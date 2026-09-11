@@ -7,7 +7,7 @@ import { scrape } from "./scrape.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 const WEB_DIR = process.env.WEB_DIR || join(__dirname, "..", "web", "dist");
-const PORT = Number(process.env.PORT || 80);
+const PORT = Number(process.env.PORT || 3000);
 const INTERVAL_MS = Number(process.env.SCRAPE_MS || 120000);
 
 const app = express();
@@ -82,7 +82,9 @@ app.get("*", (_req, res) => {
   res.sendFile(join(WEB_DIR, "index.html"));
 });
 
-app.listen(PORT, "0.0.0.0", () => {
+console.log("boot", { port: PORT, data: DATA_DIR, web: WEB_DIR });
+
+const server = app.listen(PORT, "0.0.0.0", () => {
   console.log("listening", PORT);
   if (process.env.SKIP_SCRAPE === "1") {
     console.log("scrape desligado (SKIP_SCRAPE=1)");
@@ -94,4 +96,8 @@ app.listen(PORT, "0.0.0.0", () => {
   }
   tick();
   setInterval(tick, INTERVAL_MS);
+});
+server.on("error", (err) => {
+  console.error("listen fail", err);
+  process.exit(1);
 });

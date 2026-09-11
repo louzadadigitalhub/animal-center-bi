@@ -12,7 +12,7 @@ O Docker já junta o painel e o robô no mesmo serviço. Não precisa Vercel par
 
 1. Conecte o repositório GitHub no EasyPanel, projeto `animalcenter`.
 2. Tipo: **App** a partir do `Dockerfile` na raiz.
-3. Porta interna: **80**.
+3. Porta interna: **3000**.
 4. Volume persistente: `/data` (guarda as vendas entre restarts).
 5. Variáveis de ambiente (as senhas ficam só no EasyPanel, nunca no GitHub):
 
@@ -21,7 +21,7 @@ O Docker já junta o painel e o robô no mesmo serviço. Não precisa Vercel par
 | `SIMPLES_VET_EMAIL` | e-mail do login da clínica |
 | `SIMPLES_VET_PASSWORD` | senha do login da clínica |
 | `SIMPLES_VET_LOGIN_URL` | `https://app.simples.vet/login/login.php` |
-| `PORT` | `80` |
+| `PORT` | `3000` |
 | `DATA_DIR` | `/data` |
 | `SCRAPE_MS` | `120000` (puxa a cada 2 minutos) |
 
