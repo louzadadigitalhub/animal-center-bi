@@ -1,0 +1,16 @@
+.env
+.env.local
+.env.*
+!.env.example
+*.pem
+*.key
+node_modules/
+web/dist/
+web/node_modules/
+bot/node_modules/
+data/
+.DS_Store
+Sem Título.rtf
+.impeccable/
+web/.impeccable/
+

@@ -1,0 +1,10 @@
+node_modules
+web/node_modules
+bot/node_modules
+web/dist
+data
+.env
+.env.*
+.git
+*.rtf
+.DS_Store

@@ -1,0 +1,13 @@
+{
+  "name": "animal-center-bot",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "scrape": "node scrape.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "playwright": "1.55.0"
+  }
+}

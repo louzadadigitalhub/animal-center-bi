@@ -1,0 +1,97 @@
+import express from "express";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { scrape } from "./scrape.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
+const WEB_DIR = process.env.WEB_DIR || join(__dirname, "..", "web", "dist");
+const PORT = Number(process.env.PORT || 80);
+const INTERVAL_MS = Number(process.env.SCRAPE_MS || 120000);
+
+const app = express();
+app.set("trust proxy", 1);
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", process.env.FRONTEND_ORIGIN || "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+let lastError = null;
+let running = false;
+
+async function loadSnapshot() {
+  try {
+    const raw = await readFile(join(DATA_DIR, "snapshot.json"), "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+async function tick() {
+  if (running) return;
+  running = true;
+  try {
+    const r = await scrape();
+    lastError = null;
+    console.log(new Date().toISOString(), "scrape ok", r);
+  } catch (err) {
+    lastError = String(err && err.stack ? err.stack : err);
+    console.error(new Date().toISOString(), "scrape fail", lastError);
+  } finally {
+    running = false;
+  }
+}
+
+app.get("/api/health", async (_req, res) => {
+  const snap = await loadSnapshot();
+  res.json({
+    ok: true,
+    running,
+    lastError,
+    at: snap?.at || null,
+    rows: snap?.rows || 0,
+  });
+});
+
+app.get("/api/snapshot", async (req, res) => {
+  const snap = await loadSnapshot();
+  if (!snap?.snapshot?.views) {
+    res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet", lastError });
+    return;
+  }
+  const unit = String(req.query.unit || "matriz");
+  const year = Number(req.query.year || 2026);
+  const month = req.query.month === "all" ? "all" : Number(req.query.month ?? 8);
+  const view = snap.snapshot.views[unit]?.[year]?.[month];
+  res.json({
+    ok: true,
+    at: snap.at,
+    from: snap.from,
+    to: snap.to,
+    rows: snap.rows,
+    headers: snap.snapshot.headers,
+    view: view || null,
+  });
+});
+
+app.use(express.static(WEB_DIR));
+app.get("*", (_req, res) => {
+  res.sendFile(join(WEB_DIR, "index.html"));
+});
+
+app.listen(PORT, "0.0.0.0", () => {
+  console.log("listening", PORT);
+  if (process.env.SKIP_SCRAPE === "1") {
+    console.log("scrape desligado (SKIP_SCRAPE=1)");
+    return;
+  }
+  if (!process.env.SIMPLES_VET_EMAIL || !process.env.SIMPLES_VET_PASSWORD) {
+    console.warn("scrape desligado: SIMPLES_VET_EMAIL/PASSWORD ausentes");
+    return;
+  }
+  tick();
+  setInterval(tick, INTERVAL_MS);
+});
