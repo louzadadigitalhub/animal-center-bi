@@ -2,7 +2,13 @@ import express from "express";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scrape } from "./scrape.js";
+
+process.on("uncaughtException", (err) => {
+  console.error("uncaught", err);
+});
+process.on("unhandledRejection", (err) => {
+  console.error("unhandled", err);
+});
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
@@ -34,6 +40,7 @@ async function tick() {
   if (running) return;
   running = true;
   try {
+    const { scrape } = await import("./scrape.js");
     const r = await scrape();
     lastError = null;
     console.log(new Date().toISOString(), "scrape ok", r);
