@@ -13,7 +13,7 @@ process.on("unhandledRejection", (err) => {
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 const WEB_DIR = process.env.WEB_DIR || join(__dirname, "..", "web", "dist");
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 8787);
 const INTERVAL_MS = Number(process.env.SCRAPE_MS || 120000);
 
 const app = express();

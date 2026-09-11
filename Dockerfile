@@ -20,13 +20,13 @@ RUN cd web && npm run build
 COPY bot/ bot/
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=8787
 ENV DATA_DIR=/data
 ENV WEB_DIR=/app/web/dist
 ENV SCRAPE_MS=120000
 
 VOLUME ["/data"]
 
-EXPOSE 3000
+EXPOSE 8787
 
 CMD ["node", "--trace-uncaught", "bot/server.js"]
