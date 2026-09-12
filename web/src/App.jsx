@@ -676,6 +676,33 @@ export default function App() {
      falha viraria enxurrada, entao so avisamos quando o estado VIRA. */
   const ultimoOk = useRef(null);
 
+  /* O robô relê o SimplesVet a cada 2 min (SCRAPE_MS). A tela buscava uma
+     vez e congelava: o telão do corredor fica ligado o dia inteiro mostrando
+     o número da hora em que alguém abriu a página.
+     Pausa quando a aba some, e atualiza na hora em que ela volta. */
+  useEffect(() => {
+    const PASSO = 120000;
+    let id = 0;
+    const liga = () => {
+      clearInterval(id);
+      id = setInterval(() => setTentativa((n) => n + 1), PASSO);
+    };
+    const aoTrocarVisibilidade = () => {
+      if (document.hidden) {
+        clearInterval(id);
+        return;
+      }
+      setTentativa((n) => n + 1);
+      liga();
+    };
+    liga();
+    document.addEventListener("visibilitychange", aoTrocarVisibilidade);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", aoTrocarVisibilidade);
+    };
+  }, []);
+
   useEffect(() => {
     let vivo = true;
     const q = `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}`;
