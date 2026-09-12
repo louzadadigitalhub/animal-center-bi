@@ -13,8 +13,8 @@ RUN mkdir -p /root/.cache \
   && cd bot && npm ci --omit=dev \
   && npx playwright install chromium
 
+ENV BUILD_MARK=grafico-20260912c
 COPY web/ web/
-ARG CHART_FIX=20260912b
 RUN cd web && npm run build
 
 COPY bot/ bot/

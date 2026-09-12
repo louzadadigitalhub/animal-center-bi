@@ -63,6 +63,10 @@ async function tick() {
   }
 }
 
+app.get("/api/version", (_req, res) => {
+  res.json({ v: "grafico-20260912c", tz: "America/Sao_Paulo" });
+});
+
 app.get("/api/health", async (_req, res) => {
   const snap = await loadSnapshot();
   res.json({
