@@ -9,13 +9,9 @@ import {
   cookieHeader,
   loginPerson,
   personDashboard,
-  photoFile,
-  photoMap,
   publicStaff,
   readCookie,
   readSession,
-  removePhoto,
-  savePhoto,
   syncPeopleFromSales,
 } from "./people.js";
 import { aggregate } from "./aggregate.js";
@@ -198,39 +194,6 @@ app.get("/api/me/dashboard", async (req, res) => {
   res.json({ ok: true, me, view });
 });
 
-const IMG_TYPES = ["image/jpeg", "image/png", "image/webp"];
-
-app.post("/api/me/foto", express.raw({ type: IMG_TYPES, limit: "3mb" }), async (req, res) => {
-  const me = await readSession(readCookie(req));
-  if (!me) return res.status(401).json({ ok: false, error: "entre com seu PIN" });
-  if (!Buffer.isBuffer(req.body) || !req.body.length) {
-    return res.status(400).json({ ok: false, error: "manda a imagem no corpo (JPG, PNG ou WebP)" });
-  }
-  // o id sai da sessao: ninguem troca a foto de outra pessoa
-  const r = await savePhoto(me.id, req.body);
-  if (!r.ok) return res.status(400).json(r);
-  res.json({ ok: true, foto: r.foto });
-});
-
-app.delete("/api/me/foto", async (req, res) => {
-  const me = await readSession(readCookie(req));
-  if (!me) return res.status(401).json({ ok: false, error: "entre com seu PIN" });
-  const r = await removePhoto(me.id);
-  if (!r.ok) return res.status(400).json(r);
-  res.json({ ok: true });
-});
-
-/* Publica: o telao do corredor nao tem login. */
-app.get("/api/foto/:id", async (req, res) => {
-  const info = await photoFile(String(req.params.id || ""));
-  if (!info) return res.status(404).json({ ok: false, error: "sem foto" });
-  res.setHeader("Content-Type", info.type);
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Content-Disposition", "inline");
-  res.setHeader("Cache-Control", "public, max-age=300");
-  res.sendFile(info.path);
-});
-
 app.get("/api/snapshot", async (req, res) => {
   const snap = await loadSnapshot();
   if (!snap?.snapshot?.views) {
@@ -257,7 +220,6 @@ app.get("/api/snapshot", async (req, res) => {
     headers: snap.snapshot.headers,
     years: snap.snapshot.years || [],
     hoje: snap.snapshot.hoje?.[unit] || null,
-    fotos: await photoMap().catch(() => ({})),
     view: view ? { ...view, dailyFat } : null,
   });
 });
