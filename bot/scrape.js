@@ -1,10 +1,22 @@
 import { chromium } from "playwright";
+import { existsSync, readFileSync } from "node:fs";
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const envPath = join(__dirname, "..", ".env");
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+    if (!line.includes("=") || line.trim().startsWith("#")) continue;
+    const i = line.indexOf("=");
+    const k = line.slice(0, i).trim();
+    const v = line.slice(i + 1).trim();
+    if (!process.env[k]) process.env[k] = v;
+  }
+}
+
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 
 const EMAIL = process.env.SIMPLES_VET_EMAIL;
@@ -116,106 +128,70 @@ async function login(page) {
 }
 
 async function scrapeRecebimentos(page, from, to) {
-  const urls = [
-    "https://app.simples.vet/principal/financeiro/recebimento.php",
-    "https://app.simples.vet/principal/recebimento/recebimento.php",
-    "https://app.simples.vet/principal/venda/recebimento.php",
-    "https://app.simples.vet/principal/relatorio/recebimento.php",
-    "https://app.simples.vet/principal/caixa/recebimento.php",
-  ];
-  let found = false;
-  const menu = page.getByRole("link", { name: /Recebimento/i }).first();
-  if (await menu.count()) {
-    await menu.click();
-    await page.waitForTimeout(1200);
-    found = /Receita total|Lista de Recebimentos|Baixas no dia/i.test(await page.locator("body").innerText());
-  }
-  for (const u of urls) {
-    if (found) break;
-    const res = await page.goto(u, { waitUntil: "domcontentloaded", timeout: 20000 }).catch(() => null);
-    if (!res) continue;
-    await page.waitForTimeout(800);
-    const body = await page.locator("body").innerText();
-    if (/Receita total|Lista de Recebimentos|Baixas no dia/i.test(body)) {
-      found = true;
-      break;
-    }
-  }
-  if (!found) {
-    console.warn("tela de recebimentos nao encontrada");
-    return null;
-  }
-
+  await page.goto("https://app.simples.vet/consulta/recebimento/recebimento.php", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForSelector("#p__vba_dat_baixa_text", { timeout: 30000 });
   await page.evaluate(
     ({ from, to }) => {
-      const hidden =
-        document.getElementById("p__ven_dat_data") ||
-        document.querySelector("input[name*='data']") ||
-        document.querySelector("#p__dat_data");
-      const span = document.querySelector("#p__ven_dat_data_text span, .daterange span");
+      const hidden = document.getElementById("p__vba_dat_baixa");
+      const span = document.querySelector("#p__vba_dat_baixa_text span");
       if (hidden) hidden.value = `${from}-${to}`;
       if (span) span.textContent = `${from} até ${to}`;
     },
     { from, to }
   );
-  const filtrar = page.locator("#p__btn_filtrar, button:has-text('Filtrar'), input[value='Filtrar']").first();
-  if (await filtrar.count()) {
-    await filtrar.click();
-    await page.waitForTimeout(2000);
-  }
+  await Promise.all([
+    page.waitForLoadState("domcontentloaded"),
+    page.locator("#p__btn_filtrar").click(),
+  ]);
+  await page.waitForSelector(".dashboard-stat .number", { timeout: 30000 });
+  await page.waitForTimeout(1200);
 
-  const cards = await page.evaluate(() => {
-    const txt = document.body.innerText.replace(/\s+/g, " ");
-    const grab = (label) => {
-      const re = new RegExp("([\\$R]?\\s*[\\d\\.\\,]{3,})\\s*" + label, "i");
-      const m = txt.match(re);
-      return m ? m[1] : "";
+  const extracted = await page.evaluate(() => {
+    const cards = {};
+    for (const el of document.querySelectorAll(".dashboard-stat")) {
+      const label = (el.querySelector(".desc")?.getAttribute("data-desc") || el.querySelector(".desc")?.innerText || "").trim();
+      const value = (el.querySelector(".number")?.innerText || "").trim();
+      if (label) cards[label] = value;
+    }
+    const tableByCaption = (caption) => {
+      const cap = [...document.querySelectorAll(".portlet-title .caption span")].find((s) => s.innerText.trim() === caption);
+      if (!cap) return [];
+      const table = cap.closest(".portlet")?.querySelector("table");
+      if (!table) return [];
+      return [...table.querySelectorAll("tbody tr")].map((tr) => [...tr.querySelectorAll("td")].map((td) => td.innerText.trim()));
     };
     return {
-      noDia: grab("Baixas no dia"),
-      posteriores: grab("Baixas posteriores"),
-      adiantamento: grab("Adiantamento"),
-      receitaTotal: grab("Receita total"),
-      emAberto: grab("Em aberto"),
-      raw: txt.slice(0, 1500),
+      period: document.querySelector("#p__vba_dat_baixa")?.value || "",
+      cards,
+      porUsuario: tableByCaption("Usuário que realizou a baixa"),
+      porDia: tableByCaption("Data de baixa"),
+      porForma: tableByCaption("Formas de recebimento"),
     };
   });
 
-  const lista = page.getByText(/Lista de Recebimentos/i).first();
-  if (await lista.count()) {
-    await lista.click();
-    await page.waitForTimeout(1500);
+  const n = (s) => moneyBR(s);
+  const dailyMap = {};
+  for (const row of extracted.porDia || []) {
+    const date = row.find((c) => /^\d{1,2}\/\d{1,2}/.test(c)) || "";
+    const val = moneyBR(row.find((c) => /[\d\.]+,\d{2}/.test(c)) || "0");
+    if (!date) continue;
+    dailyMap[date] = (dailyMap[date] || 0) + val;
   }
-
-  let daily = [];
-  const tableDaily = await page.evaluate(() => {
-    const out = [];
-    const rows = [...document.querySelectorAll("table tr")];
-    for (const tr of rows) {
-      const cells = [...tr.querySelectorAll("td, th")].map((c) => c.innerText.trim());
-      const date = cells.find((c) => /\d{2}\/\d{2}\/\d{4}/.test(c));
-      const money = [...cells].reverse().find((c) => /[\d\.]+,\d{2}/.test(c));
-      if (date && money) out.push({ date, money });
-    }
-    return out;
-  });
-  daily = tableDaily;
-
-  const toN = (s) => {
-    const t = String(s || "").replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
-    const n = Number(t);
-    return Number.isFinite(n) ? n : 0;
-  };
+  const daily = Object.entries(dailyMap).map(([date, money]) => ({ date, money }));
 
   return {
-    noDia: toN(cards.noDia),
-    posteriores: toN(cards.posteriores),
-    adiantamento: toN(cards.adiantamento),
-    receitaTotal: toN(cards.receitaTotal),
-    emAberto: toN(cards.emAberto),
+    noDia: n(extracted.cards["Baixas no dia de venda"]),
+    posteriores: n(extracted.cards["Baixas posteriores à venda"]),
+    adiantamento: n(extracted.cards["Adiantamento de clientes"]),
+    receitaTotal: n(extracted.cards["Receita total"]),
+    emAberto: n(extracted.cards["Em aberto"]),
     daily,
+    porUsuario: extracted.porUsuario,
+    porForma: extracted.porForma,
+    period: extracted.period,
     url: page.url(),
-    raw: cards.raw,
   };
 }
 
@@ -229,11 +205,11 @@ function applyRecebimentos(snapshot, caixa, from) {
   if (caixa.daily?.length) {
     const byDay = {};
     for (const row of caixa.daily) {
-      const dm = String(row.date).match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      const dm = String(row.date).match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
       if (!dm) continue;
       const d = Number(dm[1]);
-      const val = Number(String(row.money).replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", "."));
-      if (Number.isFinite(val)) byDay[d] = (byDay[d] || 0) + val;
+      const val = moneyBR(row.money);
+      if (val) byDay[d] = (byDay[d] || 0) + val;
     }
     const daysIn = new Date(year, month + 1, 0).getDate();
     for (let d = 1; d <= daysIn; d++) dailyFat.push({ d, fat: Math.round(byDay[d] || 0) });
