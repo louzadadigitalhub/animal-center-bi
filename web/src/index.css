@@ -239,18 +239,18 @@ aside {
   flex-shrink: 0;
 }
 
-.logo span {
+.logo img {
   width: 38px;
   height: 38px;
-  border-radius: var(--r-ctl);
-  background: var(--grad);
-  color: #04202c;
-  display: grid;
-  place-items: center;
-  font-weight: 700;
-  font-size: 21px;
-  line-height: 1;
-  box-shadow: 0 6px 18px -6px rgba(62, 200, 240, 0.6);
+  border-radius: 11px;
+  flex: none;
+  display: block;
+}
+
+/* O logo escuro e um quadrado escuro sobre fundo escuro: um anel fino
+   destaca a borda sem inventar moldura. */
+[data-theme="dark"] .logo img {
+  box-shadow: 0 0 0 1px var(--line-2), 0 6px 18px -8px rgba(62, 200, 240, 0.5);
 }
 
 .logo strong {
@@ -1886,9 +1886,19 @@ tr.click:hover td,
     z-index: 30;
   }
   .mob-top strong {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
     text-align: center;
     font-size: 14px;
     font-weight: 600;
+  }
+  .mob-top strong img {
+    width: 22px;
+    height: 22px;
+    border-radius: 7px;
+    display: block;
   }
   .burger {
     display: grid;

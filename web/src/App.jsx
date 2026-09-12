@@ -691,13 +691,16 @@ export default function App() {
         <button className="burger" aria-label="Abrir menu" onClick={() => setMenu((v) => !v)}>
           {menu ? <X size={22} /> : <List size={22} />}
         </button>
-        <strong>Animal Center</strong>
+        <strong>
+          <img src={theme === "light" ? "/logo-light.png" : "/logo-dark.png"} alt="" width="22" height="22" />
+          Animal Center
+        </strong>
         <span />
       </header>
       {menu ? <div className="scrim" onClick={() => setMenu(false)} /> : null}
       <aside>
         <div className="logo">
-          <span>+</span>
+          <img src={theme === "light" ? "/logo-light.png" : "/logo-dark.png"} alt="" width="38" height="38" />
           <div>
             <strong>Animal Center</strong>
             <small>Gestao</small>
