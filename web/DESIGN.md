@@ -1,426 +1,254 @@
-# Wrike — Style Reference
-> Lime switch on a clean engineer's console — vivid green accents powered against deep navy authority, floating on white.
+# Animal Center — Sistema Visual
 
-**Theme:** light
+> Navy profundo, gradiente ciano→teal, superfícies elevadas. Clean na estrutura, tecnológico no detalhe — o movimento serve o dado, nunca decora.
 
-Wrike's design language is built on a stark white canvas punctuated by a single vivid lime green that acts as a power switch across the interface. The system uses a deep midnight navy for authority text and dark sections, with cool blue-gray neutrals providing soft surface separation rather than warm grays or heavy shadows. Typography is carried by TT Norms Pro at comfortable 4px-grid spacing, with weight 700 headlines that command attention against whisper-thin 400 body text. Components are pill-shaped (40px radius) and card-soft (20px radius), using one signature shadow recipe that floats product mockups off the page. The overall feel is enterprise-confident but energetic — a work-management tool that looks like a productivity OS, not a form.
+**Temas:** escuro (padrão) e claro, com toggle. Preferência em `localStorage` sob a chave `ac-theme`.
+**Referência:** dashboard "Personal Finance" (Collect UI) — navy + ciano, cards arredondados, radar de estrutura, donuts com anel grosso, toggle de tema no topo.
 
-## Tokens — Colors
+## Princípio
 
-| Name | Value | Token | Role |
-|------|-------|-------|------|
-| Signal Green | `linear-gradient(to left, rgb(0, 153, 128), rgb(0, 178, 89), rgb(0, 224, 92), rgb(0, 178, 89), rgb(0, 153, 128))` | `--color-signal-green` | Green supporting accent for decorative details and low-frequency emphasis. Do not promote it to the primary CTA color; Decorative geometric shapes, radial glow accents in dark sections, gradient endpoints |
-| Midnight Navy | `#162136` | `--color-midnight-navy` | Headlines, primary body text, navigation, dark footer sections — the structural anchor of the entire hierarchy |
-| Slate Navy | `#2b3a57` | `--color-slate-navy` | Secondary headings, card titles, muted dark text — a softened navy for sub-hierarchy |
-| Steel Blue-Gray | `#657694` | `--color-steel-blue-gray` | Helper text, secondary copy, muted labels, dropdown menus — the cool-toned equivalent of mid-gray |
-| Mist Blue | `#bfc7d9` | `--color-mist-blue` | Hairline borders, dividers, input borders, subtle separators |
-| Carbon | `#000000` | `--color-carbon` | Icon strokes, high-contrast text, SVG fills, decorative geometric accents |
-| Paper White | `#ffffff` | `--color-paper-white` | Page canvas, card surfaces, inverse text on dark, input fills |
-| Frost Surface | `#f2f5fa` | `--color-frost-surface` | Feature card backgrounds, subtle wash sections, ghost button hovers — the softest cool tint |
-| Halo Blue-Gray | `#c1c9d8` | `--color-halo-blue-gray` | Shadow tones, elevated surface edges, decorative background shapes |
-| Link Blue | `#0073d3` | `--color-link-blue` | Blue supporting accent for decorative details and low-frequency emphasis. Do not promote it to the primary CTA color |
-| Smoke Gray | `#737a86` | `--color-smoke-gray` | Disabled button states, inactive controls, de-emphasized metadata |
+Estrutura calma, detalhe vivo. O layout não chama atenção; o **dado** é que se move ao entrar — barra cresce, linha se desenha, número conta. Depois disso, tudo fica parado.
 
-## Tokens — Typography
+---
 
-### TT Norms Pro — Single-family system for all UI. Weight 700 for headlines and CTAs (commands attention on white), weight 600 for subheadings and button labels, weight 400 for body and descriptions. Tabular numerals (tnum) enabled for data-heavy product mockups; stylistic alternates ss01–ss04, ss06 active for refined letterforms in display sizes. The 0.125em letter-spacing on 12–13px all-caps creates the uppercase eyebrow pattern ('3+ HOURS', 'TRUSTED BY 20,000+ HAPPY CUSTOMERS WORLDWIDE') that structures every section. · `--font-tt-norms-pro`
-- **Substitute:** Inter or DM Sans
-- **Weights:** 400, 600, 700
-- **Sizes:** 12, 13, 14, 16, 18, 20, 24, 32, 48, 64
-- **Line height:** 1.10–2.00 (tight 1.10–1.20 for display, 1.38–1.50 for body, 2.00 for spacious eyebrows)
-- **Letter spacing:** 0.125em for uppercase eyebrows at 12-13px, 0.013-0.014em for body and small headings
-- **OpenType features:** `"ss01", "ss02", "ss03", "ss04", "ss06", "tnum"`
-- **Role:** Single-family system for all UI. Weight 700 for headlines and CTAs (commands attention on white), weight 600 for subheadings and button labels, weight 400 for body and descriptions. Tabular numerals (tnum) enabled for data-heavy product mockups; stylistic alternates ss01–ss04, ss06 active for refined letterforms in display sizes. The 0.125em letter-spacing on 12–13px all-caps creates the uppercase eyebrow pattern ('3+ HOURS', 'TRUSTED BY 20,000+ HAPPY CUSTOMERS WORLDWIDE') that structures every section.
+## Tokens — Cor
 
-### Arial — Arial — detected in extracted data but not described by AI · `--font-arial`
-- **Weights:** 600
-- **Sizes:** 13px
-- **Line height:** 1.2
-- **Role:** Arial — detected in extracted data but not described by AI
+O acento é constante nos dois temas. Só as superfícies e o texto trocam.
 
-### Type Scale
+### Acento
 
-| Role | Size | Line Height | Letter Spacing | Token |
-|------|------|-------------|----------------|-------|
-| caption | 12px | 1.6 | 0.125px | `--text-caption` |
-| body-sm | 14px | 1.4 | 0.014px | `--text-body-sm` |
-| body | 16px | 1.5 | 0.013px | `--text-body` |
-| subheading | 18px | 1.4 | 0.013px | `--text-subheading` |
-| heading-sm | 20px | 1.38 | 0.014px | `--text-heading-sm` |
-| heading | 24px | 1.3 | 0.013px | `--text-heading` |
-| heading-lg | 32px | 1.25 | — | `--text-heading-lg` |
-| display | 48px | 1.2 | — | `--text-display` |
-| hero | 64px | 1.1 | — | `--text-hero` |
-
-## Tokens — Spacing & Shapes
-
-**Base unit:** 4px
-
-**Density:** comfortable
-
-### Spacing Scale
-
-| Name | Value | Token |
+| Nome | Valor | Token |
 |------|-------|-------|
-| 4 | 4px | `--spacing-4` |
-| 8 | 8px | `--spacing-8` |
-| 12 | 12px | `--spacing-12` |
-| 16 | 16px | `--spacing-16` |
-| 20 | 20px | `--spacing-20` |
-| 24 | 24px | `--spacing-24` |
-| 28 | 28px | `--spacing-28` |
-| 32 | 32px | `--spacing-32` |
-| 36 | 36px | `--spacing-36` |
-| 48 | 48px | `--spacing-48` |
-| 60 | 60px | `--spacing-60` |
-| 64 | 64px | `--spacing-64` |
-| 68 | 68px | `--spacing-68` |
-| 112 | 112px | `--spacing-112` |
+| Ciano | `#3ec8f0` | `--cyan` |
+| Teal | `#2ad4c8` | `--teal` |
+| Azul | `#4f8ff7` | `--blue` |
+| Gradiente 135° | `linear-gradient(135deg, cyan, teal)` | `--grad` |
+| Gradiente vertical | `linear-gradient(180deg, cyan, teal)` | `--grad-v` |
 
-### Border Radius
+`--grad` é a assinatura: botão ativo, barra, trilho preenchido, marca do logo, indicador do dock.
 
-| Element | Value |
-|---------|-------|
-| cards | 20px |
-| pills | 9999px |
-| small | 4px |
-| inputs | 8px |
-| buttons | 40px |
+### Superfícies
 
-### Shadows
+| Token | Escuro | Claro | Papel |
+|-------|--------|-------|-------|
+| `--bg` | `#081527` | `#e9eff8` | Canvas |
+| `--surface-1` | `#0f2039` | `#ffffff` | Card |
+| `--surface-2` | `#16304f` | `#f4f8fd` | Elevado, card de destaque |
+| `--surface-3` | `#1d3b61` | `#e6eff9` | Pressionado |
+| `--line` | `rgba(125,190,255,.10)` | `rgba(15,45,85,.09)` | Borda |
+| `--line-2` | `rgba(125,190,255,.20)` | `rgba(15,45,85,.16)` | Borda em hover/destaque |
+| `--edge` | `rgba(255,255,255,.06)` | `rgba(255,255,255,.9)` | Fio de luz no topo do card |
 
-| Name | Value | Token |
-|------|-------|-------|
-| xl | `rgba(24, 31, 56, 0.25) 0px 25px 45px -45px` | `--shadow-xl` |
+### Texto
 
-### Layout
+| Token | Escuro | Claro | Papel |
+|-------|--------|-------|-------|
+| `--text` | `#e9f2fe` | `#0f2340` | Títulos, valores |
+| `--text-2` | `#9fb6d6` | `#4c6488` | Corpo, células |
+| `--text-3` | `#6c86a9` | `#7a91b0` | Rótulos, eixos, legendas |
+| `--accent-text` | `#5fd4f5` | `#0c93bd` | Texto sobre o acento — mais fundo no claro para manter contraste |
 
-- **Page max-width:** 1200px
-- **Section gap:** 80-120px
-- **Card padding:** 32-40px
-- **Element gap:** 12-24px
+### Sistema
 
-## Components
+`--pos` (= `--teal`) · `--neg` `#ff6b81` · `--warn` `#ffb020`
 
-### Primary CTA Button
-**Role:** Main conversion action across hero, section CTAs, and footer
+**Nenhum estado depende só de cor.** `.up`/`.down` levam ▲/▼ por `::before`, `.row.warn` e `.alerts li` levam `!`, `.ok` leva ✓, o item ativo da sidebar ganha barrinha em gradiente + peso, o dock ganha traço no topo, `.kpi.warn` ganha faixa interna.
 
-Filled Signal Green (#00e05c) background, white text, TT Norms Pro weight 600 at 16px, 40px pill radius, 14px 28px padding. The vivid green against pure white makes it impossible to miss. Used for 'Try Wrike for free' everywhere.
+### Barra secundária
 
-### Ghost Text Button
-**Role:** Secondary action below primary CTA (e.g. 'Discover Wrike in 3 minutes')
+`--bar-off-a` / `--bar-off-b` — a barra não-destacada do gráfico de dias. Cor sólida por tema, **não** o acento com alpha: no tema claro um ciano a 30% sumia no branco.
 
-No background, no border. Link Blue (#0073d3) text at 14-16px weight 400, paired with a small icon (play triangle, arrow). 8px padding. Sits directly under the primary CTA as a low-pressure alternative.
+---
 
-### Top Announcement Bar
-**Role:** Time-sensitive promo strip above the nav
+## Tokens — Tipografia
 
-Full-bleed Signal Green (#00e05c) background, black or dark navy text at 13px weight 600, centered. 8-10px vertical padding. Lightning-bolt icon prefix. Appears only when a campaign is active.
+| Família | Token | Uso |
+|---------|-------|-----|
+| **Outfit** | `--font` | Toda a UI |
+| **JetBrains Mono** | `--mono` | **Todo número** — KPI, tabela, valor de barra, eixo, delta, legenda, drawer |
 
-### Navigation Bar
-**Role:** Primary site navigation with logo and utility links
+Número é sempre mono + `tabular-nums`. É o que alinha coluna de valores e dá a leitura técnica.
 
-White background, no visible border bottom, sits on the white canvas. Wrike green checkmark wordmark left, nav links (Solutions, Product, Why Wrike?, Resources, Enterprise, Pricing) in Midnight Navy at 16px weight 400 with dropdown chevrons. Right cluster: 'Contact Sales' text link, language selector ('EN'), 'Log in' text, then filled Primary CTA. The single signature shadow rgba(24, 31, 56, 0.25) 0px 25px 45px -45px may apply on scroll.
+| Papel | Tamanho | Peso |
+|-------|---------|------|
+| Título da página | `clamp(22px, 2.6vw, 28px)` | 600 |
+| KPI grande | `clamp(28px, 3.6vw, 36px)` | 600, mono |
+| KPI de card | `clamp(21px, 2.7vw, 26px)` | 600, mono |
+| Título de card | 15px | 600 |
+| Corpo / tabela | 13px | 400 |
+| Rótulo caixa alta | 11px, `tracking .12em` | 500 |
+| Cabeçalho de tabela | 10px, `tracking .14em` | 600 |
 
-### Feature Card
-**Role:** Three-column feature block in AI section and similar grids
+---
 
-White background, 20px radius, no visible border. Card padding 32-40px internal. Eyebrow ('3+ HOURS') in uppercase 13px letter-spacing 0.125em weight 600 muted blue. Heading in Midnight Navy weight 700 at 20-24px. Body in Steel Blue-Gray #657694 at 14-16px weight 400. Green link text with right-arrow affordance. Bottom half contains a photo or illustration with floating green icon badges overlaid.
+## Tokens — Espaço e Forma
 
-### Hero Section
-**Role:** Above-the-fold landing
+**Base 4px.** `--s1` 4 · `--s2` 8 · `--s3` 12 · `--s4` 16 · `--s5` 20 · `--s6` 24 · `--s8` 32 · `--s10` 40
 
-Full-bleed white background, max-width 1200px content. Two-column layout: left half has a 64px hero headline in Midnight Navy weight 700 (line-height 1.10) with one keyword highlighted in Signal Green, supporting body in Steel Blue-Gray, then Primary CTA + Ghost button stack. Right half shows a product mockup (dashboard UI) floating with the signature shadow rgba(24, 31, 56, 0.25) 0px 25px 45px -45px.
+| Elemento | Raio | Token |
+|----------|------|-------|
+| Card, tile, drawer, TV | 20px | `--r-card` |
+| Controle: select, botão, mapa | 12px | `--r-ctl` |
+| Badge pequeno | 8px | `--r-sm` |
+| Pílula, trilho, segmentado | 999px | `--r-pill` |
 
-### Product Mockup
-**Role:** Dashboard/UI screenshot rendered as a floating element
+### Elevação
 
-White card with 12-20px radius, floating via the signature shadow rgba(24, 31, 56, 0.25) 0px 25px 45px -45px. Internal content shows Kanban boards, charts, avatars, and project data in full color. Sometimes slightly rotated or offset to feel alive.
+`--shadow` (repouso) e `--shadow-lift` (hover) — uma receita cada, por tema. `--glow` é o halo ciano, só em foco de teclado.
 
-### Dark CTA Footer Section
-**Role:** Final conversion band before page end
+Todo card leva um **fio de luz de 1px no topo** (`::before` com `--edge`). É o detalhe que dá o ar de vidro sem usar `backdrop-filter`.
 
-Full-bleed Midnight Navy #162136 background. Decorative green geometric shapes (triangles, pill blobs, glow circles) float on the edges as brand energy. Centered white headline weight 700 at 32-48px. Sub-copy in muted lighter navy. Email input (white fill, 8px radius, 14px placeholder) paired inline with Primary CTA. Star rating row below.
+---
 
-### Email Input + Button Combo
-**Role:** Lead capture in the dark footer section
+## Movimento
 
-Horizontal flex row. Input: white background, 8px radius, 1px Mist Blue border, 14px placeholder in Steel Blue-Gray, 12-16px vertical padding. Button: same Primary CTA, 8px radius variant (not pill) to nest against the input edge.
+| Efeito | Onde | Duração |
+|--------|------|---------|
+| `rise` em cascata | Cards do `.dash`/`.bento`, 40ms entre eles | 0.55s |
+| `growBarY` | Barras do gráfico de dias, sparkline, hora-a-hora — cresce da base, escalonado | 0.6s |
+| `growX` | Trilho preenchido de `.row` — cresce da esquerda | 0.75s |
+| `draw` | Linha do `LineChart` via `stroke-dashoffset` | 1.1s |
+| `<animate>` SMIL | Arco do donut, `stroke-dasharray` de 0 até o valor | 0.9s |
+| `popIn` | Polígono do radar, escala a partir do centro | 0.7s |
+| Contagem | `useCountUp` nos números grandes, easing cúbico | 0.9s |
+| Hover | Card sobe 2px e troca a sombra | 0.18s |
+| `slideIn` | Drawer entra pela direita | 0.28s |
+| `pulseDot` | Ponto do selo "ao vivo" — **o único loop infinito do sistema** | 2s |
 
-### Client Logo Strip
-**Role:** Social proof band below hero
+`--ease` é `cubic-bezier(.16,1,.3,1)` em tudo. `prefers-reduced-motion` zera tudo, e o `useCountUp` checa o media query direto antes de animar.
 
-White background, centered uppercase eyebrow 'TRUSTED BY 20,000+ HAPPY CUSTOMERS WORLDWIDE' at 13px letter-spacing 0.125em in muted gray. Row of 7-8 grayscale client logos at uniform height, evenly spaced. Logos are rendered in #000000 or muted navy with no color highlights.
+---
 
-### Award Badge
-**Role:** Third-party recognition (G2, TrustRadius, Capterra)
+## Navegação
 
-Colorful shield/ribbon-shaped badge with multi-color gradient fills, 80-100px tall, centered above a caption label in Midnight Navy. Appears in a 3-column grid.
+Uma superfície por viewport.
 
-### Floating Icon Badge
-**Role:** Small decorative icon overlaid on feature card photos
+| Viewport | Navegação | Filtros globais |
+|----------|-----------|-----------------|
+| ≥ 800px | `aside` — sidebar persistente, 248px (216px abaixo de 1240px) | `.top`: unidade (pílula segmentada) + ano + mês + toggle de tema |
+| < 800px | `.mob-top` (hambúrguer) abre `aside` como gaveta + `.dock` com os 4 mais usados | `.top` acima do conteúdo |
 
-8-12px radius square or circle, Signal Green or white fill with green icon, semi-transparent backdrop. Overlaps the bottom corner of feature card photos to add brand color energy to otherwise neutral imagery.
+Item ativo da sidebar: lavagem + borda + barrinha em gradiente + peso. No dock: traço em gradiente no topo + cor.
 
-## Do's and Don'ts
+---
 
-### Do
-- Use Signal Green #00e05c as the ONLY chromatic accent in the interface — no secondary brand colors, no red error states rendered in chromatic red (use navy or muted gray for errors)
-- Apply 40px pill radius to all standalone buttons; use 8px radius only on the email-capture button nested against an input
-- Use the single shadow recipe rgba(24,31,56,0.25) 0px 25px 45px -45px for product mockups and sticky nav — never stack multiple shadows
-- Highlight exactly one word in Signal Green within any hero or section headline (e.g. 'One platform', 'Wrike AI') — the green keyword is the visual anchor
-- Set all eyebrows to uppercase 12-13px with letter-spacing 0.125em in Steel Blue-Gray #657694 to create the section-rhythm pattern
-- Use Frost Surface #f2f5fa for feature card backgrounds and subtle section washes — never use it as a page background
-- Keep the final CTA section dark navy #162136 with Signal Green geometric decorations as the page's energy release
+## Layout do dashboard
 
-### Don't
-- Do not introduce a second accent color (no purple, no orange, no teal) — the system is monochromatic plus one green
-- Do not use square or sharp-cornered buttons — pill radius is signature
-- Do not stack multiple shadow recipes or add inner shadows — one shadow recipe only
-- Do not render the dark CTA section in any color other than #162136 — light or mid-gray breaks the final-section contrast
-- Do not use warm grays or beige neutrals — the entire neutral palette is cool blue-gray
-- Do not use full-bleed photography as a hero — the product UI mockup is always the visual hero
-- Do not render the Signal Green CTA in any variant other than a fully filled pill — no outlined green, no ghost green, no green text-only
+`.dash` são **três colunas, cada uma com o próprio empilhamento** (`.dash-col`).
 
-## Surfaces
-
-| Level | Name | Value | Purpose |
-|-------|------|-------|---------|
-| 0 | Page Canvas | `#ffffff` | Default page background |
-| 1 | Frost Card | `#f2f5fa` | Feature cards, subtle section washes |
-| 2 | Dark Stage | `#162136` | Final CTA section, dark-mode contrast band |
-| 3 | Signal Layer | `#00e05c` | CTA fills, announcement bar, active state fills |
-
-## Elevation
-
-- **Product mockup cards:** `rgba(24, 31, 56, 0.25) 0px 25px 45px -45px`
-- **Sticky navigation:** `rgba(24, 31, 56, 0.25) 0px 25px 45px -45px`
-
-## Imagery
-
-Photography appears only inside feature cards: real human shots of people at laptops, in meetings, in office contexts. Photos are treated as contained rectangles inside white cards, never full-bleed, and always overlaid with small floating green icon badges in the corners to inject brand color. No lifestyle hero photography — the product UI mockup IS the hero visual. Decorative geometric shapes (triangles, pill blobs, glows) appear in the dark footer section in Signal Green as brand energy. Icons are minimal: outlined or single-color flat, no 3D, no gradients, paired with green when interactive.
-
-## Layout
-
-Max-width 1200px centered container. Hero is a two-column split (text left, product mockup right) on white. Sections are full-bleed white bands stacked vertically with 80-120px vertical gaps, no alternating dark/light rhythm until the final CTA section which is a full-bleed dark navy band. Feature sections use 3-column card grids with equal widths. Content blocks are centered stacks with 2-column text+image alternating. Navigation is a single horizontal top bar, sticky on scroll, with no sidebar. Density is comfortable — generous padding inside cards, wide vertical breathing room between sections, never cramped.
-
-## Agent Prompt Guide
-
-**Quick Color Reference**
-- text (primary): #162136 Midnight Navy
-- text (muted): #657694 Steel Blue-Gray
-- background (page): #ffffff Paper White
-- background (card): #f2f5fa Frost Surface
-- border: #bfc7d9 Mist Blue
-- accent: #00e05c Signal Green
-- primary action: no distinct CTA color
-
-**3-5 Example Component Prompts**
-
-No distinct primary action color was observed; use the extracted neutral button treatments instead of inventing a filled CTA color.
-
-2. **Build a feature card**: White #ffffff background, 20px border-radius, 32px internal padding. Top: uppercase eyebrow '3+ HOURS' at 13px weight 600 letter-spacing 0.125em in #657694. Middle: heading at 24px weight 700 in #162136, then body at 16px weight 400 in #657694. Below body: a Link Blue #0073d3 text link with right-arrow at 16px. Bottom half: a 16:9 photo with a floating 10px-radius green (#00e05c) icon badge overlapping the bottom-left corner.
-
-
-
-5. **Build a client logo strip**: White #ffffff background, centered. Eyebrow text 'TRUSTED BY 20,000+ HAPPY CUSTOMERS WORLDWIDE' at 13px weight 600 letter-spacing 0.125em in #657694, uppercase. Below: a single row of 8 grayscale client logos (rendered in #000000 or muted #2b3a57), each ~80px tall, evenly spaced with 40-60px gaps between them.
-
-## Signature Choices
-
-Three choices define Wrike's visual identity and would not appear in a generic SaaS system:
-
-1. **Single-shade lime green as the only chromatic accent.** Every other color in the system is achromatic, near-gray, or navy. This makes the green on CTAs and the brand wordmark feel like a power switch — it only appears where the brand needs you to act. Using two accents (e.g. a blue and a green) would dilute this.
-
-2. **Pill-shaped buttons at 40px radius.** Most enterprise SaaS uses 4-8px radius on buttons. Wrike pushes to 40px — nearly full-pill. Combined with the vivid green fill, the CTA reads as friendly and decisive, not corporate. The 8px-radius variant only appears on the email-capture button nested against the input.
-
-3. **One shadow recipe for all elevation.** rgba(24,31,56,0.25) 0px 25px 45px -45px is the only shadow in the system. Used on product mockups and the sticky nav. Negative spread (-45px) means the shadow only appears at the bottom edge, giving a 'floating sheet' feel without haloing around all sides. Other systems use 3-5 shadow tiers; Wrike uses one.
-
-## Similar Brands
-
-- **Notion** — Same near-monochrome palette with a single vivid accent and pill-shaped CTAs; product mockups as hero visuals
-- **Asana** — Same enterprise-SaaS white canvas with cool blue-gray neutrals, generous card padding, and structured 3-column feature grids
-- **Linear** — Same restraint with a single signature accent color used sparingly for active states and CTAs, plus a deep navy inverse section for final CTAs
-- **ClickUp** — Same competitive work-management positioning with bright green brand color, product mockup heroes, and award-badge social proof strips
-- **Monday.com** — Same vivid accent-on-white SaaS pattern with rounded card components, feature grid sections, and dark-mode final CTA bands
-
-## Quick Start
-
-### CSS Custom Properties
-
-```css
-:root {
-  /* Colors */
-  --color-signal-green: #00e05c;
-  --gradient-signal-green: linear-gradient(to left, rgb(0, 153, 128), rgb(0, 178, 89), rgb(0, 224, 92), rgb(0, 178, 89), rgb(0, 153, 128));
-  --color-midnight-navy: #162136;
-  --color-slate-navy: #2b3a57;
-  --color-steel-blue-gray: #657694;
-  --color-mist-blue: #bfc7d9;
-  --color-carbon: #000000;
-  --color-paper-white: #ffffff;
-  --color-frost-surface: #f2f5fa;
-  --color-halo-blue-gray: #c1c9d8;
-  --color-link-blue: #0073d3;
-  --color-smoke-gray: #737a86;
-
-  /* Typography — Font Families */
-  --font-tt-norms-pro: 'TT Norms Pro', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-arial: 'Arial', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-
-  /* Typography — Scale */
-  --text-caption: 12px;
-  --leading-caption: 1.6;
-  --tracking-caption: 0.125px;
-  --text-body-sm: 14px;
-  --leading-body-sm: 1.4;
-  --tracking-body-sm: 0.014px;
-  --text-body: 16px;
-  --leading-body: 1.5;
-  --tracking-body: 0.013px;
-  --text-subheading: 18px;
-  --leading-subheading: 1.4;
-  --tracking-subheading: 0.013px;
-  --text-heading-sm: 20px;
-  --leading-heading-sm: 1.38;
-  --tracking-heading-sm: 0.014px;
-  --text-heading: 24px;
-  --leading-heading: 1.3;
-  --tracking-heading: 0.013px;
-  --text-heading-lg: 32px;
-  --leading-heading-lg: 1.25;
-  --text-display: 48px;
-  --leading-display: 1.2;
-  --text-hero: 64px;
-  --leading-hero: 1.1;
-
-  /* Typography — Weights */
-  --font-weight-regular: 400;
-  --font-weight-semibold: 600;
-  --font-weight-bold: 700;
-
-  /* Spacing */
-  --spacing-unit: 4px;
-  --spacing-4: 4px;
-  --spacing-8: 8px;
-  --spacing-12: 12px;
-  --spacing-16: 16px;
-  --spacing-20: 20px;
-  --spacing-24: 24px;
-  --spacing-28: 28px;
-  --spacing-32: 32px;
-  --spacing-36: 36px;
-  --spacing-48: 48px;
-  --spacing-60: 60px;
-  --spacing-64: 64px;
-  --spacing-68: 68px;
-  --spacing-112: 112px;
-
-  /* Layout */
-  --page-max-width: 1200px;
-  --section-gap: 80-120px;
-  --card-padding: 32-40px;
-  --element-gap: 12-24px;
-
-  /* Border Radius */
-  --radius-md: 4px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 20px;
-  --radius-3xl: 24px;
-  --radius-3xl-2: 30px;
-  --radius-3xl-3: 40px;
-
-  /* Named Radii */
-  --radius-cards: 20px;
-  --radius-pills: 9999px;
-  --radius-small: 4px;
-  --radius-inputs: 8px;
-  --radius-buttons: 40px;
-
-  /* Shadows */
-  --shadow-xl: rgba(24, 31, 56, 0.25) 0px 25px 45px -45px;
-
-  /* Surfaces */
-  --surface-page-canvas: #ffffff;
-  --surface-frost-card: #f2f5fa;
-  --surface-dark-stage: #162136;
-  --surface-signal-layer: #00e05c;
-}
-```
-
-### Tailwind v4
-
-```css
-@theme {
-  /* Colors */
-  --color-signal-green: #00e05c;
-  --color-midnight-navy: #162136;
-  --color-slate-navy: #2b3a57;
-  --color-steel-blue-gray: #657694;
-  --color-mist-blue: #bfc7d9;
-  --color-carbon: #000000;
-  --color-paper-white: #ffffff;
-  --color-frost-surface: #f2f5fa;
-  --color-halo-blue-gray: #c1c9d8;
-  --color-link-blue: #0073d3;
-  --color-smoke-gray: #737a86;
-
-  /* Typography */
-  --font-tt-norms-pro: 'TT Norms Pro', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --font-arial: 'Arial', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-
-  /* Typography — Scale */
-  --text-caption: 12px;
-  --leading-caption: 1.6;
-  --tracking-caption: 0.125px;
-  --text-body-sm: 14px;
-  --leading-body-sm: 1.4;
-  --tracking-body-sm: 0.014px;
-  --text-body: 16px;
-  --leading-body: 1.5;
-  --tracking-body: 0.013px;
-  --text-subheading: 18px;
-  --leading-subheading: 1.4;
-  --tracking-subheading: 0.013px;
-  --text-heading-sm: 20px;
-  --leading-heading-sm: 1.38;
-  --tracking-heading-sm: 0.014px;
-  --text-heading: 24px;
-  --leading-heading: 1.3;
-  --tracking-heading: 0.013px;
-  --text-heading-lg: 32px;
-  --leading-heading-lg: 1.25;
-  --text-display: 48px;
-  --leading-display: 1.2;
-  --text-hero: 64px;
-  --leading-hero: 1.1;
-
-  /* Spacing */
-  --spacing-4: 4px;
-  --spacing-8: 8px;
-  --spacing-12: 12px;
-  --spacing-16: 16px;
-  --spacing-20: 20px;
-  --spacing-24: 24px;
-  --spacing-28: 28px;
-  --spacing-32: 32px;
-  --spacing-36: 36px;
-  --spacing-48: 48px;
-  --spacing-60: 60px;
-  --spacing-64: 64px;
-  --spacing-68: 68px;
-  --spacing-112: 112px;
-
-  /* Border Radius */
-  --radius-md: 4px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
-  --radius-2xl: 20px;
-  --radius-3xl: 24px;
-  --radius-3xl-2: 30px;
-  --radius-3xl-3: 40px;
-
-  /* Shadows */
-  --shadow-xl: rgba(24, 31, 56, 0.25) 0px 25px 45px -45px;
-}
-```
+Isso não é detalhe. Com um único grid de 3 colunas, a altura da linha era a do card mais alto — o card "Receita total" (curto) abria um buraco de ~150px esperando o radar da mesma linha. Colunas independentes empilham por conta própria.
+
+| Coluna | Cards |
+|--------|-------|
+| 1 | Receita total · Em aberto |
+| 2 | Entrada · Recebimentos · Grupos vs média |
+| 3 | Estrutura (radar) · Grupos (donut) · Anos |
+
+---
+
+## Gráficos
+
+| Componente | Uso |
+|------------|-----|
+| `DailyBars` | Caixa por dia. Gridline, eixo, valor no topo. **A barra de maior valor recebe o gradiente cheio**; as outras ficam em `--bar-off-*` |
+| `LineChart` | Série mensal. Área em gradiente, linha em gradiente horizontal, ponto em cada mês |
+| `Donut` | Parte-do-todo. Anel de fundo em `--track`, fatias com `strokeLinecap: round`, legenda com valor ao lado |
+| `Radar` | Participação por grupo. 4 anéis, preenchimento radial, ponto em cada vértice |
+| `SparkBars` / `Hourly` | Micro-barras em `--grad-v` |
+
+Todo elemento tem `<title>` — tooltip nativo sem JS. Cor vem de `var(--token)` direto no `fill`/`stroke`: **zero hex solto** fora da rampa categórica `SERIES`.
+
+---
+
+## TV corredor — pódio
+
+Tela passiva, lida de longe. Único lugar do sistema onde a animação é protagonista.
+
+### Metais
+
+| Lugar | Claro | Base | Fundo | Token no `<li>` |
+|-------|-------|------|-------|-----------------|
+| 1 Ouro | `#fff3b0` | `#ffd54a` | `#e09a16` | `--metal-a/b/c` |
+| 2 Prata | `#ffffff` | `#dfe8f2` | `#93a7bd` | idem |
+| 3 Bronze | `#ffd9b0` | `#e2934f` | `#a75f26` | idem |
+
+Os metais entram por variável inline no `<li>`; todo o CSS do degrau lê `--metal-*`, então não há regra duplicada por posição.
+
+### Animação (`Podium.jsx`)
+
+| Efeito | Técnica |
+|--------|---------|
+| Coroa flutua e inclina | `rAF` escrevendo `transform` direto no `<g>` — **sem re-render do React** |
+| Brilho atravessa o metal | `rAF` no `gradientTransform` de um `<linearGradient>` sobreposto |
+| Faíscas (só no ouro) | `<canvas>` com 22 partículas, estrela de 4 pontas, sobem e apagam |
+| Confete do líder | `<canvas>` com 84 partículas, gravidade, estoura **uma vez** e para sozinho |
+| Degraus sobem | `podRise`, escalonado 2º → 1º → 3º |
+| Valores contam | `useCountUp` a 1400ms |
+| Varredura na base do ouro | `sweep`, o único loop além do ponto "ao vivo" |
+
+Cada coroa está em fase diferente (`rank * 0.8`) para não pulsarem em uníssono.
+
+### Ticker único
+
+`anim.jsx` mantém **um** `requestAnimationFrame` para o app inteiro. Componentes assinam via `useRaf`; o loop só roda enquanto houver assinante e se desliga sozinho no último `unsubscribe`.
+
+Isso importa: o pódio tem 3 coroas + 2 canvas. Cinco loops concorrentes seriam desperdício no PC que toca a TV. `useRaf` também não faz nada sob `prefers-reduced-motion` — a coroa fica parada e legível.
+
+### Ordem visual
+
+O DOM renderiza 2º, 1º, 3º — a ordem do pódio de verdade. Abaixo de 760px vira coluna única com o 1º no topo (`order: -1`) e a base vira faixa horizontal.
+
+---
+
+## Responsivo
+
+Refluxo depende da largura do **card**, não da janela — o mesmo componente vive numa coluna de 240px e numa de 900px na mesma tela. `.tile`, `.kpi` e `.card` declaram `container-type: inline-size`.
+
+| Regra | Efeito |
+|-------|--------|
+| `@container (max-width: 400px)` | `.row` vira duas linhas: nome + valor em cima, barra + % embaixo |
+| `@container (max-width: 460px)` | `.donut-wrap` empilha donut sobre legenda |
+
+Breakpoints de janela cuidam do shell: 1240px encolhe a sidebar, 1100px desempilha as grades, 800px troca sidebar por gaveta + dock, 640px enxuga colunas de tabela.
+
+---
+
+## Faça
+
+- `--grad` para ação primária, item ativo e série principal
+- Todo número em `--mono` + `tabular-nums`
+- Todo estado com **dois sinais no mínimo** (cor + glifo, ou cor + peso, ou cor + faixa)
+- Animação só na **entrada** do dado; depois, repouso
+- Uma navegação por viewport
+
+## Não faça
+
+- **Sem segundo acento.** Ciano e teal são um gradiente, não duas cores.
+- **Sem `backdrop-filter` em card.** Só em barra fixa de mobile e no scrim.
+- **Sem animação em loop**, exceto o ponto do selo "ao vivo".
+- **Sem hex solto em componente.** Token novo entra no `:root` do `index.css`.
+- **Sem depender só de cor** para positivo, negativo, alerta ou ativo.
+- **Sem alpha do acento para elemento que precisa ser lido no tema claro.** Use `--bar-off-*`.
+
+---
+
+## Acessibilidade
+
+- `:focus-visible` é contorno de 2px em `--cyan` com 2px de deslocamento
+- Alvo de toque mínimo de 44px no mobile
+- `prefers-reduced-motion` zera animação e transição
+- `color-scheme` por tema, para select e scrollbar nativos acompanharem
+- `--accent-text` é mais escuro no tema claro justamente para manter contraste sobre branco
+
+---
+
+## Arquivos
+
+| Arquivo | Conteúdo |
+|---------|----------|
+| `src/index.css` | `:root` + `[data-theme]` com todos os tokens, shell, componentes, keyframes, container queries |
+| `src/seller.css` | Tela do vendedor. **Herda os tokens**, não redeclara nenhum |
+| `src/charts.jsx` | SVG lendo `var(--token)` em `fill`/`stroke`, com gradientes e animação de entrada |
+| `src/main.jsx` | Aplica `data-theme` do `localStorage` **antes** de renderizar — vale para o dashboard e para `/eu` |
+| `src/anim.jsx` | Ticker rAF compartilhado, `useCountUp`, `Num`, `useCanvasSize` |
+| `src/Podium.jsx` | Pódio da TV: coroa, faíscas, confete, degraus |

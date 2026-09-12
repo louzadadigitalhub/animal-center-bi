@@ -11,10 +11,14 @@ import { MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
 import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { List } from "@phosphor-icons/react/List";
 import { X } from "@phosphor-icons/react/X";
+import { Sun } from "@phosphor-icons/react/Sun";
+import { Moon } from "@phosphor-icons/react/Moon";
 import { DailyBars, Donut, Hourly, LineChart, Radar, SparkBars } from "./charts";
 import { MONTHS, YEARS, brl, getView, num, periodLabel, sanitizeDaily } from "./data";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
+import { Num } from "./anim.jsx";
+import Podium, { Ambient } from "./Podium.jsx";
 import { Badge } from "./components/ui/badge.jsx";
 
 const NAV = [
@@ -60,142 +64,147 @@ function Vendas({ u, year }) {
   const maxG = Math.max(1, ...u.grupos.map((x) => x.valor));
   return (
     <div className="dash">
-      <Card className="tile tile-dark tile-balance">
-        <CardHeader>
-          <CardDescription>Receita total</CardDescription>
-          <CardTitle>{brl(cx.receitaTotal || u.fat)}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="hint">Recebimentos do recorte. Nao e DRE.</p>
-          <div className="mini-kpis">
-            <div>
-              <span>No dia da venda</span>
-              <b>{brl(cx.noDia)}</b>
-            </div>
-            <div>
-              <span>Posteriores</span>
-              <b>{brl(cx.posteriores)}</b>
-            </div>
-          </div>
-          <SparkBars values={fatSeries} />
-        </CardContent>
-      </Card>
-
-      <Card className="tile tile-inflow">
-        <CardHeader>
-          <CardTitle>Entrada</CardTitle>
-          <CardDescription>Caixa por dia (data da baixa)</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {daily.length ? <DailyBars days={daily} h={340} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
-        </CardContent>
-      </Card>
-
-      <Card className="tile tile-structure">
-        <CardHeader>
-          <CardTitle>Estrutura</CardTitle>
-          <CardDescription>Participacao por grupo</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Radar slices={groupsDonut} />
-        </CardContent>
-      </Card>
-
-      <Card className="tile tile-goals">
-        <CardHeader>
-          <CardDescription>Em aberto</CardDescription>
-          <CardTitle>{brl(cx.emAberto)}</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="hint">Ainda nao baixou no caixa · adiantamento {brl(cx.adiantamento || 0)}</p>
-          <div className="goal-line">
-            <span>Eletivas vs meta</span>
-            <b>{u.eletivasPct}%</b>
-          </div>
-          <div className="track">
-            <i style={{ width: `${Math.min(100, u.eletivasPct || 0)}%` }} />
-          </div>
-          <small>
-            {u.eletivas} de {u.metaEletivas} · ticket {brl(u.ticketCliente)}
-          </small>
-        </CardContent>
-      </Card>
-
-      <Card className="tile tile-budget">
-        <CardHeader>
-          <CardTitle>Recebimentos</CardTitle>
-          <CardDescription>Como o dinheiro entrou</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Donut slices={budget} totalLabel="Caixa" totalValue={brl(cx.receitaTotal || u.fat)} />
-        </CardContent>
-      </Card>
-
-      <Card className="tile tile-costs">
-        <CardHeader>
-          <CardTitle>Grupos</CardTitle>
-          <CardDescription>Pilares da clinica</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Donut slices={groupsDonut} totalLabel="Vendas" totalValue={brl(u.fatVenda || u.fat)} />
-        </CardContent>
-      </Card>
-
-      <Card className="tile tile-compare">
-        <CardHeader>
-          <CardTitle>Grupos vs media</CardTitle>
-          <CardDescription>Alarme se cair da media</CardDescription>
-        </CardHeader>
-        <CardContent>
-        <div className="bars">
-          {u.grupos.map((g) => (
-            <div key={g.nome} className={g.valor < g.media ? "row warn" : "row"}>
-              <span>{g.nome}</span>
-              <div className="track">
-                <i style={{ width: `${Math.min(100, (g.valor / maxG) * 100)}%` }} />
-              </div>
-              <b>{brl(g.valor)}</b>
-              <em className={g.vsAno < 0 ? "down" : "up"}>
-                {g.vsAno > 0 ? "+" : ""}
-                {g.vsAno}%
-              </em>
-            </div>
-          ))}
-        </div>
-        {alerts.length ? (
-          <ul className="alerts">
-            {alerts.map((g) => (
-              <li key={g.nome}>
-                {g.nome} abaixo da media ({brl(g.valor)} vs {brl(g.media)})
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="ok">Nenhum grupo abaixo da media neste recorte.</p>
-        )}
-        </CardContent>
-      </Card>
-
-      {(u.compareYears || []).filter((c) => c.qtd || c.fat).length > 1 ? (
-        <Card className="tile tile-dark tile-annual">
+      <div className="dash-col">
+        <Card className="tile tile-dark tile-balance">
           <CardHeader>
-            <CardTitle>Anos</CardTitle>
-            <CardDescription>Recebimento no mesmo recorte</CardDescription>
+            <CardDescription>Receita total</CardDescription>
+            <CardTitle>
+              <Num value={cx.receitaTotal || u.fat} format={brl} />
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <ol className="year-list">
-              {u.compareYears
-                .filter((c) => c.qtd || c.fat)
-                .map((c) => (
-                  <li key={c.ano} className={c.ano === year ? "now" : ""}>
-                    <span>{c.ano}</span>
-                    <b>{brl(c.fat)}</b>
-                  </li>
-                ))}
-            </ol>
+            <p className="hint">Recebimentos do recorte. Nao e DRE.</p>
+            <div className="mini-kpis">
+              <div>
+                <span>No dia da venda</span>
+                <b>{brl(cx.noDia)}</b>
+              </div>
+              <div>
+                <span>Posteriores</span>
+                <b>{brl(cx.posteriores)}</b>
+              </div>
+            </div>
+            <SparkBars values={fatSeries} />
           </CardContent>
         </Card>
-      ) : null}
+        <Card className="tile tile-goals">
+          <CardHeader>
+            <CardDescription>Em aberto</CardDescription>
+            <CardTitle>
+              <Num value={cx.emAberto} format={brl} />
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="hint">Ainda nao baixou no caixa · adiantamento {brl(cx.adiantamento || 0)}</p>
+            <div className="goal-line">
+              <span>Eletivas vs meta</span>
+              <b>{u.eletivasPct}%</b>
+            </div>
+            <div className="track">
+              <i style={{ width: `${Math.min(100, u.eletivasPct || 0)}%` }} />
+            </div>
+            <small>
+              {u.eletivas} de {u.metaEletivas} · ticket {brl(u.ticketCliente)}
+            </small>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="dash-col">
+        <Card className="tile tile-inflow">
+          <CardHeader>
+            <CardTitle>Entrada</CardTitle>
+            <CardDescription>Caixa por dia (data da baixa)</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {daily.length ? <DailyBars days={daily} h={340} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
+          </CardContent>
+        </Card>
+        <Card className="tile tile-budget">
+          <CardHeader>
+            <CardTitle>Recebimentos</CardTitle>
+            <CardDescription>Como o dinheiro entrou</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Donut slices={budget} totalLabel="Caixa" totalValue={brl(cx.receitaTotal || u.fat)} />
+          </CardContent>
+        </Card>
+        <Card className="tile tile-compare">
+          <CardHeader>
+            <CardTitle>Grupos vs media</CardTitle>
+            <CardDescription>Alarme se cair da media</CardDescription>
+          </CardHeader>
+          <CardContent>
+          <div className="bars">
+            {u.grupos.map((g) => (
+              <div key={g.nome} className={g.valor < g.media ? "row warn" : "row"}>
+                <span>{g.nome}</span>
+                <div className="track">
+                  <i style={{ width: `${Math.min(100, (g.valor / maxG) * 100)}%` }} />
+                </div>
+                <b>{brl(g.valor)}</b>
+                <em className={g.vsAno < 0 ? "down" : "up"}>
+                  {g.vsAno > 0 ? "+" : ""}
+                  {g.vsAno}%
+                </em>
+              </div>
+            ))}
+          </div>
+          {alerts.length ? (
+            <ul className="alerts">
+              {alerts.map((g) => (
+                <li key={g.nome}>
+                  {g.nome} abaixo da media ({brl(g.valor)} vs {brl(g.media)})
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="ok">Nenhum grupo abaixo da media neste recorte.</p>
+          )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="dash-col">
+        <Card className="tile tile-structure">
+          <CardHeader>
+            <CardTitle>Estrutura</CardTitle>
+            <CardDescription>Participacao por grupo</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Radar slices={groupsDonut} />
+          </CardContent>
+        </Card>
+        <Card className="tile tile-costs">
+          <CardHeader>
+            <CardTitle>Grupos</CardTitle>
+            <CardDescription>Pilares da clinica</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Donut slices={groupsDonut} totalLabel="Vendas" totalValue={brl(u.fatVenda || u.fat)} />
+          </CardContent>
+        </Card>
+        {(u.compareYears || []).filter((c) => c.qtd || c.fat).length > 1 ? (
+          <Card className="tile tile-dark tile-annual">
+            <CardHeader>
+              <CardTitle>Anos</CardTitle>
+              <CardDescription>Recebimento no mesmo recorte</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ol className="year-list">
+                {u.compareYears
+                  .filter((c) => c.qtd || c.fat)
+                  .map((c) => (
+                    <li key={c.ano} className={c.ano === year ? "now" : ""}>
+                      <span>{c.ano}</span>
+                      <b>{brl(c.fat)}</b>
+                    </li>
+                  ))}
+              </ol>
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -584,19 +593,25 @@ function Drawer({ detail, onClose }) {
   );
 }
 
-function Tv({ u }) {
+function Tv({ u, label, fotos }) {
+  const total = u.equipe.reduce((a, p) => a + (p.fat || 0), 0);
   return (
     <div className="tv">
-      <p>Telao do corredor. Sem login. Sem DRE. Sem telefone.</p>
-      <ol>
-        {u.equipe.slice(0, 8).map((p, i) => (
-          <li key={p.nome}>
-            <b>{i + 1}</b>
-            <span>{p.nome}</span>
-            <em>{brl(p.fat)}</em>
-          </li>
-        ))}
-      </ol>
+      <Ambient />
+      <header className="tv-head">
+        <div>
+          <p className="tv-kicker">Ranking do time</p>
+          <h2 className="tv-title">{u.casa}</h2>
+          <p className="tv-sub">{label} · sem login, sem DRE, sem telefone</p>
+        </div>
+        <div className="tv-total">
+          <span>Total do time</span>
+          <strong>
+            <Num value={total} format={brl} ms={1600} />
+          </strong>
+        </div>
+      </header>
+      <Podium equipe={u.equipe} brl={brl} fotos={fotos} />
     </div>
   );
 }
@@ -609,6 +624,14 @@ export default function App() {
   const [live, setLive] = useState(null);
   const [detail, setDetail] = useState(null);
   const [menu, setMenu] = useState(false);
+  const [theme, setTheme] = useState(() => localStorage.getItem("ac-theme") || "dark");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#e9eff8" : "#081527");
+    localStorage.setItem("ac-theme", theme);
+  }, [theme]);
+
   const go = (id) => {
     setPage(id);
     setMenu(false);
@@ -646,35 +669,6 @@ export default function App() {
         <span />
       </header>
       {menu ? <div className="scrim" onClick={() => setMenu(false)} /> : null}
-      <header className="topbar">
-        <div className="logo">
-          <span>+</span>
-          <div>
-            <strong>Animal Center</strong>
-            <small>Gestao</small>
-          </div>
-        </div>
-        <nav className="top-nav">
-          {NAV.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button key={item.id} className={page === item.id ? "on" : ""} onClick={() => go(item.id)}>
-                <Icon size={16} weight={page === item.id ? "fill" : "regular"} />
-                {item.label}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="period">
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
-            {yearsOn.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </div>
-      </header>
       <aside>
         <div className="logo">
           <span>+</span>
@@ -726,19 +720,28 @@ export default function App() {
                 </option>
               ))}
             </select>
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              aria-label={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
+              title={theme === "dark" ? "Tema claro" : "Tema escuro"}
+            >
+              {theme === "dark" ? <Sun size={18} weight="fill" /> : <Moon size={18} weight="fill" />}
+            </button>
           </div>
         </header>
 
         <div className="crumb">
           <h1>{NAV.find((n) => n.id === page)?.label}</h1>
-          <p>
+          <div className="crumb-meta">
             <span>
               {u.casa} · {label}
             </span>
             <Badge variant={live?.ok ? "default" : "outline"} className={live?.ok ? "pill-live border-0" : "pill-wait"}>
               {fonte}
             </Badge>
-          </p>
+          </div>
         </div>
 
         {page === "vendas" && <Vendas u={u} year={year} />}
@@ -749,7 +752,7 @@ export default function App() {
         {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} />}
-        {page === "tv" && <Tv u={u} />}
+        {page === "tv" && <Tv u={u} label={label} fotos={live?.fotos} />}
       </div>
       <nav className="dock" aria-label="Atalhos">
         {DOCK.map((item) => {

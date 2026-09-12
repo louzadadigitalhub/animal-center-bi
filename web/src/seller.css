@@ -1,0 +1,368 @@
+/* Tela do vendedor — mesmos tokens do index.css, layout de coluna unica.
+   Herda --bg, --surface-*, --line*, --text-*, --accent* de :root. */
+
+.seller {
+  position: relative;
+  min-height: 100dvh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: var(--s6) var(--s4) calc(var(--s10) + env(safe-area-inset-bottom));
+  font-family: var(--font);
+  color: var(--text);
+}
+
+.seller-boot {
+  padding: 80px var(--s3);
+  text-align: center;
+  color: var(--text-3);
+}
+
+.seller-card {
+  position: relative;
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--s5);
+  margin-top: var(--s4);
+  box-shadow: var(--shadow);
+  animation: rise 0.5s var(--ease) both;
+}
+
+.seller-login {
+  margin-top: 12vh;
+}
+
+.seller-kicker {
+  margin: 0;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-text);
+}
+
+.seller h1,
+.seller h2,
+.seller-top strong {
+  margin: 6px 0 0;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.seller h1 {
+  font-size: 30px;
+}
+
+.seller h2 {
+  font-size: 16px;
+  margin-bottom: var(--s3);
+}
+
+.seller-lead,
+.seller-note,
+.seller-empty,
+.seller-muted {
+  color: var(--text-3);
+}
+
+.seller-lead {
+  margin: var(--s2) 0 var(--s6);
+  line-height: 1.55;
+}
+
+/* ---------- Formulario ---------- */
+
+.seller label {
+  display: grid;
+  gap: 6px;
+  margin-bottom: var(--s4);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.seller label span {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 0 var(--s3);
+  transition: border-color 0.15s ease;
+}
+
+.seller label span:focus-within {
+  border-color: var(--line-2);
+}
+
+.seller label svg {
+  flex: none;
+  color: var(--text-3);
+}
+
+.seller input,
+.seller select {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 13px 0;
+  outline: none;
+}
+
+.seller input {
+  font-family: var(--mono);
+  letter-spacing: 0.08em;
+}
+
+.seller option {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.seller button[type="submit"] {
+  width: 100%;
+  margin-top: var(--s2);
+  border: 0;
+  border-radius: var(--r-ctl);
+  padding: 14px;
+  background: var(--grad);
+  color: #04202c;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.seller button[type="submit"]:hover:not(:disabled) {
+  background: var(--grad); filter: brightness(1.08);
+}
+
+.seller button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.seller-err {
+  color: var(--neg);
+  margin: 0 0 var(--s2);
+  font-size: 13px;
+}
+
+.seller-err::before {
+  content: "! ";
+  font-weight: 700;
+}
+
+/* ---------- Cabecalho ---------- */
+
+.seller-top {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s3);
+  align-items: flex-start;
+}
+
+.seller-top p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 13px;
+}
+
+.seller-top strong {
+  font-size: 18px;
+}
+
+.seller-top small {
+  display: block;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.seller-out {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-radius: var(--r-ctl);
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.seller-out:hover {
+  border-color: var(--line-2);
+  color: var(--text);
+}
+
+/* ---------- Filtros ---------- */
+
+.seller-filters {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s5);
+}
+
+.seller-filters select {
+  flex: 1;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 10px 12px;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ---------- KPIs ---------- */
+
+.seller-kpis {
+  display: grid;
+  gap: var(--s3);
+  margin-top: var(--s4);
+}
+
+.seller-kpis article {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: var(--s4) var(--s5);
+  box-shadow: var(--shadow);
+  animation: rise 0.5s var(--ease) both;
+}
+
+.seller-kpis article:nth-child(2) { animation-delay: 0.06s; }
+.seller-kpis article:nth-child(3) { animation-delay: 0.12s; }
+
+/* O KPI principal ganha a marca do acento — um foco so */
+.seller-kpis article:first-child {
+  background:
+    linear-gradient(160deg, rgba(62, 200, 240, 0.14) 0%, transparent 55%),
+    var(--surface-2);
+  border-color: var(--line-2);
+}
+
+.seller-kpis p {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 500;
+}
+
+.seller-kpis small {
+  margin: 0;
+  color: var(--text-3);
+  font-size: 12px;
+}
+
+.seller-kpis strong {
+  display: block;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 28px;
+  letter-spacing: -0.03em;
+  margin: var(--s1) 0;
+  font-weight: 600;
+}
+
+/* ---------- Comparativo ---------- */
+
+.seller-cmp {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s2);
+}
+
+.seller-cmp li {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: var(--s3);
+  align-items: center;
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.seller-cmp li:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.seller-cmp b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Delta ja traz icone de seta no JSX — cor so reforca */
+.seller-up,
+.seller-down {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.seller-up {
+  color: var(--pos);
+}
+
+.seller-down {
+  color: var(--neg);
+}
+
+/* ---------- Barras ---------- */
+
+.seller-bars {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s2);
+}
+
+.seller-bars li {
+  display: grid;
+  grid-template-columns: 110px 1fr auto;
+  gap: var(--s2);
+  align-items: center;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.seller-bars i {
+  display: block;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--grad);
+  transform-origin: left;
+  animation: growX 0.7s var(--ease) both;
+}
+
+.seller-bars b,
+.seller-bars strong {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+
+.seller-note {
+  margin: var(--s4) 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+@media (min-width: 720px) {
+  .seller-kpis {
+    grid-template-columns: 1.3fr 1fr 1fr;
+  }
+}

@@ -1,4 +1,5 @@
 import { forwardRef, useCallback } from "react";
+import * as maplibregl from "maplibre-gl";
 import MapLibre, { Marker, Popup, NavigationControl } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cn } from "@/lib/utils";
@@ -56,6 +57,7 @@ export const Map = forwardRef(function Map(
             }
       }
       onMove={onMove}
+      mapLib={maplibregl}
       mapStyle={mapStyle}
       attributionControl
       reuseMaps
