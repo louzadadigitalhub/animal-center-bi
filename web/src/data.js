@@ -1,5 +1,5 @@
 export const MONTHS = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-export const YEARS = [2023, 2024, 2025, 2026];
+export const YEARS = [2026];
 
 export const brl = (n) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
@@ -254,13 +254,12 @@ function unitSlice(meta, year, month) {
       d: i + 1,
       fat: Math.round((fat / 11) * (0.6 + ((i * 17) % 9) / 10)),
     })),
-    compareYears: YEARS.map((y) => {
+    compareYears: [year].map((y) => {
       const m = month === "all" ? lastCompleteMonth(y) : month;
-      const scale = year === 2026 && month === 8 && y < 2026 ? 11 / 30 : 1;
       return {
         ano: y,
-        fat: Math.round(sliceYear(meta.fat[y], m) * scale),
-        qtd: Math.round(sliceYear(meta.vendas[y], m) * scale),
+        fat: Math.round(sliceYear(meta.fat[y], m)),
+        qtd: Math.round(sliceYear(meta.vendas[y], m)),
       };
     }),
   };

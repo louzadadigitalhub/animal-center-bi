@@ -340,7 +340,7 @@ export function aggregate(rows) {
       monthlyFatPrev: Array(12).fill(0),
       monthlyQtd,
       dailyFat,
-      compareYears: [2023, 2024, 2025, 2026].map((y) => {
+      compareYears: [...new Set(parsed.map((r) => r.dt.y).filter(Boolean))].sort().map((y) => {
         const ls = parsed.filter((r) => {
           if (r.dt.y !== y) return false;
           if (unit !== "consolidado" && r.unit !== unit) return false;

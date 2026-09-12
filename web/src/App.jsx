@@ -38,7 +38,7 @@ function Kpi({ label, value, hint, spark, warn }) {
   );
 }
 
-function Vendas({ u }) {
+function Vendas({ u, year }) {
   const fatSeries = u.monthlyFat.map((n) => n || 0);
   const groupsDonut = u.grupos.map((g) => ({ nome: g.nome, value: g.valor, hint: brl(g.valor) }));
   const alerts = u.grupos.filter((g) => g.valor < g.media);
@@ -156,20 +156,24 @@ function Vendas({ u }) {
         )}
       </section>
 
-      <section className="tile tile-dark tile-annual">
-        <header>
-          <h2>Anos</h2>
-          <p>Recebimento no mesmo recorte</p>
-        </header>
-        <ol className="year-list">
-          {u.compareYears.map((c) => (
-            <li key={c.ano} className={c.ano === 2026 ? "now" : ""}>
-              <span>{c.ano}</span>
-              <b>{brl(c.fat)}</b>
-            </li>
-          ))}
-        </ol>
-      </section>
+      {(u.compareYears || []).filter((c) => c.qtd || c.fat).length > 1 ? (
+        <section className="tile tile-dark tile-annual">
+          <header>
+            <h2>Anos</h2>
+            <p>Recebimento no mesmo recorte</p>
+          </header>
+          <ol className="year-list">
+            {u.compareYears
+              .filter((c) => c.qtd || c.fat)
+              .map((c) => (
+                <li key={c.ano} className={c.ano === year ? "now" : ""}>
+                  <span>{c.ano}</span>
+                  <b>{brl(c.fat)}</b>
+                </li>
+              ))}
+          </ol>
+        </section>
+      ) : null}
     </div>
   );
 }
@@ -591,6 +595,7 @@ export default function App() {
   ];
   const demo = useMemo(() => getView(unit, year, month), [unit, year, month]);
   const u = live?.view ? { ...demo, ...live.view } : demo;
+  const yearsOn = [...new Set((u.compareYears || []).filter((c) => c.qtd || c.fat).map((c) => c.ano).concat([year]))].sort();
   const label = periodLabel(year, month);
   const fonte = live?.ok
     ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
@@ -631,13 +636,15 @@ export default function App() {
             );
           })}
         </nav>
-        <div className="period">
-          {YEARS.map((y) => (
-            <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
-              {y}
-            </button>
-          ))}
-        </div>
+        {yearsOn.length > 1 ? (
+          <div className="period">
+            {yearsOn.map((y) => (
+              <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
+                {y}
+              </button>
+            ))}
+          </div>
+        ) : null}
       </header>
       <aside>
         <div className="brand">
@@ -672,11 +679,13 @@ export default function App() {
           </div>
           <div className="period">
             <CalendarBlank size={16} />
-            {YEARS.map((y) => (
-              <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
-                {y}
-              </button>
-            ))}
+            {yearsOn.length > 1
+              ? yearsOn.map((y) => (
+                  <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
+                    {y}
+                  </button>
+                ))
+              : null}
             <select value={month} onChange={(e) => setMonth(e.target.value === "all" ? "all" : Number(e.target.value))}>
               <option value="all">Ano todo</option>
               {MONTHS.map((m, i) => (
@@ -698,7 +707,7 @@ export default function App() {
           </p>
         </div>
 
-        {page === "vendas" && <Vendas u={u} />}
+        {page === "vendas" && <Vendas u={u} year={year} />}
         {page === "ritmo" && <Ritmo u={u} />}
         {page === "equipe" && <Equipe u={u} onOpen={setDetail} />}
         {page === "clientes" && <Clientes u={u} onOpen={setDetail} />}
