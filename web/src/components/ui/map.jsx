@@ -4,6 +4,10 @@ import MapLibre, { Marker, Popup, NavigationControl } from "react-map-gl/maplibr
 import "maplibre-gl/dist/maplibre-gl.css";
 import { cn } from "@/lib/utils";
 
+/* O worker vive em public/maplibre/, copiado do node_modules por
+   scripts/copy-maplibre-worker.mjs. O porque esta no comentario de la. */
+maplibregl.setWorkerUrl("/maplibre/maplibre-gl-worker.mjs");
+
 const FREE_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
 export const Map = forwardRef(function Map(
@@ -57,6 +61,7 @@ export const Map = forwardRef(function Map(
             }
       }
       onMove={onMove}
+      onError={(e) => console.error("MAPLIBRE ERRO:", e?.error?.message || e?.error || e)}
       mapLib={maplibregl}
       mapStyle={mapStyle}
       attributionControl

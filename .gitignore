@@ -14,3 +14,6 @@ Sem Título.rtf
 .impeccable/
 web/.impeccable/
 
+
+# gerado por web/scripts/copy-maplibre-worker.mjs no prebuild
+web/public/maplibre/
