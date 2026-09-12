@@ -52,6 +52,7 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.json({ limit: "32kb" }));
+const bootedAt = new Date().toISOString();
 let lastError = null;
 let running = false;
 
@@ -101,8 +102,29 @@ async function tick() {
   }
 }
 
+/* A string fixa nao dizia nada sobre o que estava no ar de fato. O nome do
+   bundle carrega hash do conteudo e muda a cada build, entao serve para
+   saber se um deploy realmente pegou. */
+let assetCache = null;
+function assetAtual() {
+  if (assetCache) return assetCache;
+  try {
+    const html = readFileSync(join(WEB_DIR, "index.html"), "utf8");
+    assetCache = html.match(/assets\/(index-[\w-]+\.js)/)?.[1] || "desconhecido";
+  } catch {
+    assetCache = "sem build";
+  }
+  return assetCache;
+}
+
 app.get("/api/version", (_req, res) => {
-  res.json({ v: "grafico-20260912c", tz: "America/Sao_Paulo" });
+  res.json({
+    v: "grafico-20260912c",
+    build: process.env.BUILD_MARK || null,
+    asset: assetAtual(),
+    subiuEm: bootedAt,
+    tz: "America/Sao_Paulo",
+  });
 });
 
 app.get("/api/health", async (_req, res) => {

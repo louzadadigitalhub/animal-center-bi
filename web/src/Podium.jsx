@@ -335,7 +335,9 @@ export default function Podium({ equipe = [], brl, fotos }) {
 
   return (
     <div className="podium-wrap">
-      <ol className="podium">
+      {/* A Filial tem uma vendedora so. Tres colunas com um degrau no meio
+          parece defeito, entao o grid acompanha quantas pessoas existem. */}
+      <ol className={`podium podium-${top.length}`}>
         {ordem.map((rank) => (
           <Degrau
             key={`${top[rank - 1].nome}-${rank === 1 ? ciclo : 0}`}

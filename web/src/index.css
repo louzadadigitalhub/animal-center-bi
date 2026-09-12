@@ -1399,6 +1399,24 @@ tr.click:hover td,
   align-items: end;
 }
 
+/* Com menos de tres, o podio encolhe em vez de deixar coluna vazia */
+.podium-1 {
+  grid-template-columns: minmax(0, 340px);
+  justify-content: center;
+}
+
+.podium-2 {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
+  max-width: 820px;
+  margin-inline: auto;
+}
+
+/* Sozinha no recorte, ela nao esta "em primeiro": esta sozinha. */
+.podium-1 .pod-metal::after {
+  content: " · única no recorte";
+  font-weight: 600;
+}
+
 .pod {
   position: relative;
   display: flex;
