@@ -264,6 +264,19 @@ export function aggregate(rows) {
       ticketVenda: qtd ? Math.round(fatVenda / qtd) : 0,
       ticketCliente: clienteNomes.size ? Math.round(fat / clienteNomes.size) : 0,
       recebido: Math.round(recebido),
+      caixa: (() => {
+        const noDia = recebidos
+          .filter((r) => r.dtBaixa && r.dt && r.dtBaixa.d === r.dt.d && r.dtBaixa.m === r.dt.m && r.dtBaixa.y === r.dt.y)
+          .reduce((a, r) => a + r.valor, 0);
+        const posteriores = Math.max(0, recebido - noDia);
+        return {
+          noDia: Math.round(noDia),
+          posteriores: Math.round(posteriores),
+          adiantamento: 0,
+          receitaTotal: Math.round(recebido),
+          emAberto: Math.round(Math.max(0, fatVenda - recebido)),
+        };
+      })(),
       consultas: list.filter((r) => r.grupo === "Consultas").length,
       vacinasAplicadas: list.filter((r) => r.grupo === "Vacinas").length,
       atendimentos:
