@@ -14,6 +14,7 @@ RUN mkdir -p /root/.cache \
   && npx playwright install chromium
 
 COPY web/ web/
+ARG CHART_FIX=20260912b
 RUN cd web && npm run build
 
 COPY bot/ bot/

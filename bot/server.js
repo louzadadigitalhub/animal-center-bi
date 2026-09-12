@@ -96,15 +96,13 @@ app.get("/api/snapshot", async (req, res) => {
   const year = Number(req.query.year || 2026);
   const month = req.query.month === "all" ? "all" : Number(req.query.month ?? 8);
   const view = snap.snapshot.views[unit]?.[year]?.[month];
-  if (view?.dailyFat && view?.caixa?.receitaTotal) {
-    const cap = view.caixa.receitaTotal;
-    view.dailyFat = view.dailyFat.map((row) => {
-      let fat = Number(row.fat) || 0;
-      while (fat > cap && fat >= 100) fat /= 100;
-      if (fat > 1e7) fat = 0;
-      return { d: row.d, fat: Math.round(fat) };
-    });
-  }
+  const cap = Math.max(Number(view?.caixa?.receitaTotal || view?.fat) || 0, 1);
+  const dailyFat = (view?.dailyFat || []).map((row) => {
+    let fat = Number(row.fat) || 0;
+    while (cap > 1 && fat > cap && fat >= 100) fat /= 100;
+    if (fat > 10000000) fat = 0;
+    return { d: row.d, fat: Math.round(fat) };
+  });
   res.json({
     ok: true,
     at: snap.at,
@@ -112,7 +110,7 @@ app.get("/api/snapshot", async (req, res) => {
     to: snap.to,
     rows: snap.rows,
     headers: snap.snapshot.headers,
-    view: view || null,
+    view: view ? { ...view, dailyFat } : null,
   });
 });
 
