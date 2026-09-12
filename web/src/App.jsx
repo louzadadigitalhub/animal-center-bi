@@ -13,7 +13,7 @@ import { List } from "@phosphor-icons/react/List";
 import { X } from "@phosphor-icons/react/X";
 import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
-import { DailyBars, Donut, Hourly, LineChart, Radar, SparkBars } from "./charts";
+import { DailyBars, Donut, Hourly, LineChart, Radar, SparkBars, Treemap, VolumeTicket } from "./charts";
 import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily } from "./data";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
@@ -189,11 +189,11 @@ function Vendas({ u, year }) {
         </Card>
         <Card className="tile tile-costs">
           <CardHeader>
-            <CardTitle>Grupos</CardTitle>
-            <CardDescription>Pilares da clinica</CardDescription>
+            <CardTitle>Faturamento por pilar</CardTitle>
+            <CardDescription>Area = participacao no total</CardDescription>
           </CardHeader>
           <CardContent>
-            <Donut slices={groupsDonut} totalLabel="Vendas" totalValue={brl(u.fatVenda || u.fat)} />
+            <Treemap slices={groupsDonut} brl={brl} />
           </CardContent>
         </Card>
         {(u.compareYears || []).filter((c) => c.qtd || c.fat).length > 1 ? (
@@ -256,6 +256,13 @@ function Equipe({ u, onOpen }) {
   const maxFat = Math.max(1, ...u.equipe.map((p) => p.fat));
   return (
     <div className="bento">
+      <section className="card span-12">
+        <header>
+          <h2>Volume x ticket</h2>
+          <p>Barra e quantidade de vendas, ponto e ticket medio. Quem vende muito nem sempre vende caro.</p>
+        </header>
+        <VolumeTicket pessoas={u.equipe} brl={brl} />
+      </section>
       <section className="card span-12">
         <header>
           <h2>Ranking</h2>
@@ -384,7 +391,7 @@ function Clientes({ u, onOpen }) {
         onOpen={() => onOpen(listaPorEspecie("Felinos", /felin/i, lista, especies))}
       />
 
-      <section className="card span-8">
+      <section className="card span-12">
         <header>
           <h2>Onde os tutores moram</h2>
           <p>Cada alfinete e um tutor, no endereco do cadastro. Clique para abrir a ficha.</p>
@@ -394,6 +401,31 @@ function Clientes({ u, onOpen }) {
           clients={lista}
           onSelect={(p) => onOpen({ type: p.kind || "cliente", payload: p.payload || p })}
         />
+      </section>
+
+      <section className="card span-4">
+        <header>
+          <h2>Genero do tutor</h2>
+          <p>Quem traz o animal na clinica.</p>
+        </header>
+        <div className="genero">
+          {[
+            ["fem", "Mulheres", u.genero?.fem || 0],
+            ["masc", "Homens", u.genero?.masc || 0],
+          ].map(([k, rotulo, n]) => {
+            const tot = (u.genero?.fem || 0) + (u.genero?.masc || 0) || 1;
+            return (
+              <div key={k} className={`genero-${k}`}>
+                <strong>{num(n)}</strong>
+                <span>{rotulo}</span>
+                <div className="track">
+                  <i style={{ width: `${Math.round((n / tot) * 100)}%` }} />
+                </div>
+                <small>{Math.round((n / tot) * 100)}% do total</small>
+              </div>
+            );
+          })}
+        </div>
       </section>
 
       <section className="card span-4">
@@ -779,6 +811,9 @@ export default function App() {
   const hoje = hojeBR();
   const [year, setYear] = useState(hoje.getFullYear());
   const [month, setMonth] = useState(hoje.getMonth());
+  /* hoje e semana ja vem dentro da mesma resposta do snapshot, entao trocar
+     para eles nao custa rede nenhuma. Mes e ano e que mudam a busca. */
+  const [periodo, setPeriodo] = useState("mes");
   const [live, setLive] = useState(null);
   const [detail, setDetail] = useState(null);
   const [menu, setMenu] = useState(false);
@@ -801,9 +836,16 @@ export default function App() {
     { id: "vacinas", label: "Vacinas", icon: Syringe },
   ];
   const demo = useMemo(() => getView(unit, year, month), [unit, year, month]);
-  const u = live?.view ? { ...demo, ...live.view } : demo;
+  const recorte =
+    periodo === "hoje" ? live?.hoje : periodo === "semana" ? live?.semana : live?.view;
+  const u = recorte ? { ...demo, ...recorte } : demo;
   const yearsOn = [...new Set([...(live?.years || []), ...(u.compareYears || []).filter((c) => c.qtd || c.fat).map((c) => c.ano), year])].filter(Boolean).sort((a, b) => a - b);
-  const label = periodLabel(year, month);
+  const label =
+    periodo === "hoje"
+      ? `Hoje · ${u.diaLabel || ""}`
+      : periodo === "semana"
+        ? `Semana · ${u.diaLabel || ""}${u.dias ? ` · ${u.dias} dia(s)` : ""}`
+        : periodLabel(year, month);
   const fonte = live?.ok
     ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
     : "Aguardando robô";
@@ -935,7 +977,32 @@ export default function App() {
               </button>
             ))}
           </div>
-          <div className="period">
+          <div className="periodos" role="tablist" aria-label="Recorte">
+            {[
+              ["hoje", "Hoje"],
+              ["semana", "Semana"],
+              ["mes", "Mês"],
+              ["ano", "Ano"],
+            ].map(([id, rotulo]) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={periodo === id}
+                className={periodo === id ? "on" : ""}
+                onClick={() => {
+                  setPeriodo(id);
+                  if (id === "mes") {
+                    setYear(hoje.getFullYear());
+                    setMonth(hoje.getMonth());
+                  }
+                  if (id === "ano") setMonth("all");
+                }}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+          <div className="period" hidden={periodo === "hoje" || periodo === "semana"}>
             <CalendarBlank size={16} />
             <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
               {yearsOn.map((y) => (
@@ -944,7 +1011,15 @@ export default function App() {
                 </option>
               ))}
             </select>
-            <select value={month} onChange={(e) => setMonth(e.target.value === "all" ? "all" : Number(e.target.value))} aria-label="Mes">
+            <select
+              value={month}
+              onChange={(e) => {
+                const v = e.target.value === "all" ? "all" : Number(e.target.value);
+                setMonth(v);
+                setPeriodo(v === "all" ? "ano" : "mes");
+              }}
+              aria-label="Mes"
+            >
               <option value="all">Ano todo</option>
               {MONTHS.map((m, i) => (
                 <option key={m} value={i} disabled={year === hoje.getFullYear() && i > hoje.getMonth()}>

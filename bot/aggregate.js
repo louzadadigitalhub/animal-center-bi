@@ -129,9 +129,12 @@ export function aggregate(rows) {
     return { y: Number(parts.year), m: Number(parts.month), d: Number(parts.day) };
   }
 
-  function slice(unit, year, month, day) {
+  /* dentro() e um recorte livre sobre a data. A semana precisa dele porque
+     atravessa a virada do mes: 30/09 e 01/10 caem na mesma semana. */
+  function slice(unit, year, month, day, dentro) {
     const list = parsed.filter((r) => {
       if (unit !== "consolidado" && r.unit !== unit) return false;
+      if (dentro) return dentro(r.dt);
       if (r.dt.y !== year) return false;
       if (month !== "all" && r.dt.m !== month + 1) return false;
       if (day != null && r.dt.d !== day) return false;
@@ -421,5 +424,29 @@ export function aggregate(rows) {
     hoje[unit] = h;
   }
 
-  return { headers, count: parsed.length, years, views, hoje };
+  /* Semana corrente: segunda ate hoje, no fuso de Brasilia. Nao e "ultimos
+     7 dias" — quem olha o painel na quarta quer a semana que esta correndo,
+     nao uma janela movel que comeca numa quinta. */
+  const semana = {};
+  {
+    const base = new Date(Date.UTC(now.y, now.m - 1, now.d));
+    const diaSemana = (base.getUTCDay() + 6) % 7; // 0 = segunda
+    const ini = new Date(base);
+    ini.setUTCDate(base.getUTCDate() - diaSemana);
+    const iniMs = ini.getTime();
+    const fimMs = base.getTime();
+    const rotulo = (d) =>
+      `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    for (const unit of ["matriz", "filial", "consolidado"]) {
+      const sem = slice(unit, null, "all", null, (dt) => {
+        const t = Date.UTC(dt.y, dt.m - 1, dt.d);
+        return t >= iniMs && t <= fimMs;
+      });
+      sem.diaLabel = `${rotulo(ini)} a ${rotulo(base)}`;
+      sem.dias = diaSemana + 1;
+      semana[unit] = sem;
+    }
+  }
+
+  return { headers, count: parsed.length, years, views, hoje, semana };
 }

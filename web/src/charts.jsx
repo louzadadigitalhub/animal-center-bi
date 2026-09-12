@@ -322,3 +322,91 @@ export function Hourly({ values }) {
     </div>
   );
 }
+
+/* Treemap — o "_Faturamento por Pilar" do BI antigo. A area conta a
+   participacao melhor que barra quando uma fatia domina as outras. */
+export function Treemap({ slices = [], brl }) {
+  const total = slices.reduce((a, s) => a + (s.value || 0), 0) || 1;
+  const dados = [...slices].filter((s) => s.value > 0).sort((a, b) => b.value - a.value);
+  const W = 320;
+  const H = 200;
+
+  /* Squarify simplificado: corta a faixa mais longa a cada passo, o que
+     evita os retangulos finos que o corte fixo produz. */
+  const caixas = [];
+  let x = 0, y = 0, w = W, h = H;
+  let resto = total;
+  dados.forEach((d, i) => {
+    const parte = d.value / resto;
+    const ultimo = i === dados.length - 1;
+    if (w >= h) {
+      const cw = ultimo ? w : w * parte;
+      caixas.push({ ...d, x, y, w: cw, h });
+      x += cw; w -= cw;
+    } else {
+      const ch = ultimo ? h : h * parte;
+      caixas.push({ ...d, x, y, w, h: ch });
+      y += ch; h -= ch;
+    }
+    resto -= d.value;
+  });
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="chart treemap" role="img" aria-label="Faturamento por pilar">
+      {caixas.map((c, i) => {
+        const cor = SERIES[i % SERIES.length];
+        const cabe = c.w > 52 && c.h > 26;
+        return (
+          <g key={c.nome}>
+            <title>{`${c.nome}: ${brl ? brl(c.value) : c.value} (${Math.round((c.value / total) * 100)}%)`}</title>
+            <rect x={c.x + 1} y={c.y + 1} width={Math.max(0, c.w - 2)} height={Math.max(0, c.h - 2)} rx="4" fill={cor} opacity="0.88" />
+            {cabe ? (
+              <>
+                <text x={c.x + 8} y={c.y + 17} fontSize="9" fontWeight="600" fill="#06212c">
+                  {c.nome.length > 13 ? `${c.nome.slice(0, 12)}…` : c.nome}
+                </text>
+                <text x={c.x + 8} y={c.y + 29} fontSize="9" fill="#06212c" opacity="0.75" fontFamily="var(--mono)">
+                  {Math.round((c.value / total) * 100)}%
+                </text>
+              </>
+            ) : null}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+/* Volume x ticket por pessoa, eixo duplo — a p7 do BI antigo. Barra e
+   quantidade, ponto e ticket: quem vende muito nem sempre vende caro. */
+export function VolumeTicket({ pessoas = [], brl }) {
+  const dados = [...pessoas].filter((p) => p.vendas).sort((a, b) => b.vendas - a.vendas).slice(0, 10);
+  if (!dados.length) return <p className="hint">Sem vendas no recorte.</p>;
+  const w = 560, h = 220, padLeft = 40, padBaixo = 46, top = 16;
+  const base = h - padBaixo;
+  const maxV = Math.max(1, ...dados.map((p) => p.vendas));
+  const maxT = Math.max(1, ...dados.map((p) => p.ticket || 0));
+  const bw = (w - padLeft - 12) / dados.length;
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="chart" role="img" aria-label="Volume e ticket por pessoa">
+      <Grads id="vt" />
+      <Grid w={w} top={top} base={base} max={maxV} padLeft={padLeft} steps={3} />
+      {dados.map((p, i) => {
+        const x = padLeft + i * bw;
+        const bh = (p.vendas / maxV) * (base - top);
+        const yT = base - ((p.ticket || 0) / maxT) * (base - top);
+        return (
+          <g key={p.nome}>
+            <title>{`${p.nome}: ${p.vendas} vendas · ticket ${brl ? brl(p.ticket) : p.ticket}`}</title>
+            <rect className="bar-grow" style={{ animationDelay: `${i * 40}ms` }} x={x + 3} y={base - bh} width={Math.max(3, bw - 8)} height={bh} rx="3" fill="url(#vt-off)" />
+            <circle className="dot" style={{ animationDelay: `${300 + i * 40}ms` }} cx={x + bw / 2} cy={yT} r="3.4" fill="var(--surface-1)" stroke="var(--cyan)" strokeWidth="1.8" />
+            <text x={x + bw / 2} y={h - 30} textAnchor="middle" fontSize="8" fill={AXIS} transform={`rotate(-32 ${x + bw / 2} ${h - 30})`}>
+              {p.nome.split(" ")[0]}
+            </text>
+          </g>
+        );
+      })}
+      <line x1={padLeft} y1={base} x2={w - 12} y2={base} stroke={GRID} />
+    </svg>
+  );
+}
