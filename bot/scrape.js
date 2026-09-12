@@ -1,5 +1,5 @@
 import { chromium } from "playwright";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { writeFile, mkdir } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -242,11 +242,47 @@ function subCaixa(a, b) {
   return out;
 }
 
+function findChrome() {
+  const roots = [
+    process.env.PLAYWRIGHT_CHROMIUM_PATH,
+    process.env.PLAYWRIGHT_BROWSERS_PATH,
+    "/ms-playwright",
+    "/root/.cache/ms-playwright",
+    "/home/pwuser/.cache/ms-playwright",
+  ].filter(Boolean);
+  const names = ["headless_shell", "chrome", "chromium"];
+  const walk = (dir, depth = 0) => {
+    if (!dir || !existsSync(dir) || depth > 5) return null;
+    try {
+      for (const ent of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, ent.name);
+        if (ent.isFile() && names.includes(ent.name)) return p;
+        if (ent.isDirectory()) {
+          const hit = walk(p, depth + 1);
+          if (hit) return hit;
+        }
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  };
+  for (const root of roots) {
+    if (existsSync(root) && names.some((n) => root.endsWith("/" + n))) return root;
+    const hit = walk(root);
+    if (hit) return hit;
+  }
+  return null;
+}
+
 export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) {
   if (!EMAIL || !PASSWORD) throw new Error("SIMPLES_VET_EMAIL/PASSWORD ausentes");
 
+  const executablePath = findChrome() || undefined;
+  if (executablePath) console.log("chrome", executablePath);
   const browser = await chromium.launch({
     headless: true,
+    executablePath,
     args: ["--no-sandbox", "--disable-dev-shm-usage"],
   });
   const context = await browser.newContext({

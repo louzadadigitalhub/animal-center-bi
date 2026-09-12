@@ -2,11 +2,13 @@ FROM mcr.microsoft.com/playwright:v1.55.0-noble
 
 WORKDIR /app
 
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+
 COPY web/package.json web/package-lock.json web/
 RUN cd web && npm ci
 
 COPY bot/package.json bot/package-lock.json bot/
-RUN cd bot && npm ci --omit=dev
+RUN cd bot && npm ci --omit=dev && npx playwright install chromium
 
 COPY web/ web/
 RUN cd web && npm run build
