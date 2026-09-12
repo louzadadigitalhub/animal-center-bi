@@ -15,10 +15,12 @@ function shortMil(n) {
   return v.toLocaleString("pt-BR");
 }
 
-export function DailyBars({ days = [], h = 300 }) {
+export function DailyBars({ days = [], h = 340 }) {
+  const last = Math.max(1, ...days.filter((d) => d.fat).map((d) => d.d), 1);
+  const vis = days.filter((d) => d.d <= last);
   const w = 720;
-  const max = Math.max(1, ...days.map((d) => d.fat));
-  const n = Math.max(1, days.length);
+  const max = Math.max(1, ...vis.map((d) => d.fat));
+  const n = Math.max(1, vis.length);
   const bw = (w - 36) / n;
   const top = 22;
   const base = h - 22;
@@ -30,7 +32,7 @@ export function DailyBars({ days = [], h = 300 }) {
           <stop offset="100%" stopColor="#3ec8f0" />
         </linearGradient>
       </defs>
-      {days.map((d, i) => {
+      {vis.map((d, i) => {
         const x = 18 + i * bw;
         const barH = (d.fat / max) * (base - top);
         const y = base - barH;
@@ -119,24 +121,24 @@ export function Donut({ slices, totalLabel, totalValue }) {
   const sum = slices.reduce((a, s) => a + s.value, 0) || 1;
   let acc = 0;
   const colors = ["#3ec8f0", "#12203a", "#2ad4c8", "#1b2e52", "#7a8aa3", "#5ee0ff", "#2b3a57"];
-  const r = 42;
+  const r = 56;
   const c = 2 * Math.PI * r;
   return (
     <div className="donut-wrap">
-      <svg viewBox="0 0 120 120" className="donut">
-        <g transform="rotate(-90 60 60)">
+      <svg viewBox="0 0 160 160" className="donut">
+        <g transform="rotate(-90 80 80)">
           {slices.map((s, i) => {
             const len = (s.value / sum) * c;
             const dash = `${len} ${c - len}`;
             const el = (
               <circle
                 key={s.nome}
-                cx="60"
-                cy="60"
+                cx="80"
+                cy="80"
                 r={r}
                 fill="none"
                 stroke={colors[i % colors.length]}
-                strokeWidth="14"
+                strokeWidth="18"
                 strokeDasharray={dash}
                 strokeDashoffset={-acc}
               />
@@ -145,10 +147,10 @@ export function Donut({ slices, totalLabel, totalValue }) {
             return el;
           })}
         </g>
-        <text x="60" y="56" textAnchor="middle" fontSize="11" fill="#657694">
+        <text x="80" y="74" textAnchor="middle" fontSize="12" fill="#7a8aa3">
           {totalLabel}
         </text>
-        <text x="60" y="72" textAnchor="middle" fontSize="13" fontWeight="700" fill="#162136">
+        <text x="80" y="94" textAnchor="middle" fontSize="14" fontWeight="700" fill="#12203a">
           {totalValue}
         </text>
       </svg>
@@ -168,9 +170,9 @@ export function Donut({ slices, totalLabel, totalValue }) {
 export function Radar({ slices = [] }) {
   const n = slices.length || 1;
   const max = Math.max(1, ...slices.map((s) => s.value));
-  const cx = 110;
-  const cy = 110;
-  const r = 62;
+  const cx = 140;
+  const cy = 140;
+  const r = 88;
   const pt = (i, v) => {
     const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
     const rr = r * (v / max);
@@ -179,7 +181,7 @@ export function Radar({ slices = [] }) {
   const rings = [0.35, 0.65, 1];
   const poly = slices.map((s, i) => pt(i, s.value).join(",")).join(" ");
   return (
-    <svg viewBox="0 0 220 220" className="chart radar">
+    <svg viewBox="0 0 280 280" className="chart radar">
       {rings.map((k) => (
         <polygon
           key={k}
@@ -195,10 +197,10 @@ export function Radar({ slices = [] }) {
       <polygon points={poly} fill="rgba(0,224,92,.22)" stroke="#00e05c" strokeWidth="2" />
       {slices.map((s, i) => {
         const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-        const x = cx + Math.cos(a) * 92;
-        const y = cy + Math.sin(a) * 92;
+        const x = cx + Math.cos(a) * 118;
+        const y = cy + Math.sin(a) * 118;
         return (
-          <text key={s.nome} x={x} y={y} textAnchor="middle" fontSize="9" fill="#162136">
+          <text key={s.nome} x={x} y={y} textAnchor="middle" fontSize="12" fill="#12203a">
             {s.nome}
           </text>
         );

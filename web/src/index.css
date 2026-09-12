@@ -162,6 +162,37 @@ select {
   margin-left: auto;
 }
 
+.logo {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.logo span {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--cyan);
+  color: var(--navy);
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 22px;
+}
+
+.logo strong {
+  display: block;
+  font-size: 14px;
+}
+
+.logo small {
+  color: var(--steel);
+  font-size: 11px;
+  letter-spacing: 0.125em;
+  text-transform: uppercase;
+}
+
 aside {
   display: none;
   background: var(--paper);
@@ -317,9 +348,29 @@ aside nav button.on {
 
 .dash {
   display: grid;
-  grid-template-columns: 1.05fr 1.55fr 1fr;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(0, 2fr) minmax(280px, 1.15fr);
   gap: 14px;
   animation: rise 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.tile-inflow,
+.tile-structure {
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+}
+
+.tile-inflow .chart,
+.tile-structure .chart.radar {
+  flex: 1;
+  min-height: 300px;
+  width: 100%;
+}
+
+.tile-budget .donut,
+.tile-costs .donut {
+  min-height: 200px;
+  width: 100%;
 }
 
 @keyframes rise {
@@ -331,6 +382,42 @@ aside nav button.on {
     opacity: 1;
     transform: none;
   }
+}
+
+.ui-card-header {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ui-card-title {
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  font-size: 16px;
+}
+
+.ui-card-desc {
+  font-size: 13px;
+  color: var(--steel);
+}
+
+.ui-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 8px;
+  padding: 3px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ui-badge-solid {
+  background: var(--cyan);
+  color: var(--navy);
+}
+
+.ui-badge-outline {
+  border: 1px solid var(--mist);
+  color: var(--steel);
 }
 
 .tile {
@@ -360,7 +447,9 @@ aside nav button.on {
   font-size: 12px;
 }
 
-.tile > strong {
+.tile > strong,
+.tile-balance .ui-card-title,
+.tile-goals .ui-card-title {
   display: block;
   font-family: var(--mono);
   font-size: clamp(26px, 4vw, 36px);
@@ -383,8 +472,16 @@ aside nav button.on {
   color: #9eb0c9;
 }
 
-.tile-dark > strong {
+.tile-dark > strong,
+.tile-dark .ui-card-title {
   color: #fff;
+  font-family: var(--mono);
+  font-size: clamp(26px, 4vw, 36px);
+}
+
+.tile-dark .ui-card-desc,
+.tile-dark .hint {
+  color: #9eb0c9;
 }
 
 .mini-kpis {
@@ -545,8 +642,8 @@ aside nav button.on {
 
 .donut-wrap {
   display: grid;
-  grid-template-columns: 140px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 12px;
   align-items: center;
 }
 
@@ -702,11 +799,54 @@ tr.now td {
 }
 
 .geo-map {
-  height: min(380px, 58vw);
-  min-height: 220px;
+  height: min(420px, 62vw);
+  min-height: 260px;
   border-radius: 16px;
   overflow: hidden;
   background: var(--frost);
+}
+
+.geo-map .maplibregl-map {
+  width: 100%;
+  height: 100%;
+}
+
+.map-pin {
+  display: block;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  filter: drop-shadow(0 2px 4px rgba(11, 22, 16, 0.35));
+}
+
+.map-count {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  z-index: 2;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #12203a;
+  font-size: 12px;
+}
+
+.maplibregl-popup-content {
+  padding: 10px 12px;
+  border-radius: 12px;
+  font-family: inherit;
+}
+
+.maplibregl-popup-content strong {
+  display: block;
+}
+
+.maplibregl-popup-content p {
+  margin: 4px 0 0;
+  color: #5b6b78;
+  font-size: 12px;
 }
 
 .click {

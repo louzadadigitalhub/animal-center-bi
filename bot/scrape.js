@@ -308,7 +308,48 @@ function findChrome() {
   return null;
 }
 
-export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) {
+async function exportVendas(page, from, to) {
+  await page.goto("https://app.simples.vet/principal/venda/venda.php", {
+    waitUntil: "domcontentloaded",
+  });
+  await page.waitForSelector("#filter", { timeout: 30000 });
+  await setDateRange(page, from, to);
+  await page.locator("#p__btn_filtrar").click();
+  await page.waitForTimeout(2500);
+  await page.locator("#p__btn_relatorio").click({ force: true });
+  await page.waitForTimeout(400);
+  const popupPromise = page.waitForEvent("popup", { timeout: 40000 }).catch(() => null);
+  const downloadPromise = page.waitForEvent("download", { timeout: 40000 }).catch(() => null);
+  await page.locator('a.p__btn_exportar[rel="xls_vendas"]').click({ force: true });
+  let text = "";
+  const download = await downloadPromise;
+  if (download) {
+    const p = join(DATA_DIR, "vendas-raw.csv");
+    await download.saveAs(p);
+    const { readFile } = await import("node:fs/promises");
+    const buf = await readFile(p);
+    const latin = buf.toString("latin1");
+    const utf8 = buf.toString("utf8");
+    text = (latin.match(/Grupo/g) || []).length >= (utf8.match(/Grupo/g) || []).length ? latin : utf8;
+    if (!text.includes(";") && !text.includes(",")) text = utf8;
+  } else {
+    const popup = await popupPromise;
+    if (popup) {
+      await popup.waitForLoadState("domcontentloaded");
+      text = await popup.evaluate(() => document.body.innerText);
+      await popup.close();
+    }
+  }
+  if (!text) throw new Error("Export vazio " + from + "-" + to);
+  return rowsToObjects(parseCsv(text));
+}
+
+export async function scrape({ from, to } = {}) {
+  const pNow = nowBrasilia();
+  const histFrom = from || `01/01/${pNow.y - 3}`;
+  const histTo = to || monthEndBR();
+  const caixaFrom = monthStartBR();
+  const caixaTo = monthEndBR();
   if (!EMAIL || !PASSWORD) throw new Error("SIMPLES_VET_EMAIL/PASSWORD ausentes");
 
   const executablePath = findChrome() || undefined;
@@ -329,59 +370,33 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
   try {
     await login(page);
 
-    await page.goto("https://app.simples.vet/principal/venda/venda.php", {
-      waitUntil: "domcontentloaded",
-    });
-    await page.waitForSelector("#filter", { timeout: 30000 });
-    await setDateRange(page, from, to);
-    await page.locator("#p__btn_filtrar").click();
-    await page.waitForTimeout(2500);
-
-    await page.locator("#p__btn_relatorio").click({ force: true });
-    await page.waitForTimeout(400);
-    const popupPromise = page.waitForEvent("popup", { timeout: 25000 }).catch(() => null);
-    const downloadPromise = page.waitForEvent("download", { timeout: 25000 }).catch(() => null);
-    await page.locator('a.p__btn_exportar[rel="xls_vendas"]').click({ force: true });
-
-    let text = "";
-    const download = await downloadPromise;
-    if (download) {
-      const p = join(DATA_DIR, "vendas-raw.csv");
-      await download.saveAs(p);
-      const { readFile } = await import("node:fs/promises");
-      const buf = await readFile(p);
-      const latin = buf.toString("latin1");
-      const utf8 = buf.toString("utf8");
-      text = (latin.match(/Grupo/g) || []).length >= (utf8.match(/Grupo/g) || []).length ? latin : utf8;
-      if (!text.includes(";") && !text.includes(",")) text = utf8;
-    } else {
-      const popup = await popupPromise;
-      if (popup) {
-        await popup.waitForLoadState("domcontentloaded");
-        text = await popup.evaluate(() => document.body.innerText);
-        await popup.close();
+    const objects = [];
+    const startY = Number(String(histFrom).slice(-4)) || pNow.y - 3;
+    for (let y = startY; y <= pNow.y; y++) {
+      const f = `01/01/${y}`;
+      const t = y === pNow.y ? histTo : `31/12/${y}`;
+      try {
+        const chunk = await exportVendas(page, f, t);
+        console.log("vendas", y, chunk.length);
+        objects.push(...chunk);
+      } catch (err) {
+        console.warn("vendas", y, String(err && err.message ? err.message : err));
       }
     }
-
-    if (!text) {
-      const html = await page.content();
-      throw new Error("Export nao veio (csv vazio). html=" + html.length);
-    }
-
-    const objects = rowsToObjects(parseCsv(text));
+    if (!objects.length) throw new Error("Export nao veio (csv vazio).");
     let snapshot = aggregate(objects);
     let caixaTodos = null;
     let caixaFilial = null;
     try {
-      caixaTodos = await scrapeRecebimentos(page, from, to, "");
-      snapshot = applyRecebimentos(snapshot, caixaTodos, from, "consolidado");
+      caixaTodos = await scrapeRecebimentos(page, caixaFrom, caixaTo, "");
+      snapshot = applyRecebimentos(snapshot, caixaTodos, caixaFrom, "consolidado");
     } catch (err) {
       console.warn("recebimentos consolidado falhou", err);
     }
     try {
-      caixaFilial = await scrapeRecebimentos(page, from, to, FILIAL_USER_ID);
+      caixaFilial = await scrapeRecebimentos(page, caixaFrom, caixaTo, FILIAL_USER_ID);
       if (caixaFilial?.receitaTotal > 0) {
-        snapshot = applyRecebimentos(snapshot, caixaFilial, from, "filial");
+        snapshot = applyRecebimentos(snapshot, caixaFilial, caixaFrom, "filial");
       } else {
         caixaFilial = null;
       }
@@ -390,7 +405,7 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
     }
     if (caixaTodos && caixaFilial) {
       const packM = subCaixa(caixaPack(caixaTodos), caixaPack(caixaFilial));
-      const m = String(from).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      const m = String(caixaFrom).match(/(\d{2})\/(\d{2})\/(\d{4})/);
       if (m) {
         const month = Number(m[2]) - 1;
         const year = Number(m[3]);
@@ -409,18 +424,24 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
         snapshot.caixaOficial.matriz = { ...packM, at: agoraBrasiliaIso() };
       }
     } else if (caixaTodos) {
-      snapshot = applyRecebimentos(snapshot, caixaTodos, from, "matriz");
+      snapshot = applyRecebimentos(snapshot, caixaTodos, caixaFrom, "matriz");
     }
     await mkdir(DATA_DIR, { recursive: true });
     await writeFile(join(DATA_DIR, "vendas.json"), JSON.stringify(objects, null, 0));
+    try {
+      const { mergeSalesHistory } = await import("./people.js");
+      await mergeSalesHistory(objects);
+    } catch (err) {
+      console.warn("historico pessoas falhou", err);
+    }
     await writeFile(
       join(DATA_DIR, "snapshot.json"),
       JSON.stringify(
         {
           ok: true,
           at: agoraBrasiliaIso(),
-          from,
-          to,
+          from: histFrom,
+          to: histTo,
           rows: objects.length,
           snapshot,
           caixa: {
@@ -433,15 +454,15 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
         0
       )
     );
-    await writeFile(join(DATA_DIR, "raw.csv"), text);
+    await writeFile(join(DATA_DIR, "raw.csv"), `anos ${histFrom} ${histTo} linhas ${objects.length}\n`);
     await writeFile(
       join(DATA_DIR, "recebimentos.json"),
       JSON.stringify({ consolidado: caixaTodos, filial: caixaFilial }, null, 2)
     );
     return {
       rows: objects.length,
-      from,
-      to,
+      from: histFrom,
+      to: histTo,
       matriz: snapshot.caixaOficial?.matriz?.receitaTotal || null,
       filial: caixaFilial ? caixaFilial.receitaTotal : null,
       consolidado: caixaTodos ? caixaTodos.receitaTotal : null,

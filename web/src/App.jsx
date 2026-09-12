@@ -14,6 +14,8 @@ import { X } from "@phosphor-icons/react/X";
 import { DailyBars, Donut, Hourly, LineChart, Radar, SparkBars } from "./charts";
 import { MONTHS, YEARS, brl, getView, num, periodLabel, sanitizeDaily } from "./data";
 import MapPanel from "./MapPanel.jsx";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
+import { Badge } from "./components/ui/badge.jsx";
 
 const NAV = [
   { id: "vendas", label: "Vendas", icon: ChartBar },
@@ -58,76 +60,93 @@ function Vendas({ u, year }) {
   const maxG = Math.max(1, ...u.grupos.map((x) => x.valor));
   return (
     <div className="dash">
-      <article className="tile tile-dark tile-balance">
-        <p>Receita total</p>
-        <strong>{brl(cx.receitaTotal || u.fat)}</strong>
-        <small>Recebimentos do recorte. Nao e DRE.</small>
-        <div className="mini-kpis">
-          <div>
-            <span>No dia da venda</span>
-            <b>{brl(cx.noDia)}</b>
+      <Card className="tile tile-dark tile-balance">
+        <CardHeader>
+          <CardDescription>Receita total</CardDescription>
+          <CardTitle>{brl(cx.receitaTotal || u.fat)}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="hint">Recebimentos do recorte. Nao e DRE.</p>
+          <div className="mini-kpis">
+            <div>
+              <span>No dia da venda</span>
+              <b>{brl(cx.noDia)}</b>
+            </div>
+            <div>
+              <span>Posteriores</span>
+              <b>{brl(cx.posteriores)}</b>
+            </div>
           </div>
-          <div>
-            <span>Posteriores</span>
-            <b>{brl(cx.posteriores)}</b>
+          <SparkBars values={fatSeries} />
+        </CardContent>
+      </Card>
+
+      <Card className="tile tile-inflow">
+        <CardHeader>
+          <CardTitle>Entrada</CardTitle>
+          <CardDescription>Caixa por dia (data da baixa)</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {daily.length ? <DailyBars days={daily} h={340} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
+        </CardContent>
+      </Card>
+
+      <Card className="tile tile-structure">
+        <CardHeader>
+          <CardTitle>Estrutura</CardTitle>
+          <CardDescription>Participacao por grupo</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Radar slices={groupsDonut} />
+        </CardContent>
+      </Card>
+
+      <Card className="tile tile-goals">
+        <CardHeader>
+          <CardDescription>Em aberto</CardDescription>
+          <CardTitle>{brl(cx.emAberto)}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="hint">Ainda nao baixou no caixa · adiantamento {brl(cx.adiantamento || 0)}</p>
+          <div className="goal-line">
+            <span>Eletivas vs meta</span>
+            <b>{u.eletivasPct}%</b>
           </div>
-        </div>
-        <SparkBars values={fatSeries} />
-      </article>
+          <div className="track">
+            <i style={{ width: `${Math.min(100, u.eletivasPct || 0)}%` }} />
+          </div>
+          <small>
+            {u.eletivas} de {u.metaEletivas} · ticket {brl(u.ticketCliente)}
+          </small>
+        </CardContent>
+      </Card>
 
-      <section className="tile tile-inflow">
-        <header>
-          <h2>Entrada</h2>
-          <p>Caixa por dia (data da baixa)</p>
-        </header>
-        {daily.length ? <DailyBars days={daily} h={220} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
-      </section>
+      <Card className="tile tile-budget">
+        <CardHeader>
+          <CardTitle>Recebimentos</CardTitle>
+          <CardDescription>Como o dinheiro entrou</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Donut slices={budget} totalLabel="Caixa" totalValue={brl(cx.receitaTotal || u.fat)} />
+        </CardContent>
+      </Card>
 
-      <section className="tile tile-structure">
-        <header>
-          <h2>Estrutura</h2>
-          <p>Participacao por grupo</p>
-        </header>
-        <Radar slices={groupsDonut} />
-      </section>
+      <Card className="tile tile-costs">
+        <CardHeader>
+          <CardTitle>Grupos</CardTitle>
+          <CardDescription>Pilares da clinica</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Donut slices={groupsDonut} totalLabel="Vendas" totalValue={brl(u.fatVenda || u.fat)} />
+        </CardContent>
+      </Card>
 
-      <article className="tile tile-goals">
-        <p>Em aberto</p>
-        <strong>{brl(cx.emAberto)}</strong>
-        <small>Ainda nao baixou no caixa · adiantamento {brl(cx.adiantamento || 0)}</small>
-        <div className="goal-line">
-          <span>Eletivas vs meta</span>
-          <b>{u.eletivasPct}%</b>
-        </div>
-        <div className="track">
-          <i style={{ width: `${Math.min(100, u.eletivasPct || 0)}%` }} />
-        </div>
-        <small>
-          {u.eletivas} de {u.metaEletivas} · ticket {brl(u.ticketCliente)}
-        </small>
-      </article>
-
-      <section className="tile tile-budget">
-        <header>
-          <h2>Recebimentos</h2>
-          <p>Como o dinheiro entrou</p>
-        </header>
-        <Donut slices={budget} totalLabel="Caixa" totalValue={brl(cx.receitaTotal || u.fat)} />
-      </section>
-
-      <section className="tile tile-costs">
-        <header>
-          <h2>Grupos</h2>
-          <p>Pilares da clinica</p>
-        </header>
-        <Donut slices={groupsDonut} totalLabel="Vendas" totalValue={brl(u.fatVenda || u.fat)} />
-      </section>
-
-      <section className="tile tile-compare">
-        <header>
-          <h2>Grupos vs media</h2>
-          <p>Alarme se cair da media</p>
-        </header>
+      <Card className="tile tile-compare">
+        <CardHeader>
+          <CardTitle>Grupos vs media</CardTitle>
+          <CardDescription>Alarme se cair da media</CardDescription>
+        </CardHeader>
+        <CardContent>
         <div className="bars">
           {u.grupos.map((g) => (
             <div key={g.nome} className={g.valor < g.media ? "row warn" : "row"}>
@@ -154,25 +173,28 @@ function Vendas({ u, year }) {
         ) : (
           <p className="ok">Nenhum grupo abaixo da media neste recorte.</p>
         )}
-      </section>
+        </CardContent>
+      </Card>
 
       {(u.compareYears || []).filter((c) => c.qtd || c.fat).length > 1 ? (
-        <section className="tile tile-dark tile-annual">
-          <header>
-            <h2>Anos</h2>
-            <p>Recebimento no mesmo recorte</p>
-          </header>
-          <ol className="year-list">
-            {u.compareYears
-              .filter((c) => c.qtd || c.fat)
-              .map((c) => (
-                <li key={c.ano} className={c.ano === year ? "now" : ""}>
-                  <span>{c.ano}</span>
-                  <b>{brl(c.fat)}</b>
-                </li>
-              ))}
-          </ol>
-        </section>
+        <Card className="tile tile-dark tile-annual">
+          <CardHeader>
+            <CardTitle>Anos</CardTitle>
+            <CardDescription>Recebimento no mesmo recorte</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ol className="year-list">
+              {u.compareYears
+                .filter((c) => c.qtd || c.fat)
+                .map((c) => (
+                  <li key={c.ano} className={c.ano === year ? "now" : ""}>
+                    <span>{c.ano}</span>
+                    <b>{brl(c.fat)}</b>
+                  </li>
+                ))}
+            </ol>
+          </CardContent>
+        </Card>
       ) : null}
     </div>
   );
@@ -272,9 +294,13 @@ function Clientes({ u, onOpen }) {
       <section className="card span-8">
         <header>
           <h2>Onde os tutores moram</h2>
-          <p>Alfinete por bairro, a partir do CEP e endereco cadastrados. Paciente = animal.</p>
+          <p>Cada alfinete e um tutor, no endereco do cadastro. Clique para abrir a ficha.</p>
         </header>
-        <MapPanel points={u.mapPoints || []} onSelect={(p) => onOpen({ type: "bairro", payload: p })} />
+        <MapPanel
+          points={u.mapPoints || []}
+          clients={lista}
+          onSelect={(p) => onOpen({ type: p.kind || "cliente", payload: p.payload || p })}
+        />
       </section>
 
       <section className="card span-4">
@@ -616,14 +642,17 @@ export default function App() {
         <button className="burger" aria-label="Abrir menu" onClick={() => setMenu((v) => !v)}>
           {menu ? <X size={22} /> : <List size={22} />}
         </button>
-        <img src="/logo.png" alt="Animal Center System" />
+        <strong>Animal Center</strong>
         <span />
       </header>
       {menu ? <div className="scrim" onClick={() => setMenu(false)} /> : null}
       <header className="topbar">
-        <div className="brand">
-          <img className="mark" src="/icon-192.png" alt="" />
-          <img className="word" src="/logo.png" alt="Animal Center System" />
+        <div className="logo">
+          <span>+</span>
+          <div>
+            <strong>Animal Center</strong>
+            <small>Gestao</small>
+          </div>
         </div>
         <nav className="top-nav">
           {NAV.map((item) => {
@@ -647,9 +676,12 @@ export default function App() {
         ) : null}
       </header>
       <aside>
-        <div className="brand">
-          <img className="mark" src="/icon-192.png" alt="" />
-          <img className="word" src="/logo.png" alt="Animal Center System" />
+        <div className="logo">
+          <span>+</span>
+          <div>
+            <strong>Animal Center</strong>
+            <small>Gestao</small>
+          </div>
         </div>
         <nav>
           {NAV.map((item) => {
@@ -703,7 +735,9 @@ export default function App() {
             <span>
               {u.casa} · {label}
             </span>
-            <span className={live?.ok ? "pill-live" : "pill-wait"}>{fonte}</span>
+            <Badge variant={live?.ok ? "default" : "outline"} className={live?.ok ? "pill-live border-0" : "pill-wait"}>
+              {fonte}
+            </Badge>
           </p>
         </div>
 
