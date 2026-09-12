@@ -72,14 +72,23 @@ export default function MapPanel({ points = [], clients = [], onSelect }) {
                 onSelect?.({ kind: p.kind, payload: p.payload });
               }}
             >
+              {/* Cor fixa de proposito: o pin fica sobre tiles de mapa, nao sobre
+                  superficie do app, e precisa do mesmo contraste nos dois temas.
+                  Gradiente da marca, contorno escuro, miolo branco. */}
               <svg width="22" height="28" viewBox="0 0 22 28" aria-hidden>
+                <defs>
+                  <linearGradient id="pin-ac" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0%" stopColor="#3ec8f0" />
+                    <stop offset="100%" stopColor="#2ad4c8" />
+                  </linearGradient>
+                </defs>
                 <path
                   d="M11 1.5c-5 0-9 4-9 9.1 0 6.4 9 16 9 16s9-9.6 9-16C20 5.5 16 1.5 11 1.5z"
-                  fill="var(--accent)"
-                  stroke="var(--bg)"
-                  strokeWidth="1.2"
+                  fill="url(#pin-ac)"
+                  stroke="#08151e"
+                  strokeWidth="1.3"
                 />
-                <circle cx="11" cy="10.2" r="3.2" fill="var(--bg)" />
+                <circle cx="11" cy="10.2" r="3.2" fill="#fff" />
               </svg>
             </button>
           </MapMarker>
