@@ -1,4 +1,5 @@
 import express from "express";
+import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,16 @@ process.on("unhandledRejection", (err) => {
 });
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const envPath = join(__dirname, "..", ".env");
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+    if (!line.includes("=") || line.trim().startsWith("#")) continue;
+    const i = line.indexOf("=");
+    const k = line.slice(0, i).trim();
+    const v = line.slice(i + 1).trim();
+    if (!process.env[k]) process.env[k] = v;
+  }
+}
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 const WEB_DIR = process.env.WEB_DIR || join(__dirname, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 8787);
