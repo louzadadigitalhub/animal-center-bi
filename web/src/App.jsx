@@ -50,26 +50,40 @@ function Vendas({ u }) {
     emAberto: Math.max(0, (u.fatVenda || 0) - (u.fat || 0)),
   };
   const daily = sanitizeDaily(u.dailyFat || [], cx.receitaTotal || u.fat);
+  const budget = [
+    { nome: "Baixa no dia", value: cx.noDia, hint: brl(cx.noDia) },
+    { nome: "Baixa depois", value: cx.posteriores, hint: brl(cx.posteriores) },
+    { nome: "Adiantamento", value: cx.adiantamento || 0, hint: brl(cx.adiantamento || 0) },
+  ];
+  const maxG = Math.max(1, ...u.grupos.map((x) => x.valor));
   return (
-    <div className="bento vendas">
-      <Kpi label="Receita total" value={brl(cx.receitaTotal || u.fat)} hint="Recebimentos (caixa). Nao e DRE." spark={fatSeries} />
-      <Kpi label="Baixas no dia da venda" value={brl(cx.noDia)} />
-      <Kpi label="Baixas posteriores" value={brl(cx.posteriores)} />
-      <Kpi label="Em aberto" value={brl(cx.emAberto)} hint="Ainda nao entrou no caixa" />
-      <Kpi label="Adiantamento" value={brl(cx.adiantamento || 0)} />
-      <Kpi label="Ticket / cliente" value={brl(u.ticketCliente)} hint={`Por venda ${brl(u.ticketVenda)}`} />
-      <Kpi label="Vendas no periodo" value={brl(u.fatVenda || u.fat)} hint="Inclui em aberto. Linha de DRE." />
-      <Kpi label="Vendas" value={num(u.qtd)} hint={`${num(u.atendimentos)} atendimentos`} />
+    <div className="dash">
+      <article className="tile tile-dark tile-balance">
+        <p>Receita total</p>
+        <strong>{brl(cx.receitaTotal || u.fat)}</strong>
+        <small>Recebimentos do recorte. Nao e DRE.</small>
+        <div className="mini-kpis">
+          <div>
+            <span>No dia da venda</span>
+            <b>{brl(cx.noDia)}</b>
+          </div>
+          <div>
+            <span>Posteriores</span>
+            <b>{brl(cx.posteriores)}</b>
+          </div>
+        </div>
+        <SparkBars values={fatSeries} />
+      </article>
 
-      <section className="card span-12">
+      <section className="tile tile-inflow">
         <header>
-          <h2>Faturamento do mes, dia a dia</h2>
-          <p>Recebimentos por dia (data da baixa). Passe o mouse na barra para o valor cheio.</p>
+          <h2>Entrada</h2>
+          <p>Caixa por dia (data da baixa)</p>
         </header>
-        {daily.length ? <DailyBars days={daily} h={280} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
+        {daily.length ? <DailyBars days={daily} h={220} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
       </section>
 
-      <section className="card span-6">
+      <section className="tile tile-structure">
         <header>
           <h2>Estrutura</h2>
           <p>Participacao por grupo</p>
@@ -77,25 +91,49 @@ function Vendas({ u }) {
         <Radar slices={groupsDonut} />
       </section>
 
-      <section className="card span-6">
+      <article className="tile tile-goals">
+        <p>Em aberto</p>
+        <strong>{brl(cx.emAberto)}</strong>
+        <small>Ainda nao baixou no caixa · adiantamento {brl(cx.adiantamento || 0)}</small>
+        <div className="goal-line">
+          <span>Eletivas vs meta</span>
+          <b>{u.eletivasPct}%</b>
+        </div>
+        <div className="track">
+          <i style={{ width: `${Math.min(100, u.eletivasPct || 0)}%` }} />
+        </div>
+        <small>
+          {u.eletivas} de {u.metaEletivas} · ticket {brl(u.ticketCliente)}
+        </small>
+      </article>
+
+      <section className="tile tile-budget">
         <header>
-          <h2>Custos / grupos</h2>
-          <p>Pilares da clinica</p>
+          <h2>Recebimentos</h2>
+          <p>Como o dinheiro entrou</p>
         </header>
-        <Donut slices={groupsDonut} totalLabel="Total" totalValue={brl(u.fatVenda || u.fat)} />
+        <Donut slices={budget} totalLabel="Caixa" totalValue={brl(cx.receitaTotal || u.fat)} />
       </section>
 
-      <section className="card span-12">
+      <section className="tile tile-costs">
         <header>
-          <h2>Grupo vs media</h2>
-          <p>Alarme quando cai da media historica</p>
+          <h2>Grupos</h2>
+          <p>Pilares da clinica</p>
+        </header>
+        <Donut slices={groupsDonut} totalLabel="Vendas" totalValue={brl(u.fatVenda || u.fat)} />
+      </section>
+
+      <section className="tile tile-compare">
+        <header>
+          <h2>Grupos vs media</h2>
+          <p>Alarme se cair da media</p>
         </header>
         <div className="bars">
           {u.grupos.map((g) => (
             <div key={g.nome} className={g.valor < g.media ? "row warn" : "row"}>
               <span>{g.nome}</span>
               <div className="track">
-                <i style={{ width: `${Math.min(100, (g.valor / Math.max(...u.grupos.map((x) => x.valor))) * 100)}%` }} />
+                <i style={{ width: `${Math.min(100, (g.valor / maxG) * 100)}%` }} />
               </div>
               <b>{brl(g.valor)}</b>
               <em className={g.vsAno < 0 ? "down" : "up"}>
@@ -118,33 +156,19 @@ function Vendas({ u }) {
         )}
       </section>
 
-      <section className="card span-12">
+      <section className="tile tile-dark tile-annual">
         <header>
-          <h2>Mesmo dia, anos anteriores</h2>
-          <p>Acumulado comparavel</p>
+          <h2>Anos</h2>
+          <p>Recebimento no mesmo recorte</p>
         </header>
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Ano</th>
-                <th>Fat.</th>
-                <th>Vendas</th>
-                <th>Ticket</th>
-              </tr>
-            </thead>
-            <tbody>
-              {u.compareYears.map((c) => (
-                <tr key={c.ano} className={c.ano === 2026 ? "now" : ""}>
-                  <td>{c.ano}</td>
-                  <td>{brl(c.fat)}</td>
-                  <td>{num(c.qtd)}</td>
-                  <td>{c.qtd ? brl(Math.round(c.fat / c.qtd)) : "-"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <ol className="year-list">
+          {u.compareYears.map((c) => (
+            <li key={c.ano} className={c.ano === 2026 ? "now" : ""}>
+              <span>{c.ano}</span>
+              <b>{brl(c.fat)}</b>
+            </li>
+          ))}
+        </ol>
       </section>
     </div>
   );
@@ -587,17 +611,38 @@ export default function App() {
         <button className="burger" aria-label="Abrir menu" onClick={() => setMenu((v) => !v)}>
           {menu ? <X size={22} /> : <List size={22} />}
         </button>
-        <strong>Animal Center</strong>
+        <img src="/logo.png" alt="Animal Center System" />
         <span />
       </header>
       {menu ? <div className="scrim" onClick={() => setMenu(false)} /> : null}
+      <header className="topbar">
+        <div className="brand">
+          <img className="mark" src="/icon-192.png" alt="" />
+          <img className="word" src="/logo.png" alt="Animal Center System" />
+        </div>
+        <nav className="top-nav">
+          {NAV.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button key={item.id} className={page === item.id ? "on" : ""} onClick={() => go(item.id)}>
+                <Icon size={16} weight={page === item.id ? "fill" : "regular"} />
+                {item.label}
+              </button>
+            );
+          })}
+        </nav>
+        <div className="period">
+          {YEARS.map((y) => (
+            <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
+              {y}
+            </button>
+          ))}
+        </div>
+      </header>
       <aside>
-        <div className="logo">
-          <span>+</span>
-          <div>
-            <strong>Animal Center</strong>
-            <small>Gestao</small>
-          </div>
+        <div className="brand">
+          <img className="mark" src="/icon-192.png" alt="" />
+          <img className="word" src="/logo.png" alt="Animal Center System" />
         </div>
         <nav>
           {NAV.map((item) => {

@@ -1,10 +1,10 @@
 const C = {
-  green: "#00e05c",
-  navy: "#162136",
-  mist: "#bfc7d9",
-  teal: "#00995a",
-  ink: "#657694",
-  frost: "#f2f5fa",
+  green: "#3ec8f0",
+  navy: "#12203a",
+  mist: "#c5d0e0",
+  teal: "#2ad4c8",
+  ink: "#7a8aa3",
+  frost: "#eef3f9",
 };
 
 function shortMil(n) {
@@ -24,6 +24,12 @@ export function DailyBars({ days = [], h = 300 }) {
   const base = h - 22;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="chart daily" role="img">
+      <defs>
+        <linearGradient id="inflow" x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0%" stopColor="#2ad4c8" />
+          <stop offset="100%" stopColor="#3ec8f0" />
+        </linearGradient>
+      </defs>
       {days.map((d, i) => {
         const x = 18 + i * bw;
         const barH = (d.fat / max) * (base - top);
@@ -33,9 +39,9 @@ export function DailyBars({ days = [], h = 300 }) {
         return (
           <g key={d.d}>
             <title>{`Dia ${d.d}: ${d.fat.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}`}</title>
-            <rect x={x + 1} y={y} width={Math.max(2, bw - 3)} height={barH} rx="3" fill="#00e05c" opacity={d.fat ? 0.95 : 0.18} />
+            <rect x={x + 1} y={y} width={Math.max(2, bw - 3)} height={barH} rx="3" fill={d.fat ? "url(#inflow)" : "#c5d0e0"} opacity={d.fat ? 0.95 : 0.35} />
             {d.fat && (n <= 14 || d.d % 2 === 0 || barH > 40) ? (
-              <text x={cx} y={Math.max(12, y - 4)} textAnchor="middle" fontSize={n > 20 ? 8 : 9} fill="#162136" fontWeight="600">
+              <text x={cx} y={Math.max(12, y - 4)} textAnchor="middle" fontSize={n > 20 ? 8 : 9} fill="#12203a" fontWeight="600">
                 {shortMil(d.fat)}
               </text>
             ) : null}
@@ -112,7 +118,7 @@ export function LineChart({ series = [], labels = [], h = 140 }) {
 export function Donut({ slices, totalLabel, totalValue }) {
   const sum = slices.reduce((a, s) => a + s.value, 0) || 1;
   let acc = 0;
-  const colors = ["#00e05c", "#162136", "#2b3a57", "#657694", "#00995a", "#bfc7d9", "#00b259"];
+  const colors = ["#3ec8f0", "#12203a", "#2ad4c8", "#1b2e52", "#7a8aa3", "#5ee0ff", "#2b3a57"];
   const r = 42;
   const c = 2 * Math.PI * r;
   return (

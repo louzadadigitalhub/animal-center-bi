@@ -51,9 +51,9 @@ function draw(L, layer, points, onSelect) {
   for (const p of points) {
     const m = L.circleMarker([p.lat, p.lng], {
       radius: Math.min(5.5, 2.4 + Math.sqrt(p.n || 1) * 0.35),
-      color: "#00e05c",
+      color: "#3ec8f0",
       weight: 1,
-      fillColor: "#00e05c",
+      fillColor: "#3ec8f0",
       fillOpacity: 0.7,
     });
     m.bindTooltip(`${p.label} · ${p.n} atend.`);

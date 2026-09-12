@@ -3,8 +3,8 @@
   "short_name": "Animal Center",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#162136",
+  "background_color": "#12203a",
+  "theme_color": "#12203a",
   "lang": "pt-BR",
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
