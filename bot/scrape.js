@@ -1,6 +1,6 @@
 import { chromium } from "playwright";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
-import { writeFile, mkdir } from "node:fs/promises";
+import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
@@ -318,8 +318,8 @@ async function exportVendas(page, from, to) {
   await page.waitForTimeout(2500);
   await page.locator("#p__btn_relatorio").click({ force: true });
   await page.waitForTimeout(400);
-  const popupPromise = page.waitForEvent("popup", { timeout: 40000 }).catch(() => null);
-  const downloadPromise = page.waitForEvent("download", { timeout: 40000 }).catch(() => null);
+  const popupPromise = page.waitForEvent("popup", { timeout: 90000 }).catch(() => null);
+  const downloadPromise = page.waitForEvent("download", { timeout: 90000 }).catch(() => null);
   await page.locator('a.p__btn_exportar[rel="xls_vendas"]').click({ force: true });
   let text = "";
   const download = await downloadPromise;
@@ -342,6 +342,76 @@ async function exportVendas(page, from, to) {
   }
   if (!text) throw new Error("Export vazio " + from + "-" + to);
   return rowsToObjects(parseCsv(text));
+}
+
+function sedeFromNome(nome) {
+  const n = String(nome || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  if (/cristovao|filial/.test(n)) return "filial";
+  return "matriz";
+}
+
+function yearOfRow(row) {
+  const m = String(row["Data e hora"] || row["Data baixa"] || "").match(/\/(\d{4})/);
+  return m ? Number(m[1]) : 0;
+}
+
+async function listAmbientes(page) {
+  return page.evaluate(async () => {
+    const links = [...document.querySelectorAll("a.alterarAmbiente, .alterarAmbiente")].map((a) => ({
+      id: String(a.id || ""),
+      nome: (a.innerText || a.getAttribute("title") || "").replace(/\s+/g, " ").trim(),
+    })).filter((x) => x.id);
+    let api = "";
+    try {
+      const res = await fetch("/login/crud.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "acao=listarAmbientes",
+        credentials: "same-origin",
+      });
+      api = await res.text();
+    } catch (e) {
+      api = String(e);
+    }
+    return { links, api: api.slice(0, 4000), user: (document.querySelector(".username")?.innerText || "").replace(/\s+/g, " ").trim() };
+  });
+}
+
+async function switchAmbiente(page, id) {
+  if (!id) return;
+  await page.evaluate(async (id) => {
+    await fetch("/login/crud.php", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "acao=alterarAmbiente&uam_int_codigo=" + encodeURIComponent(id),
+      credentials: "same-origin",
+    });
+  }, id);
+  await page.waitForTimeout(1000);
+}
+
+async function exportVendasYear(page, y, histTo) {
+  const nowY = nowBrasilia().y;
+  const f = `01/01/${y}`;
+  const t = y === nowY ? histTo : `31/12/${y}`;
+  try {
+    const chunk = await exportVendas(page, f, t);
+    if (chunk.length) return chunk;
+  } catch (err) {
+    console.warn("vendas ano inteiro falhou", y, err.message || err);
+  }
+  const a = await exportVendas(page, f, `30/06/${y}`).catch((e) => {
+    console.warn("vendas H1", y, e.message || e);
+    return [];
+  });
+  const b = await exportVendas(page, `01/07/${y}`, t).catch((e) => {
+    console.warn("vendas H2", y, e.message || e);
+    return [];
+  });
+  return [...a, ...b];
 }
 
 export async function scrape({ from, to } = {}) {
@@ -369,63 +439,82 @@ export async function scrape({ from, to } = {}) {
 
   try {
     await login(page);
-
-    const objects = [];
-    const startY = Number(String(histFrom).slice(-4)) || pNow.y - 3;
-    for (let y = startY; y <= pNow.y; y++) {
-      const f = `01/01/${y}`;
-      const t = y === pNow.y ? histTo : `31/12/${y}`;
+    const ambientes = await listAmbientes(page);
+    console.log("ambientes", JSON.stringify(ambientes).slice(0, 1500));
+    let sedes = (ambientes.links || [])
+      .filter((x) => x.id)
+      .map((x) => ({ id: x.id, nome: x.nome, unit: sedeFromNome(x.nome) }));
+    if (sedes.length < 2) {
       try {
-        const chunk = await exportVendas(page, f, t);
-        console.log("vendas", y, chunk.length);
-        objects.push(...chunk);
-      } catch (err) {
-        console.warn("vendas", y, String(err && err.message ? err.message : err));
+        const parsed = JSON.parse(ambientes.api);
+        const arr = Array.isArray(parsed) ? parsed : parsed?.data || parsed?.json || [];
+        if (Array.isArray(arr) && arr.length) {
+          sedes = arr.map((item) => ({
+            id: String(item.uam_int_codigo || item.id || ""),
+            nome: item.emp_var_nome || item.nome || item.name || "",
+            unit: sedeFromNome(item.emp_var_nome || item.nome || ""),
+          })).filter((x) => x.id);
+        }
+      } catch {
+        /* texto, nao json */
+      }
+    }
+    if (!sedes.length) sedes = [{ id: "", nome: ambientes.user || "matriz", unit: "matriz" }];
+    if (!sedes.some((s) => s.unit === "filial") && sedes.length === 2) {
+      sedes[1].unit = "filial";
+    }
+    console.log(
+      "sedes",
+      sedes.map((s) => s.unit + ":" + s.nome + ":" + s.id).join(" | ")
+    );
+
+    let objects = [];
+    try {
+      objects = JSON.parse(await readFile(join(DATA_DIR, "vendas.json"), "utf8"));
+      if (!Array.isArray(objects)) objects = [];
+    } catch {
+      objects = [];
+    }
+
+    const startY = Number(String(histFrom).slice(-4)) || pNow.y - 3;
+    for (const sede of sedes) {
+      await switchAmbiente(page, sede.id);
+      for (let y = startY; y <= pNow.y; y++) {
+        const chunk = await exportVendasYear(page, y, histTo);
+        console.log("vendas", sede.unit, y, chunk.length);
+        if (!chunk.length) continue;
+        objects = objects.filter((r) => !(yearOfRow(r) === y && (r._sede || "matriz") === sede.unit));
+        objects.push(...chunk.map((r) => ({ ...r, _sede: sede.unit })));
       }
     }
     if (!objects.length) throw new Error("Export nao veio (csv vazio).");
     let snapshot = aggregate(objects);
-    let caixaTodos = null;
-    let caixaFilial = null;
-    try {
-      caixaTodos = await scrapeRecebimentos(page, caixaFrom, caixaTo, "");
-      snapshot = applyRecebimentos(snapshot, caixaTodos, caixaFrom, "consolidado");
-    } catch (err) {
-      console.warn("recebimentos consolidado falhou", err);
-    }
-    try {
-      caixaFilial = await scrapeRecebimentos(page, caixaFrom, caixaTo, FILIAL_USER_ID);
-      if (caixaFilial?.receitaTotal > 0) {
-        snapshot = applyRecebimentos(snapshot, caixaFilial, caixaFrom, "filial");
-      } else {
-        caixaFilial = null;
+    const caixaByUnit = {};
+    for (const sede of sedes) {
+      try {
+        await switchAmbiente(page, sede.id);
+        const cx = await scrapeRecebimentos(page, caixaFrom, caixaTo, "");
+        caixaByUnit[sede.unit] = cx;
+        snapshot = applyRecebimentos(snapshot, cx, caixaFrom, sede.unit);
+      } catch (err) {
+        console.warn("recebimentos", sede.unit, err);
       }
-    } catch (err) {
-      console.warn("recebimentos filial falhou", err);
     }
-    if (caixaTodos && caixaFilial) {
-      const packM = subCaixa(caixaPack(caixaTodos), caixaPack(caixaFilial));
-      const m = String(caixaFrom).match(/(\d{2})\/(\d{2})\/(\d{4})/);
-      if (m) {
-        const month = Number(m[2]) - 1;
-        const year = Number(m[3]);
-        const view = snapshot.views?.matriz?.[year]?.[month];
-        if (view) {
-          const dailyM = dailyFromCaixa(caixaTodos, year, month).map((d, i) => ({
-            d: d.d,
-            fat: Math.max(0, d.fat - (dailyFromCaixa(caixaFilial, year, month)[i]?.fat || 0)),
-          }));
-          view.caixa = packM;
-          view.fat = packM.receitaTotal;
-          view.recebido = packM.receitaTotal;
-          view.dailyFat = dailyM;
+    const caixaTodos = caixaByUnit.matriz && caixaByUnit.filial
+      ? {
+          ...caixaByUnit.matriz,
+          noDia: (caixaByUnit.matriz.noDia || 0) + (caixaByUnit.filial.noDia || 0),
+          posteriores: (caixaByUnit.matriz.posteriores || 0) + (caixaByUnit.filial.posteriores || 0),
+          adiantamento: (caixaByUnit.matriz.adiantamento || 0) + (caixaByUnit.filial.adiantamento || 0),
+          receitaTotal: (caixaByUnit.matriz.receitaTotal || 0) + (caixaByUnit.filial.receitaTotal || 0),
+          emAberto: (caixaByUnit.matriz.emAberto || 0) + (caixaByUnit.filial.emAberto || 0),
         }
-        snapshot.caixaOficial = snapshot.caixaOficial || {};
-        snapshot.caixaOficial.matriz = { ...packM, at: agoraBrasiliaIso() };
-      }
-    } else if (caixaTodos) {
-      snapshot = applyRecebimentos(snapshot, caixaTodos, caixaFrom, "matriz");
+      : caixaByUnit.matriz || caixaByUnit.filial || null;
+    if (caixaTodos) snapshot = applyRecebimentos(snapshot, caixaTodos, caixaFrom, "consolidado");
+    if (caixaByUnit.matriz && !caixaByUnit.filial) {
+      snapshot = applyRecebimentos(snapshot, caixaByUnit.matriz, caixaFrom, "matriz");
     }
+    const caixaFilial = caixaByUnit.filial || null;
     await mkdir(DATA_DIR, { recursive: true });
     await writeFile(join(DATA_DIR, "vendas.json"), JSON.stringify(objects, null, 0));
     try {

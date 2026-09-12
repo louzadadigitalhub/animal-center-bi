@@ -3,6 +3,17 @@ import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  clearCookieHeader,
+  clientIp,
+  cookieHeader,
+  loginPerson,
+  personDashboard,
+  publicStaff,
+  readCookie,
+  readSession,
+  syncPeopleFromSales,
+} from "./people.js";
 
 process.on("uncaughtException", (err) => {
   console.error("uncaught", err);
@@ -28,13 +39,18 @@ const PORT = Number(process.env.PORT || 8787);
 const INTERVAL_MS = Number(process.env.SCRAPE_MS || 300000);
 
 const app = express();
+app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use((req, res, next) => {
-  res.setHeader("Access-Control-Allow-Origin", process.env.FRONTEND_ORIGIN || "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET,OPTIONS");
+  const origin = process.env.FRONTEND_ORIGIN || "*";
+  res.setHeader("Access-Control-Allow-Origin", origin);
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (origin !== "*") res.setHeader("Access-Control-Allow-Credentials", "true");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
+app.use(express.json({ limit: "32kb" }));
 let lastError = null;
 let running = false;
 
@@ -90,6 +106,54 @@ app.get("/api/caixa", async (_req, res) => {
   });
 });
 
+app.get("/api/auth/staff", async (_req, res) => {
+  try {
+    const { people } = await syncPeopleFromSales();
+    res.json({ ok: true, staff: publicStaff(people) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: "nao deu para listar o time" });
+    console.error("staff fail", err);
+  }
+});
+
+app.post("/api/auth/login", async (req, res) => {
+  const id = String(req.body?.id || "");
+  const pin = String(req.body?.pin || "");
+  const result = await loginPerson(id, pin, clientIp(req));
+  if (!result.ok) return res.status(result.status).json({ ok: false, error: result.error });
+  res.setHeader("Set-Cookie", cookieHeader(result.token, req));
+  res.json({ ok: true, me: result.me });
+});
+
+app.post("/api/auth/logout", (_req, res) => {
+  res.setHeader("Set-Cookie", clearCookieHeader());
+  res.json({ ok: true });
+});
+
+app.get("/api/me", async (req, res) => {
+  const me = await readSession(readCookie(req));
+  if (!me) return res.status(401).json({ ok: false, error: "entre com seu PIN" });
+  res.json({ ok: true, me });
+});
+
+app.get("/api/me/dashboard", async (req, res) => {
+  const me = await readSession(readCookie(req));
+  if (!me) return res.status(401).json({ ok: false, error: "entre com seu PIN" });
+  const now = new Date();
+  const br = new Date(now.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const year = Number(req.query.year || br.getFullYear());
+  const monthRaw = req.query.month;
+  const month = monthRaw === "all" ? "all" : Number(monthRaw ?? br.getMonth());
+  if (!Number.isFinite(year) || year < 2020 || year > 2100) {
+    return res.status(400).json({ ok: false, error: "ano invalido" });
+  }
+  if (month !== "all" && (!Number.isFinite(month) || month < 0 || month > 11)) {
+    return res.status(400).json({ ok: false, error: "mes invalido" });
+  }
+  const view = await personDashboard(me.nome, year, month);
+  res.json({ ok: true, me, view });
+});
+
 app.get("/api/snapshot", async (req, res) => {
   const snap = await loadSnapshot();
   if (!snap?.snapshot?.views) {
@@ -114,6 +178,7 @@ app.get("/api/snapshot", async (req, res) => {
     to: snap.to,
     rows: snap.rows,
     headers: snap.snapshot.headers,
+    years: snap.snapshot.years || [],
     view: view ? { ...view, dailyFat } : null,
   });
 });

@@ -621,7 +621,7 @@ export default function App() {
   ];
   const demo = useMemo(() => getView(unit, year, month), [unit, year, month]);
   const u = live?.view ? { ...demo, ...live.view } : demo;
-  const yearsOn = [...new Set((u.compareYears || []).filter((c) => c.qtd || c.fat).map((c) => c.ano).concat([year]))].sort();
+  const yearsOn = [...new Set([...(live?.years || []), ...(u.compareYears || []).filter((c) => c.qtd || c.fat).map((c) => c.ano), year])].filter(Boolean).sort((a, b) => a - b);
   const label = periodLabel(year, month);
   const fonte = live?.ok
     ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
@@ -665,15 +665,15 @@ export default function App() {
             );
           })}
         </nav>
-        {yearsOn.length > 1 ? (
-          <div className="period">
+        <div className="period">
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
             {yearsOn.map((y) => (
-              <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
+              <option key={y} value={y}>
                 {y}
-              </button>
+              </option>
             ))}
-          </div>
-        ) : null}
+          </select>
+        </div>
       </header>
       <aside>
         <div className="logo">
@@ -711,14 +711,14 @@ export default function App() {
           </div>
           <div className="period">
             <CalendarBlank size={16} />
-            {yearsOn.length > 1
-              ? yearsOn.map((y) => (
-                  <button key={y} className={year === y ? "on" : ""} onClick={() => setYear(y)}>
-                    {y}
-                  </button>
-                ))
-              : null}
-            <select value={month} onChange={(e) => setMonth(e.target.value === "all" ? "all" : Number(e.target.value))}>
+            <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
+              {yearsOn.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+            <select value={month} onChange={(e) => setMonth(e.target.value === "all" ? "all" : Number(e.target.value))} aria-label="Mes">
               <option value="all">Ano todo</option>
               {MONTHS.map((m, i) => (
                 <option key={m} value={i} disabled={year === 2026 && i > 8}>

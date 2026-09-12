@@ -54,13 +54,9 @@ function parseDate(s) {
 }
 
 function unitOf(row) {
-  const blob = norm(
-    [
-      pick(row, ["unidade", "loja", "empresa", "filial"]),
-      pick(row, ["usuario", "usuário", "funcionario", "funcionário", "vendedor", "responsavel"]),
-    ].join(" ")
-  );
-  if (FILIAL_HINTS.some((h) => blob.includes(norm(h)))) return "filial";
+  if (row._sede === "filial" || row._sede === "matriz") return row._sede;
+  const loja = norm(pick(row, ["unidade", "loja", "empresa", "filial", "caixa"]));
+  if (/cristovao|filial/.test(loja)) return "filial";
   return "matriz";
 }
 
@@ -113,7 +109,7 @@ export function aggregate(rows) {
         raca: pick(row, ["raca", "raça"]),
         sexo: pick(row, ["sexo"]),
         produto,
-        unit: unitOf(row),
+        unit: unitOf({ ...row, _sede: row._sede }),
         grupo: grupoOf(row),
         pago: norm(status),
         venda: pick(row, ["venda"]),
@@ -357,14 +353,15 @@ export function aggregate(rows) {
     };
   }
 
+  const years = [...new Set(parsed.map((r) => r.dt.y).filter(Boolean))].sort();
   const views = {};
   for (const unit of ["matriz", "filial", "consolidado"]) {
     views[unit] = {};
-    for (const year of [2023, 2024, 2025, 2026]) {
+    for (const year of years) {
       views[unit][year] = { all: slice(unit, year, "all") };
       for (let m = 0; m < 12; m++) views[unit][year][m] = slice(unit, year, m);
     }
   }
 
-  return { headers, count: parsed.length, views };
+  return { headers, count: parsed.length, years, views };
 }
