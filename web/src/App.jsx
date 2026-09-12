@@ -14,7 +14,7 @@ import { X } from "@phosphor-icons/react/X";
 import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
 import { DailyBars, Donut, Hourly, LineChart, Radar, SparkBars } from "./charts";
-import { MONTHS, YEARS, brl, getView, num, periodLabel, sanitizeDaily } from "./data";
+import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily } from "./data";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
@@ -637,8 +637,11 @@ function Tv({ u, label, fotos, live }) {
 export default function App() {
   const [page, setPage] = useState("vendas");
   const [unit, setUnit] = useState("matriz");
-  const [year, setYear] = useState(2026);
-  const [month, setMonth] = useState(8);
+  /* Abria sempre em Set/2026 porque ano e mês estavam escritos na mão.
+     A tela de vendedor já derivava da data; o painel não. */
+  const hoje = hojeBR();
+  const [year, setYear] = useState(hoje.getFullYear());
+  const [month, setMonth] = useState(hoje.getMonth());
   const [live, setLive] = useState(null);
   const [detail, setDetail] = useState(null);
   const [menu, setMenu] = useState(false);
@@ -760,7 +763,7 @@ export default function App() {
             <select value={month} onChange={(e) => setMonth(e.target.value === "all" ? "all" : Number(e.target.value))} aria-label="Mes">
               <option value="all">Ano todo</option>
               {MONTHS.map((m, i) => (
-                <option key={m} value={i} disabled={year === 2026 && i > 8}>
+                <option key={m} value={i} disabled={year === hoje.getFullYear() && i > hoje.getMonth()}>
                   {m}
                 </option>
               ))}

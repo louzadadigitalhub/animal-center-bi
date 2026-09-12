@@ -52,18 +52,29 @@ function sliceYear(arr, month) {
   return arr[month] || 0;
 }
 
-function lastCompleteMonth(year) {
-  if (year < 2026) return 11;
-  return 8;
+/* Hoje no fuso de Brasília — a VPS pode estar em UTC. */
+export function hojeBR() {
+  const agora = new Date();
+  return new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 }
 
+function lastCompleteMonth(year) {
+  const h = hojeBR();
+  if (year < h.getFullYear()) return 11;
+  return Math.max(0, h.getMonth() - 1);
+}
+
+/* O rótulo diz só QUAL é o recorte. Quão fresco ele está é trabalho do selo
+   ao lado, que mostra vendas lidas e hora da leitura de verdade.
+   Antes isto dizia "ao vivo ate o dia 11" com ano, mês e dia escritos na
+   mão: nasceu certo num dia e errado em todos os outros. */
 export function periodLabel(year, month) {
+  const h = hojeBR();
   if (month === "all") {
-    if (year === 2026) return "Jan a Set 2026 (ao vivo ate 11/09)";
-    return `Ano ${year} completo`;
+    return year === h.getFullYear() ? `Ano ${year} · em andamento` : `Ano ${year} completo`;
   }
-  const live = year === 2026 && month === 8 ? " · ao vivo ate o dia 11" : "";
-  return `${MONTHS[month]} ${year}${live}`;
+  const emCurso = year === h.getFullYear() && month === h.getMonth();
+  return `${MONTHS[month]} ${year}${emCurso ? " · mês em curso" : ""}`;
 }
 
 const gruposNomes = [
