@@ -56,8 +56,11 @@ function Kpi({ label, value, hint, spark, warn, onOpen }) {
   );
 }
 
-function Vendas({ u, year }) {
+function Vendas({ u, year, porMes }) {
   const [campoAno, setCampoAno] = useState("fat");
+  /* No recorte de ano o dia a dia nao existe: a mesma barra passa a ser
+     mensal em vez de mostrar "abra um mes" e nao mostrar nada. */
+  const mesesComoDias = (u.monthlyFat || []).map((fat, i) => ({ d: i + 1, fat: Math.round(fat || 0) }));
   const fatSeries = u.monthlyFat.map((n) => n || 0);
   const groupsDonut = u.grupos.map((g) => ({ nome: g.nome, value: g.valor, hint: brl(g.valor) }));
   const alerts = u.grupos.filter((g) => g.valor < g.media);
@@ -127,10 +130,16 @@ function Vendas({ u, year }) {
         <Card className="tile tile-inflow">
           <CardHeader>
             <CardTitle>Entrada</CardTitle>
-            <CardDescription>Caixa por dia (data da baixa)</CardDescription>
+            <CardDescription>{porMes ? "Caixa por mes (data da baixa)" : "Caixa por dia (data da baixa)"}</CardDescription>
           </CardHeader>
           <CardContent>
-            {daily.length ? <DailyBars days={daily} h={340} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
+            {porMes ? (
+              <DailyBars days={mesesComoDias} h={340} rotulos={MONTHS} />
+            ) : daily.length ? (
+              <DailyBars days={daily} h={340} />
+            ) : (
+              <p className="hint">Sem movimento neste recorte.</p>
+            )}
           </CardContent>
         </Card>
         <Card className="tile tile-budget">
@@ -175,7 +184,7 @@ function Vendas({ u, year }) {
         <Card className="tile tile-compare">
           <CardHeader>
             <CardTitle>Grupos vs media</CardTitle>
-            <CardDescription>Alarme se cair da media</CardDescription>
+            <CardDescription>Media mensal do grupo no ano · variacao vs mesmo periodo do ano passado</CardDescription>
           </CardHeader>
           <CardContent>
           <div className="bars">
@@ -186,10 +195,16 @@ function Vendas({ u, year }) {
                   <i style={{ width: `${Math.min(100, (g.valor / maxG) * 100)}%` }} />
                 </div>
                 <b>{brl(g.valor)}</b>
-                <em className={g.vsAno < 0 ? "down" : "up"}>
-                  {g.vsAno > 0 ? "+" : ""}
-                  {g.vsAno}%
-                </em>
+                {g.vsAno == null ? (
+                  <em className="share" title="Sem o mesmo periodo no ano passado">
+                    —
+                  </em>
+                ) : (
+                  <em className={g.vsAno < 0 ? "down" : "up"} title={`Ano passado: ${brl(g.anoPassado || 0)}`}>
+                    {g.vsAno > 0 ? "+" : ""}
+                    {g.vsAno}%
+                  </em>
+                )}
               </div>
             ))}
           </div>
@@ -252,7 +267,7 @@ function Vendas({ u, year }) {
   );
 }
 
-function Ritmo({ u, hoje }) {
+function Ritmo({ u, hoje, onOpen }) {
   const r = hoje || u;
   return (
     <div className="bento">
@@ -260,15 +275,46 @@ function Ritmo({ u, hoje }) {
       <Kpi label="Emergencias hoje" value={num(r.emergencia)} />
       <Kpi label="Internacoes hoje" value={num(r.internacao)} />
       <Kpi label="Exames hoje" value={num(r.examesQtd)} />
+      {/* So estes dois tem registro por tras no recorte do dia: a lista de
+          tutores e a quebra por grupo. Consultas, emergencias, internacoes e
+          exames chegam ja somados, sem linha individual. */}
       <Kpi
         label="Atendimentos hoje"
         value={num(r.atendimentos)}
         hint={`${r.consultas} consultas + ${r.vacinasAplicadas} vacinas`}
+        onOpen={
+          (r.clientes || []).length
+            ? () =>
+                onOpen(
+                  listaTutores(
+                    "Atendimentos de hoje",
+                    `${r.clientes.length} tutores com venda em ${r.diaLabel || "hoje"}.`,
+                    r.clientes
+                  )
+                )
+            : undefined
+        }
       />
       <Kpi
         label="Caixa hoje"
         value={brl(r.caixa?.receitaTotal || r.fat || 0)}
         hint={r.diaLabel ? `Recebimentos de ${r.diaLabel}` : "Recebimentos do dia"}
+        onOpen={
+          (r.grupos || []).some((g) => g.valor)
+            ? () =>
+                onOpen({
+                  type: "lista",
+                  payload: {
+                    titulo: "Caixa de hoje por grupo",
+                    resumo: `${brl(r.caixa?.receitaTotal || r.fat || 0)} em ${r.diaLabel || "hoje"}.`,
+                    itens: [...r.grupos]
+                      .filter((g) => g.valor)
+                      .sort((a, b) => b.valor - a.valor)
+                      .map((g) => ({ chave: g.nome, nome: g.nome, nota: "grupo", valor: brl(g.valor) })),
+                  },
+                })
+            : undefined
+        }
       />
       <section className="card span-12">
         <header>
@@ -681,29 +727,41 @@ function Vacinas({ u, onOpen }) {
 }
 
 function Pesquisa({ u }) {
+  const temDado = (u.nps?.respostas || 0) > 0;
   return (
     <div className="bento">
-      <Kpi label="NPS" value={u.nps.nota} hint="0 a 10" />
-      <Kpi label="Respostas" value={num(u.nps.respostas)} />
-      <Kpi label="Promotores (est.)" value={`${Math.round((u.nps.nota / 10) * 68)}%`} />
+      {temDado ? (
+        <>
+          <Kpi label="NPS" value={u.nps.nota} hint="0 a 10" />
+          <Kpi label="Respostas" value={num(u.nps.respostas)} />
+        </>
+      ) : null}
       <section className="card span-12">
         <header>
           <h2>Pesquisa de satisfacao</h2>
-          <p>No BI antigo isso estava fora do ar (Pangeia). Aqui a nota entra no recorte.</p>
+          <p>De onde viria a nota.</p>
         </header>
-        <p className="body">
-          Comentarios individuais ficam so com a gestao. A TV e o time nao veem texto de tutor.
-        </p>
+        {temDado ? (
+          <p className="body">
+            Comentarios individuais ficam so com a gestao. A TV e o time nao veem texto de tutor.
+          </p>
+        ) : (
+          <div className="tv-vazio">
+            <strong>Sem dado de pesquisa</strong>
+            <p>
+              A pesquisa de satisfacao da clinica roda no <b>Pangeia</b>, um sistema separado. Nosso
+              robo le o SimplesVet, e a nota nao passa por la — por isso chega zerada.
+            </p>
+            <p className="tv-vazio-dica">
+              O BI antigo tinha a mesma limitacao: a pagina de satisfacao dele mostrava
+              &ldquo;visual indisponivel&rdquo;. Para a nota aparecer aqui, alguem precisa ligar o Pangeia
+              (exportacao ou API) ao robo.
+            </p>
+          </div>
+        )}
       </section>
     </div>
   );
-}
-
-function dreCell(row, campo) {
-  const n = campo === "valor" ? row.valor : row[campo];
-  const conhecido = row.conhecido || /Receita|Recebimento|Resultado|Lucro/.test(row.linha);
-  if (!conhecido && !n) return "—";
-  return brl(n || 0);
 }
 
 function Dre({ u }) {
@@ -1146,8 +1204,8 @@ export default function App() {
           </div>
         </div>
 
-        {page === "vendas" && <Vendas u={u} year={year} />}
-        {page === "ritmo" && <Ritmo u={u} hoje={live?.hoje} />}
+        {page === "vendas" && <Vendas u={u} year={year} porMes={periodo === "ano" || month === "all"} />}
+        {page === "ritmo" && <Ritmo u={u} hoje={live?.hoje} onOpen={setDetail} />}
         {page === "equipe" && <Equipe u={u} onOpen={setDetail} />}
         {page === "clientes" && <Clientes u={u} onOpen={setDetail} />}
         {page === "recorrencia" && <Recorrencia u={u} status={live?.clientesStatus} onOpen={setDetail} />}

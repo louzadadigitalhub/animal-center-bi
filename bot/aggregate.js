@@ -131,6 +131,39 @@ export function aggregate(rows) {
 
   /* dentro() e um recorte livre sobre a data. A semana precisa dele porque
      atravessa a virada do mes: 30/09 e 01/10 caem na mesma semana. */
+  /* Indice grupo x mes x ano, montado uma vez. slice() roda dezenas de vezes
+     e varrer 99 mil linhas em cada uma para achar a media sairia caro. */
+  const idxGrupo = {};
+  for (const r of parsed) {
+    const g = r.grupo;
+    if (!g || !r.dt?.y) continue;
+    for (const un of [r.unit, "consolidado"]) {
+      idxGrupo[un] ??= {};
+      idxGrupo[un][r.dt.y] ??= {};
+      idxGrupo[un][r.dt.y][r.dt.m] ??= {};
+      idxGrupo[un][r.dt.y][r.dt.m][g] = (idxGrupo[un][r.dt.y][r.dt.m][g] || 0) + r.valor;
+    }
+  }
+
+  /* media = quanto o grupo costuma fazer num mes deste ano, contando so os
+     meses que ja tiveram movimento. Contar mes vazio puxaria a media para
+     baixo e faria todo grupo parecer acima dela.
+     vsAno = variacao contra o MESMO recorte do ano passado. */
+  function grupoRef(unit, year, month, nome) {
+    const doAno = idxGrupo[unit]?.[year] || {};
+    const meses = Object.keys(doAno)
+      .map((m) => doAno[m][nome] || 0)
+      .filter((v) => v > 0);
+    const media = meses.length ? meses.reduce((a, b) => a + b, 0) / meses.length : 0;
+
+    const passado = idxGrupo[unit]?.[year - 1] || {};
+    const antes =
+      month === "all"
+        ? Object.keys(passado).reduce((a, m) => a + (passado[m][nome] || 0), 0)
+        : passado[month + 1]?.[nome] || 0;
+    return { media: Math.round(media), antes: Math.round(antes) };
+  }
+
   function slice(unit, year, month, day, dentro) {
     const list = parsed.filter((r) => {
       if (unit !== "consolidado" && r.unit !== unit) return false;
@@ -168,7 +201,11 @@ export function aggregate(rows) {
     ];
     const grupos = gruposNomes.map((nome) => {
       const valor = Math.round(byGrupo[nome] || 0);
-      return { nome, valor, media: valor, vsAno: 0 };
+      const ref = year != null ? grupoRef(unit, year, month, nome) : { media: valor, antes: 0 };
+      /* Sem ano passado nao existe variacao. Devolvo null, nao 0: zero diz
+         "ficou igual", e a tela precisa saber que nao ha com que comparar. */
+      const vsAno = ref.antes ? Math.round(((valor - ref.antes) / ref.antes) * 100) : null;
+      return { nome, valor, media: ref.media, vsAno, anoPassado: ref.antes };
     });
     const qtd = list.length;
     const byRaca = {};

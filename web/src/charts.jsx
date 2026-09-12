@@ -61,9 +61,11 @@ function Grid({ w, top, base, max, steps = 4, padLeft = 0 }) {
   return <g>{lines}</g>;
 }
 
-export function DailyBars({ days = [], h = 340 }) {
+export function DailyBars({ days = [], h = 340, rotulos }) {
   const last = Math.max(1, ...days.filter((d) => d.fat).map((d) => d.d), 1);
-  const vis = days.filter((d) => d.d <= last);
+  /* Com rotulos (meses) mostramos os 12, mesmo os sem movimento: some um
+     mes do eixo e a leitura do ano fica torta. */
+  const vis = rotulos ? days : days.filter((d) => d.d <= last);
   const w = 720;
   const max = Math.max(1, ...vis.map((d) => d.fat));
   const n = Math.max(1, vis.length);
@@ -107,9 +109,9 @@ export function DailyBars({ days = [], h = 340 }) {
                 {shortMil(d.fat)}
               </text>
             ) : null}
-            {showDay ? (
-              <text x={cx} y={h - 6} textAnchor="middle" fontSize="9" fill={AXIS}>
-                {d.d}
+            {rotulos || showDay ? (
+              <text x={cx} y={h - 6} textAnchor="middle" fontSize={rotulos ? 8 : 9} fill={AXIS}>
+                {rotulos ? rotulos[d.d - 1] : d.d}
               </text>
             ) : null}
           </g>
@@ -382,31 +384,69 @@ export function Treemap({ slices = [], brl }) {
 export function VolumeTicket({ pessoas = [], brl }) {
   const dados = [...pessoas].filter((p) => p.vendas).sort((a, b) => b.vendas - a.vendas).slice(0, 10);
   if (!dados.length) return <p className="hint">Sem vendas no recorte.</p>;
-  const w = 560, h = 220, padLeft = 40, padBaixo = 46, top = 16;
+  const w = 620, h = 280, padLeft = 46, padRight = 52, top = 24, padBaixo = 76;
   const base = h - padBaixo;
   const maxV = Math.max(1, ...dados.map((p) => p.vendas));
   const maxT = Math.max(1, ...dados.map((p) => p.ticket || 0));
-  const bw = (w - padLeft - 12) / dados.length;
+  const bw = (w - padLeft - padRight) / dados.length;
+  const xAt = (i) => padLeft + i * bw + bw / 2;
+  const yT = (t) => base - ((t || 0) / maxT) * (base - top);
+  const linha = dados.map((p, i) => `${xAt(i)},${yT(p.ticket)}`).join(" ");
+  const passos = 4;
+
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="chart" role="img" aria-label="Volume e ticket por pessoa">
       <Grads id="vt" />
-      <Grid w={w} top={top} base={base} max={maxV} padLeft={padLeft} steps={3} />
+      {/* Eixo da esquerda: quantidade. Eixo da direita: ticket. Sem o da
+          direita os pontos flutuavam numa escala invisivel e pareciam
+          espalhados ao acaso. */}
+      {Array.from({ length: passos + 1 }, (_, i) => {
+        const y = base - ((base - top) * i) / passos;
+        return (
+          <g key={i}>
+            <line x1={padLeft} y1={y} x2={w - padRight} y2={y} stroke={GRID} />
+            <text x={padLeft - 6} y={y - 3} textAnchor="end" fontSize="9" fill={AXIS}>
+              {Math.round((maxV / passos) * i)}
+            </text>
+            <text x={w - padRight + 6} y={y - 3} fontSize="9" fill="var(--accent-text)">
+              {Math.round((maxT / passos) * i)}
+            </text>
+          </g>
+        );
+      })}
+      <text x={padLeft - 6} y={top - 10} textAnchor="end" fontSize="9" fill={AXIS} fontWeight="600">
+        vendas
+      </text>
+      <text x={w - padRight + 6} y={top - 10} fontSize="9" fill="var(--accent-text)" fontWeight="600">
+        ticket R$
+      </text>
+
       {dados.map((p, i) => {
-        const x = padLeft + i * bw;
         const bh = (p.vendas / maxV) * (base - top);
-        const yT = base - ((p.ticket || 0) / maxT) * (base - top);
         return (
           <g key={p.nome}>
             <title>{`${p.nome}: ${p.vendas} vendas · ticket ${brl ? brl(p.ticket) : p.ticket}`}</title>
-            <rect className="bar-grow" style={{ animationDelay: `${i * 40}ms` }} x={x + 3} y={base - bh} width={Math.max(3, bw - 8)} height={bh} rx="3" fill="url(#vt-off)" />
-            <circle className="dot" style={{ animationDelay: `${300 + i * 40}ms` }} cx={x + bw / 2} cy={yT} r="3.4" fill="var(--surface-1)" stroke="var(--cyan)" strokeWidth="1.8" />
-            <text x={x + bw / 2} y={h - 30} textAnchor="middle" fontSize="8" fill={AXIS} transform={`rotate(-32 ${x + bw / 2} ${h - 30})`}>
+            <rect className="bar-grow" style={{ animationDelay: `${i * 40}ms` }} x={padLeft + i * bw + 4} y={base - bh} width={Math.max(3, bw - 10)} height={bh} rx="3" fill="url(#vt-off)" />
+            <text x={xAt(i)} y={h - 26} textAnchor="end" fontSize="8" fill={AXIS} transform={`rotate(-38 ${xAt(i)} ${h - 26})`}>
               {p.nome.split(" ")[0]}
             </text>
           </g>
         );
       })}
-      <line x1={padLeft} y1={base} x2={w - 12} y2={base} stroke={GRID} />
+
+      {/* A linha liga os pontos: sem ela pareciam bolinhas soltas */}
+      <polyline points={linha} fill="none" stroke="var(--cyan)" strokeWidth="1.8" strokeLinejoin="round" opacity="0.75" />
+      {dados.map((p, i) => (
+        <circle key={`t-${p.nome}`} className="dot" style={{ animationDelay: `${260 + i * 40}ms` }} cx={xAt(i)} cy={yT(p.ticket)} r="3.4" fill="var(--surface-1)" stroke="var(--cyan)" strokeWidth="1.8" />
+      ))}
+
+      <line x1={padLeft} y1={base} x2={w - padRight} y2={base} stroke={GRID} />
+      <g>
+        <rect x={padLeft} y={h - 11} width="9" height="7" rx="2" fill="url(#vt-off)" />
+        <text x={padLeft + 13} y={h - 5} fontSize="9" fill={AXIS}>quantidade de vendas</text>
+        <circle cx={padLeft + 142} cy={h - 8} r="3.2" fill="var(--surface-1)" stroke="var(--cyan)" strokeWidth="1.6" />
+        <text x={padLeft + 150} y={h - 5} fontSize="9" fill={AXIS}>ticket medio</text>
+      </g>
     </svg>
   );
 }
@@ -437,15 +477,7 @@ export function MultiLine({ porAno = {}, campo = "fat", fmt, h = 200 }) {
         const atual = si === series.length - 1;
         return (
           <g key={anos[si]}>
-            <polyline
-              points={pts}
-              fill="none"
-              stroke={cor}
-              strokeWidth={atual ? 2.6 : 1.6}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              opacity={atual ? 1 : 0.65}
-            />
+            <polyline points={pts} fill="none" stroke={cor} strokeWidth={atual ? 2.6 : 1.6} strokeLinejoin="round" strokeLinecap="round" opacity={atual ? 1 : 0.65} />
             {atual
               ? vals.slice(0, ate + 1).map((v, i) => (
                   <g key={i}>
