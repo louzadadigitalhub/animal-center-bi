@@ -479,6 +479,38 @@ function Clientes({ u, onOpen }) {
 
       <section className="card span-12">
         <header>
+          <h2>Contatos</h2>
+          <p>Tutor, pet e telefone do recorte. Para ligar ou mandar mensagem.</p>
+        </header>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Codigo</th>
+                <th>Tutor</th>
+                <th>Pets</th>
+                <th>Telefone</th>
+                <th>Bairro</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.slice(0, 60).map((c) => (
+                <tr key={`ct-${c.codigo || c.nome}`} className="click" onClick={() => onOpen({ type: "cliente", payload: c })}>
+                  <td>{c.codigo || "-"}</td>
+                  <td>{c.nome}</td>
+                  <td>{(c.animais || []).map((a) => a.nome).join(", ") || "-"}</td>
+                  <td>{c.celular || "-"}</td>
+                  <td>{c.bairro || "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {lista.length > 60 ? <p className="hint">Mostrando 60 de {num(lista.length)} no recorte.</p> : null}
+      </section>
+
+      <section className="card span-12">
+        <header>
           <h2>Tutores</h2>
           <p>Clique a linha para ver ficha, pets e contato.</p>
         </header>
@@ -520,14 +552,46 @@ function Clientes({ u, onOpen }) {
   );
 }
 
-function Recorrencia({ u }) {
+function Recorrencia({ u, status, onOpen }) {
   const stacked = u.monthlyQtd.map((n, i) => Math.round(n * 0.72));
+  const lim = status?.limites || { pre: 9, inativo: 12 };
   return (
     <div className="bento">
-      <Kpi label="Ativos no recorte" value={num(u.recorrentes)} />
-      <Kpi label="Novos" value={num(u.novos)} />
-      <Kpi label="Pre-inativos (est.)" value={num(Math.round(u.recorrentes * 0.09))} hint="Sem visita recente" />
-      <Kpi label="NPS" value={u.nps.nota} hint={`${u.nps.respostas} respostas`} />
+      <Kpi
+        label="Clientes ativos"
+        value={num(status ? status.ativo : u.recorrentes)}
+        hint={status ? `Vieram nos ultimos ${lim.pre} meses` : "Sem base historica"}
+      />
+      <Kpi label="Novos no recorte" value={num(u.novos)} />
+      <Kpi
+        label="Pre-inativos"
+        value={num(status?.pre || 0)}
+        hint={`Entre ${lim.pre} e ${lim.inativo} meses sem vir · clique para ligar`}
+        warn={!!status?.pre}
+        onOpen={
+          status?.listaPre?.length
+            ? () =>
+                onOpen({
+                  type: "lista",
+                  payload: {
+                    titulo: "Pre-inativos",
+                    resumo: `${status.pre} clientes entre ${lim.pre} e ${lim.inativo} meses sem vir. Mostrando os ${status.listaPre.length} mais urgentes.`,
+                    itens: status.listaPre.map((c) => ({
+                      chave: c.nome,
+                      nome: c.nome,
+                      nota: `ultima visita ${c.ultima} · ${c.meses} meses`,
+                      valor: brl(c.fat),
+                    })),
+                  },
+                })
+            : undefined
+        }
+      />
+      <Kpi
+        label="Inativos"
+        value={num(status?.inativo || 0)}
+        hint={`Mais de ${lim.inativo} meses sem vir`}
+      />
       <section className="card span-7">
         <header>
           <h2>Recorrentes vs faturamento</h2>
@@ -1086,7 +1150,7 @@ export default function App() {
         {page === "ritmo" && <Ritmo u={u} hoje={live?.hoje} />}
         {page === "equipe" && <Equipe u={u} onOpen={setDetail} />}
         {page === "clientes" && <Clientes u={u} onOpen={setDetail} />}
-        {page === "recorrencia" && <Recorrencia u={u} />}
+        {page === "recorrencia" && <Recorrencia u={u} status={live?.clientesStatus} onOpen={setDetail} />}
         {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} />}

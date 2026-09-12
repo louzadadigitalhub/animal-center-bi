@@ -476,5 +476,56 @@ export function aggregate(rows) {
     }
   }
 
-  return { headers, count: parsed.length, years, views, hoje, semana };
+  /* Status do cliente. Varre o historico inteiro, nao o recorte: quem parou
+     de vir em 2024 nao aparece na fatia de setembro de 2026, mas e
+     exatamente ele que a clinica precisa enxergar.
+
+     Inativo acima de 12 meses foi definido pela clinica. Pre-inativo entre
+     9 e 12 e escolha nossa: da uma janela de 3 meses para agir antes de
+     perder o cliente. Os dois limites ficam aqui em cima para mudar em um
+     lugar so. */
+  const MESES_INATIVO = 12;
+  const MESES_PRE = 9;
+  const clientesStatus = {};
+  {
+    const hojeMs = Date.UTC(now.y, now.m - 1, now.d);
+    const MES_MS = 30.44 * 24 * 3600 * 1000;
+    for (const unit of ["matriz", "filial", "consolidado"]) {
+      const ultima = new Map();
+      const gasto = new Map();
+      for (const r of parsed) {
+        if (unit !== "consolidado" && r.unit !== unit) continue;
+        const c = r.cliente;
+        if (!c) continue;
+        const t = Date.UTC(r.dt.y, r.dt.m - 1, r.dt.d);
+        if (!ultima.has(c) || t > ultima.get(c)) ultima.set(c, t);
+        gasto.set(c, (gasto.get(c) || 0) + r.valor);
+      }
+      let ativo = 0, pre = 0, inativo = 0;
+      const listaPre = [];
+      for (const [c, t] of ultima) {
+        const meses = (hojeMs - t) / MES_MS;
+        const d = new Date(t);
+        const quando = `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+        if (meses > MESES_INATIVO) inativo += 1;
+        else if (meses >= MESES_PRE) {
+          pre += 1;
+          listaPre.push({ nome: c, meses: Math.floor(meses), ultima: quando, fat: Math.round(gasto.get(c) || 0) });
+        } else ativo += 1;
+      }
+      listaPre.sort((a, b) => b.meses - a.meses || b.fat - a.fat);
+      clientesStatus[unit] = {
+        ativo,
+        pre,
+        inativo,
+        total: ultima.size,
+        limites: { pre: MESES_PRE, inativo: MESES_INATIVO },
+        /* So os 150 mais urgentes: a lista serve para ligar, nao para
+           arrastar a base inteira dentro do snapshot. */
+        listaPre: listaPre.slice(0, 150),
+      };
+    }
+  }
+
+  return { headers, count: parsed.length, years, views, hoje, semana, clientesStatus };
 }

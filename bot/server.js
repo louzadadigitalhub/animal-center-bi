@@ -243,6 +243,7 @@ app.get("/api/snapshot", async (req, res) => {
     years: snap.snapshot.years || [],
     hoje: snap.snapshot.hoje?.[unit] || null,
     semana: snap.snapshot.semana?.[unit] || null,
+    clientesStatus: snap.snapshot.clientesStatus?.[unit] || null,
     view: view ? { ...view, dailyFat } : null,
   });
 });
