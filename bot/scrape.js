@@ -396,8 +396,31 @@ function sedeFromNome(nome) {
 }
 
 function yearOfRow(row) {
-  const m = String(row["Data e hora"] || row["Data baixa"] || "").match(/\/(\d{4})/);
-  return m ? Number(m[1]) : 0;
+  const m = String(row["Data e hora"] || row["Data baixa"] || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  return m ? Number(m[3]) : 0;
+}
+
+function monthOfRow(row) {
+  const m = String(row["Data e hora"] || row["Data baixa"] || "").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  return m ? Number(m[2]) : 0;
+}
+
+const HIST_FILE = () => join(DATA_DIR, "historico.json");
+
+async function loadHist() {
+  try {
+    return JSON.parse(await readFile(HIST_FILE(), "utf8"));
+  } catch {
+    return {};
+  }
+}
+
+async function saveHist(hist) {
+  await writeFile(HIST_FILE(), JSON.stringify(hist, null, 2));
+}
+
+function countYearSede(rows, y, unit) {
+  return rows.filter((r) => yearOfRow(r) === y && (r._sede || "matriz") === unit).length;
 }
 
 async function listAmbientes(page) {
@@ -505,18 +528,44 @@ export async function scrape({ from, to } = {}) {
     }
 
     const startY = Number(String(histFrom).slice(-4)) || pNow.y - 3;
+    const hist = await loadHist();
+    const doisPerfis = sedes.some((s) => s.unit === "filial");
     for (const sede of sedes) {
       await logout(page);
       await login(page, sede.id);
       for (let y = startY; y <= pNow.y; y++) {
-        const chunk = await exportVendasYear(page, y, histTo);
-        console.log("vendas", sede.unit, y, chunk.length);
-        if (!chunk.length) continue;
-        objects = objects.filter((r) => !(yearOfRow(r) === y && (r._sede || "matriz") === sede.unit));
-        const tagged = sedes.length > 1 ? chunk.map((r) => ({ ...r, _sede: sede.unit })) : chunk;
+        const key = `${sede.unit}:${y}`;
+        const jaTem = countYearSede(objects, y, sede.unit);
+        if (y < pNow.y && hist[key] && jaTem > 0) {
+          console.log("historico ja salvo", key, jaTem);
+          continue;
+        }
+        let chunk;
+        if (y === pNow.y) {
+          chunk = await exportVendas(page, monthStartBR(), histTo).catch((e) => {
+            console.warn("vendas mes atual", sede.unit, e.message || e);
+            return [];
+          });
+          console.log("vendas mes atual", sede.unit, y, pNow.m, chunk.length);
+          if (!chunk.length) continue;
+          objects = objects.filter((r) => {
+            if ((r._sede || "matriz") !== sede.unit) return true;
+            if (yearOfRow(r) !== y) return true;
+            if (monthOfRow(r) !== pNow.m) return true;
+            return false;
+          });
+        } else {
+          chunk = await exportVendasYear(page, y, histTo);
+          console.log("vendas historico", sede.unit, y, chunk.length);
+          if (!chunk.length) continue;
+          objects = objects.filter((r) => !(yearOfRow(r) === y && (r._sede || "matriz") === sede.unit));
+          hist[key] = { at: agoraBrasiliaIso(), rows: chunk.length };
+        }
+        const tagged = doisPerfis ? chunk.map((r) => ({ ...r, _sede: sede.unit })) : chunk;
         objects.push(...tagged);
       }
     }
+    await saveHist(hist);
     if (!objects.length) throw new Error("Export nao veio (csv vazio).");
     let snapshot = aggregate(objects);
     const caixaByUnit = {};
@@ -579,6 +628,14 @@ export async function scrape({ from, to } = {}) {
       join(DATA_DIR, "recebimentos.json"),
       JSON.stringify({ consolidado: caixaTodos, filial: caixaFilial }, null, 2)
     );
+    const anos = [...new Set(objects.map((r) => yearOfRow(r)).filter(Boolean))].sort();
+    const espelho = {
+      perfis: sedes.map((s) => s.unit + ":" + s.nome),
+      anos,
+      historico: hist,
+      filialOk: Boolean(caixaByUnit.filial && caixaByUnit.filial.receitaTotal > 0),
+    };
+    await writeFile(join(DATA_DIR, "espelho.json"), JSON.stringify(espelho, null, 2));
     return {
       rows: objects.length,
       from: histFrom,
@@ -586,6 +643,8 @@ export async function scrape({ from, to } = {}) {
       matriz: snapshot.caixaOficial?.matriz?.receitaTotal || null,
       filial: caixaFilial ? caixaFilial.receitaTotal : null,
       consolidado: caixaTodos ? caixaTodos.receitaTotal : null,
+      anos,
+      filialOk: espelho.filialOk,
     };
   } finally {
     await browser.close();

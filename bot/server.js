@@ -9,9 +9,13 @@ import {
   cookieHeader,
   loginPerson,
   personDashboard,
+  photoFile,
+  photoMap,
   publicStaff,
   readCookie,
   readSession,
+  removePhoto,
+  savePhoto,
   syncPeopleFromSales,
 } from "./people.js";
 import { aggregate } from "./aggregate.js";
@@ -37,7 +41,7 @@ if (existsSync(envPath)) {
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 const WEB_DIR = process.env.WEB_DIR || join(__dirname, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 8787);
-const INTERVAL_MS = Number(process.env.SCRAPE_MS || 300000);
+const INTERVAL_MS = Number(process.env.SCRAPE_MS || 120000);
 
 const app = express();
 app.disable("x-powered-by");
@@ -45,7 +49,7 @@ app.set("trust proxy", 1);
 app.use((req, res, next) => {
   const origin = process.env.FRONTEND_ORIGIN || "*";
   res.setHeader("Access-Control-Allow-Origin", origin);
-  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   if (origin !== "*") res.setHeader("Access-Control-Allow-Credentials", "true");
   if (req.method === "OPTIONS") return res.sendStatus(204);
@@ -107,13 +111,31 @@ app.get("/api/version", (_req, res) => {
 
 app.get("/api/health", async (_req, res) => {
   const snap = await loadSnapshot();
+  let espelho = null;
+  try {
+    espelho = JSON.parse(await readFile(join(DATA_DIR, "espelho.json"), "utf8"));
+  } catch {
+    /* ainda sem historico */
+  }
   res.json({
     ok: true,
     running,
     lastError,
     at: snap?.at || null,
     rows: snap?.rows || 0,
+    anos: snap?.snapshot?.years || espelho?.anos || [],
+    filialOk: Boolean(espelho?.filialOk || snap?.caixa?.filial?.receitaTotal),
+    historico: espelho?.historico || {},
   });
+});
+
+app.get("/api/espelho", async (_req, res) => {
+  try {
+    const e = JSON.parse(await readFile(join(DATA_DIR, "espelho.json"), "utf8"));
+    res.json({ ok: true, ...e });
+  } catch {
+    res.status(503).json({ ok: false, error: "ainda sem espelho" });
+  }
 });
 
 app.get("/api/caixa", async (_req, res) => {
@@ -176,6 +198,39 @@ app.get("/api/me/dashboard", async (req, res) => {
   res.json({ ok: true, me, view });
 });
 
+const IMG_TYPES = ["image/jpeg", "image/png", "image/webp"];
+
+app.post("/api/me/foto", express.raw({ type: IMG_TYPES, limit: "3mb" }), async (req, res) => {
+  const me = await readSession(readCookie(req));
+  if (!me) return res.status(401).json({ ok: false, error: "entre com seu PIN" });
+  if (!Buffer.isBuffer(req.body) || !req.body.length) {
+    return res.status(400).json({ ok: false, error: "manda a imagem no corpo (JPG, PNG ou WebP)" });
+  }
+  // o id sai da sessao: ninguem troca a foto de outra pessoa
+  const r = await savePhoto(me.id, req.body);
+  if (!r.ok) return res.status(400).json(r);
+  res.json({ ok: true, foto: r.foto });
+});
+
+app.delete("/api/me/foto", async (req, res) => {
+  const me = await readSession(readCookie(req));
+  if (!me) return res.status(401).json({ ok: false, error: "entre com seu PIN" });
+  const r = await removePhoto(me.id);
+  if (!r.ok) return res.status(400).json(r);
+  res.json({ ok: true });
+});
+
+/* Publica: o telao do corredor nao tem login. */
+app.get("/api/foto/:id", async (req, res) => {
+  const info = await photoFile(String(req.params.id || ""));
+  if (!info) return res.status(404).json({ ok: false, error: "sem foto" });
+  res.setHeader("Content-Type", info.type);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.sendFile(info.path);
+});
+
 app.get("/api/snapshot", async (req, res) => {
   const snap = await loadSnapshot();
   if (!snap?.snapshot?.views) {
@@ -202,6 +257,7 @@ app.get("/api/snapshot", async (req, res) => {
     headers: snap.snapshot.headers,
     years: snap.snapshot.years || [],
     hoje: snap.snapshot.hoje?.[unit] || null,
+    fotos: await photoMap().catch(() => ({})),
     view: view ? { ...view, dailyFat } : null,
   });
 });
@@ -209,6 +265,17 @@ app.get("/api/snapshot", async (req, res) => {
 app.use(express.static(WEB_DIR));
 app.get("*", (_req, res) => {
   res.sendFile(join(WEB_DIR, "index.html"));
+});
+
+app.use((err, _req, res, _next) => {
+  if (err?.type === "entity.too.large") {
+    return res.status(413).json({ ok: false, error: "imagem acima de 3 MB" });
+  }
+  if (err?.type === "entity.parse.failed") {
+    return res.status(400).json({ ok: false, error: "corpo invalido" });
+  }
+  console.error("http", err);
+  res.status(500).json({ ok: false, error: "erro interno" });
 });
 
 console.log("boot", { port: PORT, data: DATA_DIR, web: WEB_DIR });
