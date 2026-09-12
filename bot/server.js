@@ -179,6 +179,7 @@ app.get("/api/snapshot", async (req, res) => {
     rows: snap.rows,
     headers: snap.snapshot.headers,
     years: snap.snapshot.years || [],
+    hoje: snap.snapshot.hoje?.[unit] || null,
     view: view ? { ...view, dailyFat } : null,
   });
 });

@@ -200,31 +200,31 @@ function Vendas({ u, year }) {
   );
 }
 
-function Ritmo({ u }) {
+function Ritmo({ u, hoje }) {
+  const r = hoje || u;
   return (
     <div className="bento">
-      <Kpi label="Consultas" value={num(u.consultas)} />
-      <Kpi label="Emergencias" value={num(u.emergencia)} />
-      <Kpi label="Internacoes" value={num(u.internacao)} />
-      <Kpi label="Exames" value={num(u.examesQtd)} />
+      <Kpi label="Consultas hoje" value={num(r.consultas)} hint={r.diaLabel || "Dia atual"} />
+      <Kpi label="Emergencias hoje" value={num(r.emergencia)} />
+      <Kpi label="Internacoes hoje" value={num(r.internacao)} />
+      <Kpi label="Exames hoje" value={num(r.examesQtd)} />
       <Kpi
-        label="Atendimentos"
-        value={num(u.atendimentos)}
-        hint={`${u.consultas} consultas + ${u.vacinasAplicadas} vacinas (remuneracao)`}
+        label="Atendimentos hoje"
+        value={num(r.atendimentos)}
+        hint={`${r.consultas} consultas + ${r.vacinasAplicadas} vacinas`}
       />
       <Kpi
-        label="Eletivas vs meta"
-        value={`${u.eletivasPct}%`}
-        hint={`${u.eletivas} de ${u.metaEletivas}`}
-        warn={u.eletivasPct < 80}
+        label="Caixa hoje"
+        value={brl(r.caixa?.receitaTotal || r.fat || 0)}
+        hint={r.diaLabel ? `Recebimentos de ${r.diaLabel}` : "Recebimentos do dia"}
       />
       <section className="card span-12">
         <header>
           <h2>Fluxo por hora</h2>
-          <p>Quando a casa enche. Base do plantao.</p>
+          <p>{r.diaLabel ? `Somente ${r.diaLabel}, horario de Brasilia.` : "Quando a casa enche hoje."}</p>
         </header>
         <div className="hourly-scroll">
-          <Hourly values={u.hourly} />
+          <Hourly values={r.hourly || Array(24).fill(0)} />
         </div>
       </section>
     </div>
@@ -742,7 +742,7 @@ export default function App() {
         </div>
 
         {page === "vendas" && <Vendas u={u} year={year} />}
-        {page === "ritmo" && <Ritmo u={u} />}
+        {page === "ritmo" && <Ritmo u={u} hoje={live?.hoje} />}
         {page === "equipe" && <Equipe u={u} onOpen={setDetail} />}
         {page === "clientes" && <Clientes u={u} onOpen={setDetail} />}
         {page === "recorrencia" && <Recorrencia u={u} />}

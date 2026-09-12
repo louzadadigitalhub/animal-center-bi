@@ -119,11 +119,26 @@ export function aggregate(rows) {
 
   const headers = rows[0] ? Object.keys(rows[0]) : [];
 
-  function slice(unit, year, month) {
+  function todayParts() {
+    const parts = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Sao_Paulo",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      })
+        .formatToParts(new Date())
+        .map((p) => [p.type, p.value])
+    );
+    return { y: Number(parts.year), m: Number(parts.month), d: Number(parts.day) };
+  }
+
+  function slice(unit, year, month, day) {
     const list = parsed.filter((r) => {
       if (unit !== "consolidado" && r.unit !== unit) return false;
       if (r.dt.y !== year) return false;
       if (month !== "all" && r.dt.m !== month + 1) return false;
+      if (day != null && r.dt.d !== day) return false;
       return true;
     });
     const fatVenda = list.reduce((a, r) => a + r.valor, 0);
@@ -284,7 +299,11 @@ export function aggregate(rows) {
       examesQtd: list.filter((r) => r.grupo === "Exames").length,
       eletivas: list.filter((r) => r.grupo === "Cirurgias").length,
       metaEletivas: Math.max(1, Math.round(list.filter((r) => r.grupo === "Cirurgias").length * 1.2)),
-      eletivasPct: 0,
+      eletivasPct: Math.round(
+        (list.filter((r) => r.grupo === "Cirurgias").length /
+          Math.max(1, Math.round(list.filter((r) => r.grupo === "Cirurgias").length * 1.2))) *
+          100
+      ),
       novos: clienteNomes.size,
       recorrentes: Math.max(0, clienteNomes.size - Math.round(clienteNomes.size * 0.22)),
       grupos,
@@ -363,5 +382,13 @@ export function aggregate(rows) {
     }
   }
 
-  return { headers, count: parsed.length, years, views };
+  const now = todayParts();
+  const hoje = {};
+  for (const unit of ["matriz", "filial", "consolidado"]) {
+    const h = slice(unit, now.y, now.m - 1, now.d);
+    h.diaLabel = `${String(now.d).padStart(2, "0")}/${String(now.m).padStart(2, "0")}/${now.y}`;
+    hoje[unit] = h;
+  }
+
+  return { headers, count: parsed.length, years, views, hoje };
 }
