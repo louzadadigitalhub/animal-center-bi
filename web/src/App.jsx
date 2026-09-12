@@ -35,13 +35,23 @@ const NAV = [
   { id: "tv", label: "Ranking", icon: MonitorPlay },
 ];
 
-function Kpi({ label, value, hint, spark, warn }) {
+/* So vira clicavel quando ha registro por tras. Card que abre gaveta vazia
+   ensina a pessoa a nao clicar em card nenhum. */
+function Kpi({ label, value, hint, spark, warn, onOpen }) {
+  const clicavel = typeof onOpen === "function";
   return (
-    <article className={`kpi ${warn ? "warn" : ""}`}>
+    <article
+      className={`kpi ${warn ? "warn" : ""} ${clicavel ? "click" : ""}`}
+      onClick={clicavel ? onOpen : undefined}
+      onKeyDown={clicavel ? (e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen()) : undefined}
+      role={clicavel ? "button" : undefined}
+      tabIndex={clicavel ? 0 : undefined}
+    >
       <p>{label}</p>
       <strong>{value}</strong>
       {hint ? <small>{hint}</small> : null}
       {spark ? <SparkBars values={spark} /> : null}
+      {clicavel ? <span className="kpi-abrir" aria-hidden>ver lista</span> : null}
     </article>
   );
 }
@@ -290,6 +300,61 @@ function Equipe({ u, onOpen }) {
   );
 }
 
+/* Montam a carga da gaveta a partir dos registros que o robo ja traz.
+   Cada item volta a apontar para a ficha do tutor, entao da para descer
+   do numero ate a pessoa sem sair da gaveta. */
+function itemTutor(c) {
+  return {
+    chave: c.codigo || c.nome,
+    nome: c.nome,
+    nota: [c.bairro, c.cidade].filter(Boolean).join(" · ") || "sem endereco",
+    valor: brl(c.fat),
+    abrir: { type: "cliente", payload: c },
+  };
+}
+
+function listaTutores(titulo, resumo, lista) {
+  return {
+    type: "lista",
+    payload: { titulo, resumo, itens: [...lista].sort((a, b) => b.fat - a.fat).map(itemTutor) },
+  };
+}
+
+function listaPets(lista) {
+  const pets = [];
+  for (const c of lista) {
+    for (const a of c.animais || []) {
+      pets.push({
+        chave: `${c.codigo || c.nome}-${a.nome}`,
+        nome: a.nome,
+        nota: `${a.especie || "especie?"} · ${a.raca || "raca?"} · tutor ${c.nome}`,
+        valor: `${a.n} atend.`,
+        abrir: { type: "cliente", payload: c },
+      });
+    }
+  }
+  pets.sort((a, b) => parseInt(b.valor) - parseInt(a.valor));
+  return {
+    type: "lista",
+    payload: { titulo: "Pacientes no recorte", resumo: `${pets.length} animais atendidos.`, itens: pets },
+  };
+}
+
+/* O numero do card e atendimento; a lista e de tutor. Sao grandezas
+   diferentes, entao o resumo diz as duas para ninguem somar errado. */
+function listaPorEspecie(titulo, regex, lista, especies) {
+  const donos = lista.filter((c) => (c.animais || []).some((a) => regex.test(a.especie || "")));
+  const atend = especies.find((e) => regex.test(e.nome))?.n || 0;
+  return {
+    type: "lista",
+    payload: {
+      titulo,
+      resumo: `${num(atend)} atendimentos, de ${donos.length} tutores com pet ${titulo.toLowerCase().replace(/s$/, "")}.`,
+      itens: [...donos].sort((a, b) => b.fat - a.fat).map(itemTutor),
+    },
+  };
+}
+
 function Clientes({ u, onOpen }) {
   const orig = (u.origem || []).map((o) => ({ nome: o.nome, value: o.valor, hint: num(o.valor) }));
   const racas = u.racas || [];
@@ -297,10 +362,27 @@ function Clientes({ u, onOpen }) {
   const lista = u.clientes || [];
   return (
     <div className="bento">
-      <Kpi label="Tutores no recorte" value={num(lista.length || u.novos)} hint="Clique no mapa ou na lista" />
-      <Kpi label="Pacientes (animais)" value={num(lista.reduce((a, c) => a + (c.animais?.length || 0), 0))} />
-      <Kpi label="Caninos" value={num(especies.find((e) => /canin/i.test(e.nome))?.n || 0)} />
-      <Kpi label="Felinos" value={num(especies.find((e) => /felin/i.test(e.nome))?.n || 0)} />
+      <Kpi
+        label="Tutores no recorte"
+        value={num(lista.length || u.novos)}
+        hint="Clique para ver a lista"
+        onOpen={() => onOpen(listaTutores("Tutores no recorte", `${lista.length} tutores com venda no periodo.`, lista))}
+      />
+      <Kpi
+        label="Pacientes (animais)"
+        value={num(lista.reduce((a, c) => a + (c.animais?.length || 0), 0))}
+        onOpen={() => onOpen(listaPets(lista))}
+      />
+      <Kpi
+        label="Caninos"
+        value={num(especies.find((e) => /canin/i.test(e.nome))?.n || 0)}
+        onOpen={() => onOpen(listaPorEspecie("Caninos", /canin/i, lista, especies))}
+      />
+      <Kpi
+        label="Felinos"
+        value={num(especies.find((e) => /felin/i.test(e.nome))?.n || 0)}
+        onOpen={() => onOpen(listaPorEspecie("Felinos", /felin/i, lista, especies))}
+      />
 
       <section className="card span-8">
         <header>
@@ -407,7 +489,29 @@ function Vacinas({ u, onOpen }) {
   const total = top.reduce((a, v) => a + (v.n || v.aplicada || v.total || 0), 0);
   return (
     <div className="bento">
-      <Kpi label="Doses no recorte" value={num(total)} hint="So o que saiu na venda (nao o estoque)" />
+      <Kpi
+        label="Doses no recorte"
+        value={num(total)}
+        hint="So o que saiu na venda (nao o estoque)"
+        onOpen={() =>
+          onOpen({
+            type: "lista",
+            payload: {
+              titulo: "Doses por vacina",
+              resumo: `${num(total)} doses no recorte, somando ${top.length} tipos.`,
+              itens: [...top]
+                .sort((a, b) => (b.n || b.aplicada || 0) - (a.n || a.aplicada || 0))
+                .map((v) => ({
+                  chave: v.nome,
+                  nome: v.nome,
+                  nota: `${num(v.n || v.aplicada || 0)} doses`,
+                  valor: `${Math.round(((v.n || v.aplicada || 0) / (total || 1)) * 100)}%`,
+                  abrir: { type: "vacina", payload: v },
+                })),
+            },
+          })
+        }
+      />
       <Kpi label="Tipos" value={num(top.length)} />
       <section className="card span-5">
         <header>
@@ -522,15 +626,48 @@ function Dre({ u }) {
   );
 }
 
-function Drawer({ detail, onClose }) {
+function Drawer({ detail, onClose, onOpen }) {
   if (!detail) return null;
   const { type, payload: p } = detail;
   return (
     <div className="drawer-bg" onClick={onClose}>
       <aside className="drawer" onClick={(e) => e.stopPropagation()}>
-        <button className="x" onClick={onClose}>
-          Fechar
-        </button>
+        <div className="drawer-topo">
+          {detail.voltar ? (
+            <button className="drawer-voltar" onClick={() => onOpen?.(detail.voltar)}>
+              Voltar para {detail.voltar.payload?.titulo || "a lista"}
+            </button>
+          ) : (
+            <span />
+          )}
+          <button className="x" onClick={onClose}>
+            Fechar
+          </button>
+        </div>
+        {type === "lista" && (
+          <>
+            <h2>{p.titulo}</h2>
+            <p className="hint">{p.resumo}</p>
+            <ul className="drawer-lista">
+              {p.itens.map((it) => (
+                <li key={it.chave}>
+                  <button
+                    type="button"
+                    onClick={() => it.abrir && onOpen?.({ ...it.abrir, voltar: detail })}
+                    disabled={!it.abrir}
+                  >
+                    <span>{it.nome}</span>
+                    <small>{it.nota}</small>
+                    <b>{it.valor}</b>
+                  </button>
+                </li>
+              ))}
+            </ul>
+            {p.itens.length >= 200 ? (
+              <p className="hint">Mostrando os {p.itens.length} do recorte.</p>
+            ) : null}
+          </>
+        )}
         {type === "cliente" && (
           <>
             <h2>{p.nome}</h2>
@@ -703,8 +840,23 @@ export default function App() {
     };
   }, []);
 
+  /* Cada recorte guardado por chave. Voltar para a Matriz depois de ver a
+     Filial passa a ser instantaneo em vez de esperar 84 KB de novo.
+     Limite de 12 para o telao, que fica ligado o dia todo, nao virar bolha
+     de memoria trocando de mes. */
+  const cache = useRef(new Map());
+  const [carregando, setCarregando] = useState(false);
+
   useEffect(() => {
     let vivo = true;
+    const chave = `${unit}|${year}|${month}`;
+    const guardado = cache.current.get(chave);
+    if (guardado) setLive(guardado);
+    /* Sem nada guardado, seguimos mostrando o recorte anterior marcado como
+       "atualizando". Zerar aqui faria a tela cair no mock do data.js, que e
+       pior que dado velho: seria numero inventado sem aviso. */
+    setCarregando(!guardado);
+
     const q = `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}`;
     fetch(q)
       .then((r) => r.json())
@@ -712,6 +864,11 @@ export default function App() {
       .catch(() => ({ ok: false }))
       .then((j) => {
         if (!vivo) return;
+        if (j.ok) {
+          cache.current.set(chave, j);
+          if (cache.current.size > 12) cache.current.delete(cache.current.keys().next().value);
+        }
+        setCarregando(false);
         setLive(j);
         const antes = ultimoOk.current;
         if (!j.ok && antes !== false) {
@@ -765,7 +922,7 @@ export default function App() {
         </nav>
       </aside>
 
-      <div className="main">
+      <div className="main" data-carregando={carregando ? "1" : undefined} aria-busy={carregando}>
         <header className="top">
           <div className="units">
             {[
@@ -844,7 +1001,7 @@ export default function App() {
           Menu
         </button>
       </nav>
-      <Drawer detail={detail} onClose={() => setDetail(null)} />
+      <Drawer detail={detail} onClose={() => setDetail(null)} onOpen={setDetail} />
       <Toaster position="bottom-right" theme={theme} offset={{ bottom: 20, right: 20 }} />
     </div>
   );

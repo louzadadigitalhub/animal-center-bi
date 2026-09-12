@@ -325,6 +325,44 @@ aside nav button.on::before {
   max-width: 1560px;
 }
 
+/* Enquanto busca um recorte novo, a tela segue mostrando o anterior. Sem
+   um sinal, o numero da Matriz fica no ar depois de clicar em Filial e
+   passa por verdadeiro. A barra diz que o que esta ali ainda vai mudar. */
+.main[data-carregando="1"]::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 60;
+  background: var(--grad);
+  animation: carregando 1s linear infinite;
+}
+
+@keyframes carregando {
+  0% {
+    clip-path: inset(0 100% 0 0);
+  }
+  50% {
+    clip-path: inset(0 0 0 0);
+  }
+  100% {
+    clip-path: inset(0 0 0 100%);
+  }
+}
+
+.main[data-carregando="1"] .crumb h1::after {
+  content: " · atualizando";
+  font-size: 0.5em;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent-text);
+  vertical-align: middle;
+  margin-left: var(--s2);
+}
+
 /* ================= TOP BAR ================= */
 
 .top {
@@ -1014,6 +1052,100 @@ table,
   vertical-align: 1px;
 }
 
+/* Card que abre relatorio: a etiqueta so aparece no hover, para nao
+   competir com o numero, que e o que a pessoa veio ler. */
+.kpi.click {
+  position: relative;
+}
+
+.kpi-abrir {
+  position: absolute;
+  top: var(--s4);
+  right: var(--s5);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--accent-text);
+  opacity: 0;
+  transform: translateY(-3px);
+  transition: opacity var(--fast) var(--ease), transform var(--fast) var(--ease);
+}
+
+.kpi.click:hover .kpi-abrir,
+.kpi.click:focus-visible .kpi-abrir {
+  opacity: 1;
+  transform: none;
+}
+
+.kpi.click:hover {
+  border-color: var(--line-2);
+}
+
+/* ---------- Lista dentro da gaveta ---------- */
+
+.drawer-lista {
+  list-style: none;
+  margin: var(--s4) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.drawer-lista button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "nome valor"
+    "nota valor";
+  gap: 0 var(--s3);
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  padding: 9px var(--s2);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.drawer-lista button:hover:not(:disabled) {
+  background: var(--accent-wash);
+  color: var(--text);
+}
+
+.drawer-lista button:disabled {
+  cursor: default;
+}
+
+.drawer-lista span {
+  grid-area: nome;
+  font-size: 14px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-lista small {
+  grid-area: nota;
+  font-size: 11px;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-lista b {
+  grid-area: valor;
+  align-self: center;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text);
+}
+
 /* ================= TABELAS ================= */
 
 .table-wrap {
@@ -1265,6 +1397,32 @@ tr.click:hover td,
   to {
     transform: none;
   }
+}
+
+.drawer-topo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  margin-bottom: var(--s2);
+}
+
+.drawer-voltar {
+  border: 0;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 13px;
+  cursor: pointer;
+  padding: var(--s2) 0;
+  text-align: left;
+}
+
+.drawer-voltar::before {
+  content: "\2190\00a0";
+}
+
+.drawer-voltar:hover {
+  text-decoration: underline;
 }
 
 .drawer h2 {
