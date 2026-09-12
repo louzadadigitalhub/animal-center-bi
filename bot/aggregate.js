@@ -2,18 +2,16 @@ import { locate } from "../web/src/geo.js";
 
 const FILIAL_HINTS = [
   "cristovao",
-  "cristóvão",
   "sao cristovao",
-  "são cristóvão",
   "sao cristovao animal center",
-  "são cristóvão animal center",
+  "sao center",
   "filial",
   "francine lagemann",
   "joao pedro",
   "joao silva",
   "lara spagnol",
   "tais scotta",
-  "taís scotta",
+  "greice spellmeier",
   "greice",
 ];
 
@@ -54,9 +52,14 @@ function parseDate(s) {
 }
 
 function unitOf(row) {
-  if (row._sede === "filial" || row._sede === "matriz") return row._sede;
-  const loja = norm(pick(row, ["unidade", "loja", "empresa", "filial", "caixa"]));
-  if (/cristovao|filial/.test(loja)) return "filial";
+  if (row._sede === "filial") return "filial";
+  const blob = norm(
+    [
+      pick(row, ["unidade", "loja", "empresa", "filial", "caixa"]),
+      pick(row, ["usuario", "usuário", "funcionario", "funcionário", "vendedor", "responsavel"]),
+    ].join(" ")
+  );
+  if (FILIAL_HINTS.some((h) => blob.includes(norm(h)))) return "filial";
   return "matriz";
 }
 

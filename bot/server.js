@@ -61,13 +61,20 @@ async function loadSnapshot() {
   try {
     const raw = await readFile(join(DATA_DIR, "snapshot.json"), "utf8");
     const snap = JSON.parse(raw);
-    if (snap?.snapshot?.hoje) return snap;
+    const filialVazia = !snap?.snapshot?.views?.filial;
+    if (snap?.snapshot?.hoje && !filialVazia) {
+      const temFilial = Object.values(snap.snapshot.views.filial || {}).some((ano) =>
+        Object.values(ano || {}).some((v) => (v?.qtd || 0) > 0)
+      );
+      if (temFilial) return snap;
+    }
     if (hojeCache.at === snap.at && hojeCache.snap) return hojeCache.snap;
     try {
       const rows = JSON.parse(await readFile(join(DATA_DIR, "vendas.json"), "utf8"));
       const agg = aggregate(rows);
+      snap.snapshot.views = agg.views;
       snap.snapshot.hoje = agg.hoje;
-      snap.snapshot.years = snap.snapshot.years || agg.years;
+      snap.snapshot.years = agg.years || snap.snapshot.years;
       hojeCache = { at: snap.at, snap };
     } catch {
       /* sem vendas.json ainda */

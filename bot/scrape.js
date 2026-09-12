@@ -484,7 +484,8 @@ export async function scrape({ from, to } = {}) {
         console.log("vendas", sede.unit, y, chunk.length);
         if (!chunk.length) continue;
         objects = objects.filter((r) => !(yearOfRow(r) === y && (r._sede || "matriz") === sede.unit));
-        objects.push(...chunk.map((r) => ({ ...r, _sede: sede.unit })));
+        const tagged = sedes.length > 1 ? chunk.map((r) => ({ ...r, _sede: sede.unit })) : chunk;
+        objects.push(...tagged);
       }
     }
     if (!objects.length) throw new Error("Export nao veio (csv vazio).");
