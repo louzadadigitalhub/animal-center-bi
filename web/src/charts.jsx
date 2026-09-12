@@ -8,9 +8,11 @@ const C = {
 };
 
 function shortMil(n) {
-  if (!n) return "";
-  if (n >= 1000) return `${(n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
-  return n.toLocaleString("pt-BR");
+  const v = Math.round(Number(n) || 0);
+  if (!v) return "";
+  if (v >= 10000) return `${Math.round(v / 1000).toLocaleString("pt-BR")} mil`;
+  if (v >= 1000) return `${(v / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  return v.toLocaleString("pt-BR");
 }
 
 export function DailyBars({ days = [], h = 300 }) {
@@ -32,8 +34,8 @@ export function DailyBars({ days = [], h = 300 }) {
           <g key={d.d}>
             <title>{`Dia ${d.d}: ${d.fat.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}`}</title>
             <rect x={x + 1} y={y} width={Math.max(2, bw - 3)} height={barH} rx="3" fill="#00e05c" opacity={d.fat ? 0.95 : 0.18} />
-            {d.fat ? (
-              <text x={cx} y={Math.max(12, y - 4)} textAnchor="middle" fontSize={n > 20 ? 7.5 : 9} fill="#162136" fontWeight="600">
+            {d.fat && (n <= 14 || d.d % 2 === 0 || barH > 40) ? (
+              <text x={cx} y={Math.max(12, y - 4)} textAnchor="middle" fontSize={n > 20 ? 8 : 9} fill="#162136" fontWeight="600">
                 {shortMil(d.fat)}
               </text>
             ) : null}

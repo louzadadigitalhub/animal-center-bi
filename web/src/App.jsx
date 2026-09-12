@@ -12,7 +12,7 @@ import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { List } from "@phosphor-icons/react/List";
 import { X } from "@phosphor-icons/react/X";
 import { DailyBars, Donut, Hourly, LineChart, Radar, SparkBars } from "./charts";
-import { MONTHS, YEARS, brl, getView, num, periodLabel } from "./data";
+import { MONTHS, YEARS, brl, getView, num, periodLabel, sanitizeDaily } from "./data";
 import MapPanel from "./MapPanel.jsx";
 
 const NAV = [
@@ -42,7 +42,6 @@ function Vendas({ u }) {
   const fatSeries = u.monthlyFat.map((n) => n || 0);
   const groupsDonut = u.grupos.map((g) => ({ nome: g.nome, value: g.valor, hint: brl(g.valor) }));
   const alerts = u.grupos.filter((g) => g.valor < g.media);
-  const daily = u.dailyFat || [];
   const cx = u.caixa || {
     noDia: 0,
     posteriores: 0,
@@ -50,6 +49,7 @@ function Vendas({ u }) {
     receitaTotal: u.fat,
     emAberto: Math.max(0, (u.fatVenda || 0) - (u.fat || 0)),
   };
+  const daily = sanitizeDaily(u.dailyFat || [], cx.receitaTotal || u.fat);
   return (
     <div className="bento vendas">
       <Kpi label="Receita total" value={brl(cx.receitaTotal || u.fat)} hint="Recebimentos (caixa). Nao e DRE." spark={fatSeries} />

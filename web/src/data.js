@@ -4,6 +4,16 @@ export const YEARS = [2023, 2024, 2025, 2026];
 export const brl = (n) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
+export function sanitizeDaily(days, receitaTotal = 0) {
+  const cap = Math.max(Number(receitaTotal) || 0, 1);
+  return (days || []).map((row) => {
+    let fat = Number(row.fat) || 0;
+    while (cap > 1 && fat > cap && fat >= 100) fat /= 100;
+    if (fat > 1e7) fat = 0;
+    return { d: row.d, fat: Math.round(fat) };
+  });
+}
+
 export const num = (n) => n.toLocaleString("pt-BR");
 
 const fatMatriz = {
