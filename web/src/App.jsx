@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChartBar } from "@phosphor-icons/react/ChartBar";
 import { Stethoscope } from "@phosphor-icons/react/Stethoscope";
 import { UsersThree } from "@phosphor-icons/react/UsersThree";
@@ -19,6 +19,8 @@ import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
 import Podium, { Ambient } from "./Podium.jsx";
+import { Toaster, sileo } from "sileo";
+import "sileo/styles.css";
 import { Badge } from "./components/ui/badge.jsx";
 
 const NAV = [
@@ -650,14 +652,38 @@ export default function App() {
     ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
     : "Aguardando robô";
   const api = import.meta.env.VITE_API_URL || "";
+  const [tentativa, setTentativa] = useState(0);
+  /* O snapshot e rebuscado a cada troca de unidade/ano/mes. Avisar em toda
+     falha viraria enxurrada, entao so avisamos quando o estado VIRA. */
+  const ultimoOk = useRef(null);
 
   useEffect(() => {
+    let vivo = true;
     const q = `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}`;
     fetch(q)
       .then((r) => r.json())
-      .then((j) => setLive(j.ok ? j : { ok: false }))
-      .catch(() => setLive({ ok: false }));
-  }, [api, unit, year, month]);
+      .then((j) => (j.ok ? j : { ok: false }))
+      .catch(() => ({ ok: false }))
+      .then((j) => {
+        if (!vivo) return;
+        setLive(j);
+        const antes = ultimoOk.current;
+        if (!j.ok && antes !== false) {
+          sileo.error({
+            title: "Robô fora do ar",
+            description: "Os números na tela são a última leitura guardada.",
+            duration: 8000,
+            button: { title: "Tentar de novo", onClick: () => setTentativa((n) => n + 1) },
+          });
+        } else if (j.ok && antes === false) {
+          sileo.success({ title: "Robô voltou", description: "Números atualizados." });
+        }
+        ultimoOk.current = !!j.ok;
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [api, unit, year, month, tentativa]);
 
   return (
     <div className={`app ${menu ? "menu-open" : ""}`}>
@@ -770,6 +796,7 @@ export default function App() {
         </button>
       </nav>
       <Drawer detail={detail} onClose={() => setDetail(null)} />
+      <Toaster position="bottom-right" theme={theme} offset={{ bottom: 20, right: 20 }} />
     </div>
   );
 }
