@@ -99,8 +99,10 @@ function monthEndBR() {
 }
 
 function moneyBR(s) {
-  const t = String(s || "").replace(/[R$\s]/g, "").replace(/\./g, "").replace(",", ".");
-  const n = Number(t);
+  if (typeof s === "number" && Number.isFinite(s)) return s;
+  const t = String(s || "").replace(/[R$\s]/g, "").trim();
+  if (!t) return 0;
+  const n = t.includes(",") ? Number(t.replace(/\./g, "").replace(",", ".")) : Number(t);
   return Number.isFinite(n) ? n : 0;
 }
 
