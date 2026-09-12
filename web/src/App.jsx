@@ -187,7 +187,7 @@ function Vendas({ u, year }) {
           </CardContent>
         </Card>
         {(u.compareYears || []).filter((c) => c.qtd || c.fat).length > 1 ? (
-          <Card className="tile tile-dark tile-annual">
+          <Card className="tile tile-dark">
             <CardHeader>
               <CardTitle>Anos</CardTitle>
               <CardDescription>Recebimento no mesmo recorte</CardDescription>
