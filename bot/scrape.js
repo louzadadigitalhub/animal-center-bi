@@ -137,14 +137,56 @@ function moneyBR(s) {
   return Number.isFinite(n) ? n : 0;
 }
 
-async function login(page) {
-  await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
-  const already = await page.locator("text=Painel de controle").count();
-  if (already) return;
-  await page.locator('input[type="email"], input[placeholder="Email"]').first().fill(EMAIL);
+async function logout(page) {
+  await page.goto("https://app.simples.vet/login/logout.php", { waitUntil: "domcontentloaded" }).catch(() => {});
+  await page.waitForTimeout(800);
+}
+
+async function submitLoginForm(page) {
+  const emailBox = page.locator('input[type="email"], input[placeholder="Email"]').first();
+  if (!(await emailBox.count()) || !(await emailBox.isVisible())) return;
+  await emailBox.fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.getByRole("button", { name: /Entrar no SimplesVet/i }).click();
+  await page.waitForTimeout(2500);
+}
+
+async function login(page, ambId = "") {
+  await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+  if (await page.locator("text=Painel de controle").count()) {
+    if (!ambId) return;
+    await logout(page);
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+  }
+  await submitLoginForm(page);
+  const cards = page.locator("#ambientes .celx");
+  await page.waitForTimeout(500);
+  if (await cards.count()) {
+    if (ambId) {
+      const alvo = page.locator(`#ambientes .celx[data-id="${ambId}"]`);
+      if (await alvo.count()) await alvo.click();
+      else await cards.first().click();
+    } else {
+      await cards.first().click();
+    }
+  }
   await page.waitForSelector("text=Painel de controle", { timeout: 45000 });
+}
+
+async function listPerfisLogin(page) {
+  await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+  if (await page.locator("text=Painel de controle").count()) {
+    await logout(page);
+    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+  }
+  await submitLoginForm(page);
+  await page.locator("#ambientes .celx").first().waitFor({ timeout: 15000 }).catch(() => {});
+  return page.evaluate(() =>
+    [...document.querySelectorAll("#ambientes .celx")].map((el) => ({
+      id: el.getAttribute("data-id") || "",
+      nome: (el.querySelector("h4")?.innerText || "").trim(),
+    })).filter((x) => x.id)
+  );
 }
 
 const FILIAL_USER_ID = process.env.SIMPLES_VET_FILIAL_USER_ID || "306237";
@@ -438,31 +480,17 @@ export async function scrape({ from, to } = {}) {
   page.setDefaultTimeout(60000);
 
   try {
-    await login(page);
-    const ambientes = await listAmbientes(page);
-    console.log("ambientes", JSON.stringify(ambientes).slice(0, 1500));
-    let sedes = (ambientes.links || [])
-      .filter((x) => x.id)
-      .map((x) => ({ id: x.id, nome: x.nome, unit: sedeFromNome(x.nome) }));
-    if (sedes.length < 2) {
-      try {
-        const parsed = JSON.parse(ambientes.api);
-        const arr = Array.isArray(parsed) ? parsed : parsed?.data || parsed?.json || [];
-        if (Array.isArray(arr) && arr.length) {
-          sedes = arr.map((item) => ({
-            id: String(item.uam_int_codigo || item.id || ""),
-            nome: item.emp_var_nome || item.nome || item.name || "",
-            unit: sedeFromNome(item.emp_var_nome || item.nome || ""),
-          })).filter((x) => x.id);
-        }
-      } catch {
-        /* texto, nao json */
-      }
-    }
-    if (!sedes.length) sedes = [{ id: "", nome: ambientes.user || "matriz", unit: "matriz" }];
+    const perfis = await listPerfisLogin(page);
+    console.log("perfis login", JSON.stringify(perfis));
+    let sedes = perfis.map((p) => ({
+      id: p.id,
+      nome: p.nome,
+      unit: sedeFromNome(p.nome),
+    }));
     if (!sedes.some((s) => s.unit === "filial") && sedes.length === 2) {
       sedes[1].unit = "filial";
     }
+    if (!sedes.length) sedes = [{ id: "34969", nome: "Animal Center", unit: "matriz" }];
     console.log(
       "sedes",
       sedes.map((s) => s.unit + ":" + s.nome + ":" + s.id).join(" | ")
@@ -478,7 +506,8 @@ export async function scrape({ from, to } = {}) {
 
     const startY = Number(String(histFrom).slice(-4)) || pNow.y - 3;
     for (const sede of sedes) {
-      await switchAmbiente(page, sede.id);
+      await logout(page);
+      await login(page, sede.id);
       for (let y = startY; y <= pNow.y; y++) {
         const chunk = await exportVendasYear(page, y, histTo);
         console.log("vendas", sede.unit, y, chunk.length);
@@ -493,7 +522,8 @@ export async function scrape({ from, to } = {}) {
     const caixaByUnit = {};
     for (const sede of sedes) {
       try {
-        await switchAmbiente(page, sede.id);
+        await logout(page);
+        await login(page, sede.id);
         const cx = await scrapeRecebimentos(page, caixaFrom, caixaTo, "");
         caixaByUnit[sede.unit] = cx;
         snapshot = applyRecebimentos(snapshot, cx, caixaFrom, sede.unit);
