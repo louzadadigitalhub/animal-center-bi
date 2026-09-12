@@ -76,28 +76,15 @@ function rowsToObjects(rows) {
 }
 
 async function setDateRange(page, from, to) {
-  await page.locator("#p__ven_dat_data_text").click({ force: true });
-  await page.waitForTimeout(300);
-  const esteMes = page.locator(".daterangepicker .ranges li", { hasText: /^Este mês$/ });
-  if (from.startsWith("01/09/") || from.startsWith("01/" + String(new Date().getMonth() + 1).padStart(2, "0") + "/")) {
-    if (await esteMes.count()) {
-      await esteMes.first().click();
-      await page.waitForTimeout(400);
-      return;
-    }
-  }
   await page.evaluate(
     ({ from, to }) => {
-      const hidden = document.getElementById("p__ven_dat_data");
-      const span = document.querySelector("#p__ven_dat_data_text span");
+      const hidden = document.getElementById("p__ven_dat_data") || document.getElementById("p__vba_dat_baixa");
+      const span = document.querySelector("#p__ven_dat_data_text span, #p__vba_dat_baixa_text span");
       if (hidden) hidden.value = `${from}-${to}`;
       if (span) span.textContent = `${from} até ${to}`;
-      const apply = document.querySelector(".daterangepicker .btn-success, .daterangepicker button.applyBtn, .daterangepicker [type=submit]");
-      apply?.click();
     },
     { from, to }
   );
-  await page.waitForTimeout(400);
 }
 
 function monthStartBR() {
@@ -127,19 +114,26 @@ async function login(page) {
   await page.waitForSelector("text=Painel de controle", { timeout: 45000 });
 }
 
-async function scrapeRecebimentos(page, from, to) {
+const FILIAL_USER_ID = process.env.SIMPLES_VET_FILIAL_USER_ID || "306237";
+
+async function scrapeRecebimentos(page, from, to, userId = "") {
   await page.goto("https://app.simples.vet/consulta/recebimento/recebimento.php", {
     waitUntil: "domcontentloaded",
   });
   await page.waitForSelector("#p__vba_dat_baixa_text", { timeout: 30000 });
   await page.evaluate(
-    ({ from, to }) => {
+    ({ from, to, userId }) => {
       const hidden = document.getElementById("p__vba_dat_baixa");
       const span = document.querySelector("#p__vba_dat_baixa_text span");
       if (hidden) hidden.value = `${from}-${to}`;
       if (span) span.textContent = `${from} até ${to}`;
+      const sel = document.getElementById("p__usu_int_codigo");
+      if (sel) sel.value = userId || "";
+      if (window.jQuery && window.jQuery.fn.select2) {
+        window.jQuery("#p__usu_int_codigo").select2("val", userId || "");
+      }
     },
-    { from, to }
+    { from, to, userId }
   );
   await Promise.all([
     page.waitForLoadState("domcontentloaded"),
@@ -192,44 +186,60 @@ async function scrapeRecebimentos(page, from, to) {
     porForma: extracted.porForma,
     period: extracted.period,
     url: page.url(),
+    userId: userId || "todos",
   };
 }
 
-function applyRecebimentos(snapshot, caixa, from) {
+function caixaPack(caixa) {
+  return {
+    noDia: Math.round(caixa.noDia || 0),
+    posteriores: Math.round(caixa.posteriores || 0),
+    adiantamento: Math.round(caixa.adiantamento || 0),
+    receitaTotal: Math.round(caixa.receitaTotal || 0),
+    emAberto: Math.round(caixa.emAberto || 0),
+  };
+}
+
+function dailyFromCaixa(caixa, year, month) {
+  const byDay = {};
+  for (const row of caixa.daily || []) {
+    const dm = String(row.date).match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
+    if (!dm) continue;
+    const d = Number(dm[1]);
+    const val = moneyBR(row.money);
+    if (val) byDay[d] = (byDay[d] || 0) + val;
+  }
+  const daysIn = new Date(year, month + 1, 0).getDate();
+  const dailyFat = [];
+  for (let d = 1; d <= daysIn; d++) dailyFat.push({ d, fat: Math.round(byDay[d] || 0) });
+  return dailyFat;
+}
+
+function applyRecebimentos(snapshot, caixa, from, unit) {
   if (!caixa || !caixa.receitaTotal) return snapshot;
   const m = String(from).match(/(\d{2})\/(\d{2})\/(\d{4})/);
   if (!m) return snapshot;
   const month = Number(m[2]) - 1;
   const year = Number(m[3]);
-  const dailyFat = [];
-  if (caixa.daily?.length) {
-    const byDay = {};
-    for (const row of caixa.daily) {
-      const dm = String(row.date).match(/(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?/);
-      if (!dm) continue;
-      const d = Number(dm[1]);
-      const val = moneyBR(row.money);
-      if (val) byDay[d] = (byDay[d] || 0) + val;
-    }
-    const daysIn = new Date(year, month + 1, 0).getDate();
-    for (let d = 1; d <= daysIn; d++) dailyFat.push({ d, fat: Math.round(byDay[d] || 0) });
-  }
-  const pack = {
-    noDia: Math.round(caixa.noDia),
-    posteriores: Math.round(caixa.posteriores),
-    adiantamento: Math.round(caixa.adiantamento),
-    receitaTotal: Math.round(caixa.receitaTotal),
-    emAberto: Math.round(caixa.emAberto),
-  };
-  const view = snapshot.views?.matriz?.[year]?.[month];
+  const pack = caixaPack(caixa);
+  const dailyFat = dailyFromCaixa(caixa, year, month);
+  const view = snapshot.views?.[unit]?.[year]?.[month];
   if (view) {
     view.caixa = pack;
     view.fat = pack.receitaTotal;
     view.recebido = pack.receitaTotal;
-    if (dailyFat.length) view.dailyFat = dailyFat;
+    if (dailyFat.some((d) => d.fat)) view.dailyFat = dailyFat;
   }
-  snapshot.caixaOficial = { ...pack, url: caixa.url, at: new Date().toISOString() };
+  snapshot.caixaOficial = snapshot.caixaOficial || {};
+  snapshot.caixaOficial[unit] = { ...pack, url: caixa.url, at: new Date().toISOString(), period: caixa.period };
   return snapshot;
+}
+
+function subCaixa(a, b) {
+  const keys = ["noDia", "posteriores", "adiantamento", "receitaTotal", "emAberto"];
+  const out = {};
+  for (const k of keys) out[k] = Math.max(0, Math.round((a?.[k] || 0) - (b?.[k] || 0)));
+  return out;
 }
 
 export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) {
@@ -290,22 +300,82 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
 
     const objects = rowsToObjects(parseCsv(text));
     let snapshot = aggregate(objects);
-    let caixa = null;
+    let caixaTodos = null;
+    let caixaFilial = null;
     try {
-      caixa = await scrapeRecebimentos(page, from, to);
-      snapshot = applyRecebimentos(snapshot, caixa, from);
+      caixaTodos = await scrapeRecebimentos(page, from, to, "");
+      snapshot = applyRecebimentos(snapshot, caixaTodos, from, "consolidado");
     } catch (err) {
-      console.warn("recebimentos falhou", err);
+      console.warn("recebimentos consolidado falhou", err);
+    }
+    try {
+      caixaFilial = await scrapeRecebimentos(page, from, to, FILIAL_USER_ID);
+      if (caixaFilial?.receitaTotal > 0) {
+        snapshot = applyRecebimentos(snapshot, caixaFilial, from, "filial");
+      } else {
+        caixaFilial = null;
+      }
+    } catch (err) {
+      console.warn("recebimentos filial falhou", err);
+    }
+    if (caixaTodos && caixaFilial) {
+      const packM = subCaixa(caixaPack(caixaTodos), caixaPack(caixaFilial));
+      const m = String(from).match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (m) {
+        const month = Number(m[2]) - 1;
+        const year = Number(m[3]);
+        const view = snapshot.views?.matriz?.[year]?.[month];
+        if (view) {
+          const dailyM = dailyFromCaixa(caixaTodos, year, month).map((d, i) => ({
+            d: d.d,
+            fat: Math.max(0, d.fat - (dailyFromCaixa(caixaFilial, year, month)[i]?.fat || 0)),
+          }));
+          view.caixa = packM;
+          view.fat = packM.receitaTotal;
+          view.recebido = packM.receitaTotal;
+          view.dailyFat = dailyM;
+        }
+        snapshot.caixaOficial = snapshot.caixaOficial || {};
+        snapshot.caixaOficial.matriz = { ...packM, at: new Date().toISOString() };
+      }
+    } else if (caixaTodos) {
+      snapshot = applyRecebimentos(snapshot, caixaTodos, from, "matriz");
     }
     await mkdir(DATA_DIR, { recursive: true });
     await writeFile(join(DATA_DIR, "vendas.json"), JSON.stringify(objects, null, 0));
     await writeFile(
       join(DATA_DIR, "snapshot.json"),
-      JSON.stringify({ ok: true, at: new Date().toISOString(), from, to, rows: objects.length, snapshot, caixa }, null, 0)
+      JSON.stringify(
+        {
+          ok: true,
+          at: new Date().toISOString(),
+          from,
+          to,
+          rows: objects.length,
+          snapshot,
+          caixa: {
+            consolidado: caixaTodos ? caixaPack(caixaTodos) : null,
+            filial: caixaFilial ? caixaPack(caixaFilial) : null,
+            matriz: snapshot.caixaOficial?.matriz || null,
+          },
+        },
+        null,
+        0
+      )
     );
     await writeFile(join(DATA_DIR, "raw.csv"), text);
-    if (caixa) await writeFile(join(DATA_DIR, "recebimentos.json"), JSON.stringify(caixa, null, 2));
-    return { rows: objects.length, from, to, caixa: caixa ? caixa.receitaTotal : null };
+    await writeFile(
+      join(DATA_DIR, "recebimentos.json"),
+      JSON.stringify({ consolidado: caixaTodos, filial: caixaFilial }, null, 2)
+    );
+    return {
+      rows: objects.length,
+      from,
+      to,
+      matriz: snapshot.caixaOficial?.matriz?.receitaTotal || null,
+      filial: caixaFilial ? caixaFilial.receitaTotal : null,
+      consolidado: caixaTodos ? caixaTodos.receitaTotal : null,
+    };
   } finally {
     await browser.close();
   }

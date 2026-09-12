@@ -14,7 +14,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 const WEB_DIR = process.env.WEB_DIR || join(__dirname, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 8787);
-const INTERVAL_MS = Number(process.env.SCRAPE_MS || 120000);
+const INTERVAL_MS = Number(process.env.SCRAPE_MS || 300000);
 
 const app = express();
 app.set("trust proxy", 1);
@@ -60,6 +60,18 @@ app.get("/api/health", async (_req, res) => {
     lastError,
     at: snap?.at || null,
     rows: snap?.rows || 0,
+  });
+});
+
+app.get("/api/caixa", async (_req, res) => {
+  const snap = await loadSnapshot();
+  if (!snap) return res.status(503).json({ ok: false, error: "ainda sem dados" });
+  res.json({
+    ok: true,
+    at: snap.at,
+    from: snap.from,
+    to: snap.to,
+    caixa: snap.caixa || snap.snapshot?.caixaOficial || null,
   });
 });
 

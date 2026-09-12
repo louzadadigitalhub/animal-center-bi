@@ -5,6 +5,8 @@ const FILIAL_HINTS = [
   "cristóvão",
   "sao cristovao",
   "são cristóvão",
+  "sao cristovao animal center",
+  "são cristóvão animal center",
   "filial",
   "francine lagemann",
   "joao pedro",
