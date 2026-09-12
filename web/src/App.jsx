@@ -45,15 +45,15 @@ function Vendas({ u }) {
   const daily = u.dailyFat || [];
   return (
     <div className="bento vendas">
-      <Kpi label="Faturamento" value={brl(u.fat)} hint={`${u.delta > 0 ? "+" : ""}${u.delta}% vs mesmo periodo`} spark={fatSeries} />
-      <Kpi label="Recebido (caixa)" value={brl(u.recebido)} hint="Nao e venda: e o dinheiro que entrou" />
+      <Kpi label="Faturamento" value={brl(u.fat)} hint="Recebimentos (caixa). Nao vem do DRE." spark={fatSeries} />
+      <Kpi label="Vendas no periodo" value={brl(u.fatVenda || u.fat)} hint="Inclui em aberto. Linha de DRE." />
       <Kpi label="Ticket / cliente" value={brl(u.ticketCliente)} hint={`Por venda ${brl(u.ticketVenda)}`} />
       <Kpi label="Vendas" value={num(u.qtd)} hint={`${num(u.atendimentos)} atendimentos`} />
 
       <section className="card span-12">
         <header>
           <h2>Faturamento do mes, dia a dia</h2>
-          <p>So o recorte aberto. Sem comparar com ano que ainda nao puxamos.</p>
+          <p>Recebimentos por dia (data da baixa). Passe o mouse na barra para o valor cheio.</p>
         </header>
         {daily.length ? <DailyBars days={daily} h={280} /> : <p className="hint">Abra um mes para ver o dia a dia.</p>}
       </section>
@@ -71,7 +71,7 @@ function Vendas({ u }) {
           <h2>Custos / grupos</h2>
           <p>Pilares da clinica</p>
         </header>
-        <Donut slices={groupsDonut} totalLabel="Total" totalValue={brl(u.fat)} />
+        <Donut slices={groupsDonut} totalLabel="Total" totalValue={brl(u.fatVenda || u.fat)} />
       </section>
 
       <section className="card span-12">

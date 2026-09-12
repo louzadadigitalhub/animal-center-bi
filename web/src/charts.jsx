@@ -7,22 +7,38 @@ const C = {
   frost: "#f2f5fa",
 };
 
-export function DailyBars({ days = [], h = 280 }) {
+function shortMil(n) {
+  if (!n) return "";
+  if (n >= 1000) return `${(n / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil`;
+  return n.toLocaleString("pt-BR");
+}
+
+export function DailyBars({ days = [], h = 300 }) {
   const w = 720;
   const max = Math.max(1, ...days.map((d) => d.fat));
   const n = Math.max(1, days.length);
   const bw = (w - 36) / n;
+  const top = 22;
+  const base = h - 22;
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="chart daily" role="img">
       {days.map((d, i) => {
         const x = 18 + i * bw;
-        const barH = (d.fat / max) * (h - 36);
-        const show = i === 0 || i === n - 1 || d.d % 2 === 1;
+        const barH = (d.fat / max) * (base - top);
+        const y = base - barH;
+        const cx = x + bw / 2;
+        const showDay = n <= 16 || i === 0 || i === n - 1 || d.d % 2 === 1;
         return (
           <g key={d.d}>
-            <rect x={x + 1} y={h - 22 - barH} width={Math.max(2, bw - 3)} height={barH} rx="3" fill="#00e05c" opacity={d.fat ? 0.95 : 0.18} />
-            {show ? (
-              <text x={x + bw / 2} y={h - 6} textAnchor="middle" fontSize="9" fill="#657694">
+            <title>{`Dia ${d.d}: ${d.fat.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}`}</title>
+            <rect x={x + 1} y={y} width={Math.max(2, bw - 3)} height={barH} rx="3" fill="#00e05c" opacity={d.fat ? 0.95 : 0.18} />
+            {d.fat ? (
+              <text x={cx} y={Math.max(12, y - 4)} textAnchor="middle" fontSize={n > 20 ? 7.5 : 9} fill="#162136" fontWeight="600">
+                {shortMil(d.fat)}
+              </text>
+            ) : null}
+            {showDay ? (
+              <text x={cx} y={h - 6} textAnchor="middle" fontSize="9" fill="#657694">
                 {d.d}
               </text>
             ) : null}

@@ -306,6 +306,10 @@ aside nav button.on:hover {
   height: auto;
 }
 
+.chart.daily {
+  overflow: visible;
+}
+
 .spark {
   display: flex;
   align-items: flex-end;

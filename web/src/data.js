@@ -162,7 +162,9 @@ function unitSlice(meta, year, month) {
   const eletivas = Math.round(qtd * 0.07);
   const metaEletivas = Math.round(qtd * 0.085);
 
-  const dreFat = fat;
+  const fatVenda = fat;
+  const recebido = Math.round(fat * 0.89);
+  const dreFat = fatVenda;
   const desc = Math.round(dreFat * 0.013);
   const liq = dreFat - desc;
   const cmv = Math.round(liq * 0.29);
@@ -179,13 +181,14 @@ function unitSlice(meta, year, month) {
     id: meta.id,
     nome: meta.nome,
     casa: meta.casa,
-    fat,
+    fat: recebido,
+    fatVenda,
     fatPrev,
     delta: fatPrev ? Math.round(((fat - fatPrev) / fatPrev) * 1000) / 10 : 0,
     qtd,
     ticketVenda,
     ticketCliente,
-    recebido: Math.round(fat * 0.89),
+    recebido,
     consultas,
     vacinasAplicadas,
     atendimentos: consultas + vacinasAplicadas,
@@ -213,7 +216,8 @@ function unitSlice(meta, year, month) {
     genero: { fem: Math.round(qtd * 0.66), masc: Math.round(qtd * 0.34) },
     nps: { nota: meta.id === "matriz" ? 8.4 : 8.1, respostas: Math.round(qtd * 0.11) },
     dre: [
-      { linha: "Receita bruta", valor: dreFat },
+      { linha: "Receita bruta (vendas)", valor: dreFat },
+      { linha: "Recebimentos", valor: recebido, destaque: true },
       { linha: "Deducoes / descontos", valor: -desc },
       { linha: "Receita liquida", valor: liq, destaque: true },
       { linha: "CMV / custo direto", valor: -cmv },
@@ -264,10 +268,11 @@ export function getView(unitId, year, month) {
     nome: "As duas",
     casa: "Matriz + Sao Cristovao",
     fat,
+    fatVenda: (a.fatVenda || 0) + (b.fatVenda || 0),
     fatPrev: a.fatPrev + b.fatPrev,
     delta: a.fatPrev + b.fatPrev ? Math.round(((fat - a.fatPrev - b.fatPrev) / (a.fatPrev + b.fatPrev)) * 1000) / 10 : 0,
     qtd,
-    ticketVenda: qtd ? Math.round(fat / qtd) : 0,
+    ticketVenda: qtd ? Math.round(((a.fatVenda || a.fat) + (b.fatVenda || b.fat)) / qtd) : 0,
     ticketCliente: Math.round(((a.ticketCliente * a.qtd + b.ticketCliente * b.qtd) / (qtd || 1))),
     recebido: a.recebido + b.recebido,
     consultas: a.consultas + b.consultas,

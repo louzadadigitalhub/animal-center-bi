@@ -29,7 +29,9 @@ function pick(row, keys) {
     const w = norm(want);
     const hit = entries.find(([k]) => {
       const nk = norm(k);
-      return nk === w || nk.includes(w) || (w.length >= 5 && nk.includes(w.slice(0, 5)));
+      if (nk === w || nk.includes(w)) return true;
+      if (w.includes(" ")) return false;
+      return w.length >= 5 && nk.includes(w.slice(0, 5));
     });
     if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
   }
@@ -82,12 +84,17 @@ export function aggregate(rows) {
       const valor = money(
         pick(row, ["liquido", "lquido", "quido", "valor liquido", "total", "bruto", "valor", "venda"])
       );
+      const status = pick(row, ["status da venda", "status", "pago", "situacao"]);
+      const dtBaixa = parseDate(pick(row, ["data baixa"]));
       const user = pick(row, ["usuario", "usuário", "funcionario", "funcionário", "vendedor", "responsavel"]);
       const cliente = pick(row, ["cliente", "tutor"]);
       const horaM = String(pick(row, ["data e hora", "data"])).match(/(\d{1,2}):/);
       const produto = pick(row, ["produto/servico", "produto/serviço", "produto", "servico"]);
       return {
         dt,
+        dtBaixa,
+        recebido: /baix/.test(norm(status)),
+        status,
         hora: horaM ? Number(horaM[1]) : null,
         valor,
         user,
@@ -106,7 +113,7 @@ export function aggregate(rows) {
         produto,
         unit: unitOf(row),
         grupo: grupoOf(row),
-        pago: norm(pick(row, ["status", "pago", "situacao"])),
+        pago: norm(status),
         venda: pick(row, ["venda"]),
       };
     })
@@ -121,7 +128,10 @@ export function aggregate(rows) {
       if (month !== "all" && r.dt.m !== month + 1) return false;
       return true;
     });
-    const fat = list.reduce((a, r) => a + r.valor, 0);
+    const fatVenda = list.reduce((a, r) => a + r.valor, 0);
+    const recebidos = list.filter((r) => r.recebido);
+    const recebido = recebidos.reduce((a, r) => a + r.valor, 0);
+    const fat = recebido;
     const clienteNomes = new Set(list.map((r) => r.cliente).filter(Boolean));
     const byUser = {};
     for (const r of list) {
@@ -222,9 +232,11 @@ export function aggregate(rows) {
       return { lat: geo.lat, lng: geo.lng, label: `${b.bairro} (${geo.cidade})`, bairro: b.bairro, n: b.n, fat: Math.round(b.fat) };
     });
     const byDay = {};
-    for (const r of list) {
-      const key = r.dt.d;
-      byDay[key] = (byDay[key] || 0) + r.valor;
+    for (const r of recebidos) {
+      const dt = r.dtBaixa || r.dt;
+      if (month !== "all" && dt.m !== month + 1) continue;
+      if (dt.y !== year) continue;
+      byDay[dt.d] = (byDay[dt.d] || 0) + r.valor;
     }
     const daysIn = month === "all" ? 0 : new Date(year, month + 1, 0).getDate();
     const dailyFat = [];
@@ -233,21 +245,25 @@ export function aggregate(rows) {
     }
     const monthlyFat = Array(12).fill(0);
     const monthlyQtd = Array(12).fill(0);
-    for (const r of parsed.filter((x) => x.dt.y === year && (unit === "consolidado" || x.unit === unit))) {
-      monthlyFat[r.dt.m - 1] += r.valor;
-      monthlyQtd[r.dt.m - 1] += 1;
+    for (const r of parsed.filter((x) => (unit === "consolidado" || x.unit === unit))) {
+      if (r.recebido) {
+        const dt = r.dtBaixa || r.dt;
+        if (dt.y === year) monthlyFat[dt.m - 1] += r.valor;
+      }
+      if (r.dt.y === year) monthlyQtd[r.dt.m - 1] += 1;
     }
     return {
       id: unit,
       nome: unit === "matriz" ? "Matriz" : unit === "filial" ? "Filial 1" : "As duas",
       casa: unit === "matriz" ? "Animal Center" : unit === "filial" ? "Sao Cristovao" : "Matriz + Sao Cristovao",
       fat: Math.round(fat),
+      fatVenda: Math.round(fatVenda),
       fatPrev: 0,
       delta: 0,
       qtd,
-      ticketVenda: qtd ? Math.round(fat / qtd) : 0,
+      ticketVenda: qtd ? Math.round(fatVenda / qtd) : 0,
       ticketCliente: clienteNomes.size ? Math.round(fat / clienteNomes.size) : 0,
-      recebido: Math.round(fat * (list.filter((r) => /pago/.test(r.pago)).length ? 0.9 : 0.89)),
+      recebido: Math.round(recebido),
       consultas: list.filter((r) => r.grupo === "Consultas").length,
       vacinasAplicadas: list.filter((r) => r.grupo === "Vacinas").length,
       atendimentos:
@@ -291,18 +307,19 @@ export function aggregate(rows) {
       genero: { fem, masc },
       nps: { nota: 0, respostas: 0 },
       dre: [
-        { linha: "Receita bruta", valor: Math.round(fat) },
+        { linha: "Receita bruta (vendas)", valor: Math.round(fatVenda) },
+        { linha: "Recebimentos", valor: Math.round(recebido), destaque: true },
         { linha: "Deducoes / descontos", valor: 0 },
-        { linha: "Receita liquida", valor: Math.round(fat), destaque: true },
+        { linha: "Receita liquida", valor: Math.round(fatVenda), destaque: true },
         { linha: "CMV / custo direto", valor: 0 },
-        { linha: "Lucro bruto", valor: Math.round(fat), destaque: true },
+        { linha: "Lucro bruto", valor: Math.round(fatVenda), destaque: true },
         { linha: "Pessoal", valor: 0 },
         { linha: "Aluguel e condominio", valor: 0 },
         { linha: "Energia, agua, internet", valor: 0 },
         { linha: "Marketing", valor: 0 },
         { linha: "Laboratorio / exames", valor: 0 },
         { linha: "Outras despesas", valor: 0 },
-        { linha: "Resultado operacional", valor: Math.round(fat), destaque: true },
+        { linha: "Resultado operacional", valor: Math.round(fatVenda), destaque: true },
       ],
       monthlyFat,
       monthlyFatPrev: Array(12).fill(0),
@@ -317,7 +334,8 @@ export function aggregate(rows) {
         });
         return {
           ano: y,
-          fat: Math.round(ls.reduce((a, r) => a + r.valor, 0)),
+          fat: Math.round(ls.filter((r) => r.recebido).reduce((a, r) => a + r.valor, 0)),
+          fatVenda: Math.round(ls.reduce((a, r) => a + r.valor, 0)),
           qtd: ls.length,
         };
       }),
