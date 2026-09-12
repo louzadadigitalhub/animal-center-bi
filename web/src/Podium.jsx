@@ -315,7 +315,7 @@ function Degrau({ p, rank, brl, maxFat, fotos }) {
 
 /* ---------- Podio ---------- */
 
-export default function Podium({ equipe = [], brl, fotos }) {
+export default function Podium({ equipe = [], brl, fotos, diagnostico }) {
   /* Conta da casa e recepcao faturam, mas nao sao pessoa: nao ganham coroa. */
   const gente = equipe.filter((p) => !isSystemName(p.nome));
   const top = gente.slice(0, 3);
@@ -331,7 +331,21 @@ export default function Podium({ equipe = [], brl, fotos }) {
     return () => clearInterval(t);
   }, []);
 
-  if (!top.length) return <p className="hint">Sem vendas no recorte.</p>;
+  /* Tela vazia num telao nao diz nada a quem passa. Aqui ela conta o que
+     o robo trouxe, para o problema ser lido sem abrir o console. */
+  if (!top.length) {
+    return (
+      <div className="tv-vazio">
+        <strong>Ninguém no ranking deste recorte</strong>
+        <p>{diagnostico}</p>
+        <p className="tv-vazio-dica">
+          {equipe.length
+            ? "O robô trouxe vendas, mas só de contas da casa (recepção, financeiro), que não entram no pódio."
+            : "O robô não trouxe venda de pessoa nenhuma neste mês. Tente outro mês ou 'Ano todo'."}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="podium-wrap">

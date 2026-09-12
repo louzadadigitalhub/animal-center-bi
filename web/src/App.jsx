@@ -32,7 +32,7 @@ const NAV = [
   { id: "vacinas", label: "Vacinas", icon: Syringe },
   { id: "pesquisa", label: "Pesquisa", icon: ChatCircleDots },
   { id: "dre", label: "DRE", icon: Table },
-  { id: "tv", label: "TV corredor", icon: MonitorPlay },
+  { id: "tv", label: "Ranking", icon: MonitorPlay },
 ];
 
 function Kpi({ label, value, hint, spark, warn }) {
@@ -602,8 +602,12 @@ function Drawer({ detail, onClose }) {
   );
 }
 
-function Tv({ u, label, fotos }) {
-  const total = u.equipe.reduce((a, p) => a + (p.fat || 0), 0);
+function Tv({ u, label, fotos, live }) {
+  const equipe = u.equipe || [];
+  const total = equipe.reduce((a, p) => a + (p.fat || 0), 0);
+  const fonte = live?.ok
+    ? `robô ok · ${live.rows} vendas lidas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
+    : "robô sem resposta · mostrando o retrato guardado";
   return (
     <div className="tv">
       <Ambient />
@@ -620,7 +624,12 @@ function Tv({ u, label, fotos }) {
           </strong>
         </div>
       </header>
-      <Podium equipe={u.equipe} brl={brl} fotos={fotos} />
+      <Podium
+        equipe={equipe}
+        brl={brl}
+        fotos={fotos}
+        diagnostico={`${u.casa} · ${label} · ${equipe.length} pessoa(s) no recorte · ${fonte}`}
+      />
     </div>
   );
 }
@@ -788,7 +797,7 @@ export default function App() {
         {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} />}
-        {page === "tv" && <Tv u={u} label={label} fotos={live?.fotos} />}
+        {page === "tv" && <Tv u={u} label={label} fotos={live?.fotos} live={live} />}
       </div>
       <nav className="dock" aria-label="Atalhos">
         {DOCK.map((item) => {

@@ -1610,17 +1610,11 @@ tr.click:hover td,
 }
 
 .pod-1 .pod-fat {
-  background: linear-gradient(135deg, var(--metal-a), var(--metal-b));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--metal-b);
 }
 
-/* No claro o ouro claro lava sobre o card branco: desce a rampa */
 [data-theme="light"] .pod-1 .pod-fat {
-  background: linear-gradient(135deg, var(--metal-b), var(--metal-c));
-  -webkit-background-clip: text;
-  background-clip: text;
+  color: var(--metal-c);
 }
 
 .pod-vendas {
@@ -1700,6 +1694,33 @@ tr.click:hover td,
   text-transform: uppercase;
   font-weight: 700;
   color: rgba(8, 21, 30, 0.66);
+}
+
+/* Vazio explicado, nao vazio mudo */
+.tv-vazio {
+  margin-top: clamp(var(--s8), 8vh, 80px);
+  text-align: center;
+  color: var(--text-2);
+}
+
+.tv-vazio strong {
+  display: block;
+  font-size: clamp(18px, 2.2vw, 26px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+}
+
+.tv-vazio p {
+  margin: var(--s3) auto 0;
+  max-width: 60ch;
+  font-size: clamp(12px, 1.3vw, 15px);
+  line-height: 1.6;
+  color: var(--text-3);
+}
+
+.tv-vazio-dica {
+  color: var(--accent-text) !important;
 }
 
 /* ---------- Do 4o em diante ---------- */
