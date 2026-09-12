@@ -14,6 +14,7 @@ import {
   readSession,
   syncPeopleFromSales,
 } from "./people.js";
+import { aggregate } from "./aggregate.js";
 
 process.on("uncaughtException", (err) => {
   console.error("uncaught", err);
@@ -54,10 +55,24 @@ app.use(express.json({ limit: "32kb" }));
 let lastError = null;
 let running = false;
 
+let hojeCache = { at: "", snap: null };
+
 async function loadSnapshot() {
   try {
     const raw = await readFile(join(DATA_DIR, "snapshot.json"), "utf8");
-    return JSON.parse(raw);
+    const snap = JSON.parse(raw);
+    if (snap?.snapshot?.hoje) return snap;
+    if (hojeCache.at === snap.at && hojeCache.snap) return hojeCache.snap;
+    try {
+      const rows = JSON.parse(await readFile(join(DATA_DIR, "vendas.json"), "utf8"));
+      const agg = aggregate(rows);
+      snap.snapshot.hoje = agg.hoje;
+      snap.snapshot.years = snap.snapshot.years || agg.years;
+      hojeCache = { at: snap.at, snap };
+    } catch {
+      /* sem vendas.json ainda */
+    }
+    return snap;
   } catch {
     return null;
   }
