@@ -257,6 +257,33 @@ export function aggregate(rows) {
     }
     const monthlyFat = Array(12).fill(0);
     const monthlyQtd = Array(12).fill(0);
+    /* Mes a mes de CADA ano presente no raspao, nao so do ano escolhido.
+       O portal ja entrega o historico inteiro (99 mil linhas desde 2023) e
+       compareYears abaixo ja varria todos os anos — faltava so guardar a
+       serie mensal, que e o que sustenta as linhas sobrepostas. */
+    const porAno = {};
+    for (const r of parsed) {
+      if (unit !== "consolidado" && r.unit !== unit) continue;
+      const a = r.dt.y;
+      if (!a) continue;
+      porAno[a] ??= { fat: Array(12).fill(0), qtd: Array(12).fill(0), clientes: Array(12).fill(null) };
+      porAno[a].qtd[r.dt.m - 1] += 1;
+      if (r.recebido) porAno[a].fat[r.dt.m - 1] += r.valor;
+      (porAno[a].clientes[r.dt.m - 1] ??= new Set()).add(r.cliente || "");
+    }
+    const monthlyPorAno = {};
+    for (const [a, v] of Object.entries(porAno)) {
+      monthlyPorAno[a] = {
+        fat: v.fat.map((n) => Math.round(n)),
+        qtd: v.qtd,
+        clientes: v.clientes.map((c) => (c ? c.size : 0)),
+        ticketVenda: v.fat.map((n, i) => (v.qtd[i] ? Math.round(n / v.qtd[i]) : 0)),
+        ticketCliente: v.fat.map((n, i) => {
+          const c = v.clientes[i] ? v.clientes[i].size : 0;
+          return c ? Math.round(n / c) : 0;
+        }),
+      };
+    }
     for (const r of parsed.filter((x) => (unit === "consolidado" || x.unit === unit))) {
       if (r.recebido) {
         const dt = r.dtBaixa || r.dt;
@@ -351,8 +378,9 @@ export function aggregate(rows) {
         { linha: "Resultado operacional", valor: Math.round(fatVenda), destaque: true },
       ],
       monthlyFat,
-      monthlyFatPrev: Array(12).fill(0),
+      monthlyFatPrev: monthlyPorAno[year - 1]?.fat || Array(12).fill(0),
       monthlyQtd,
+      monthlyPorAno,
       dailyFat,
       compareYears: [...new Set(parsed.map((r) => r.dt.y).filter(Boolean))].sort().map((y) => {
         const ls = parsed.filter((r) => {

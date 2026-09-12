@@ -13,7 +13,7 @@ import { List } from "@phosphor-icons/react/List";
 import { X } from "@phosphor-icons/react/X";
 import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
-import { DailyBars, Donut, Hourly, LineChart, Radar, SparkBars, Treemap, VolumeTicket } from "./charts";
+import { DailyBars, Donut, Hourly, LineChart, Radar, MultiLine, SparkBars, Treemap, VolumeTicket } from "./charts";
 import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily } from "./data";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
@@ -57,6 +57,7 @@ function Kpi({ label, value, hint, spark, warn, onOpen }) {
 }
 
 function Vendas({ u, year }) {
+  const [campoAno, setCampoAno] = useState("fat");
   const fatSeries = u.monthlyFat.map((n) => n || 0);
   const groupsDonut = u.grupos.map((g) => ({ nome: g.nome, value: g.valor, hint: brl(g.valor) }));
   const alerts = u.grupos.filter((g) => g.valor < g.media);
@@ -141,6 +142,36 @@ function Vendas({ u, year }) {
             <Donut slices={budget} totalLabel="Caixa" totalValue={brl(cx.receitaTotal || u.fat)} />
           </CardContent>
         </Card>
+        <Card className="tile tile-anos">
+          <CardHeader>
+            <CardTitle>Anos sobrepostos</CardTitle>
+            <CardDescription>Cada linha e um ano; a cheia e o corrente</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="anos-abas">
+              {[
+                ["fat", "Faturamento", brl],
+                ["qtd", "Qtd de venda", num],
+                ["ticketVenda", "Valor medio/venda", brl],
+                ["ticketCliente", "Valor medio/cliente", brl],
+              ].map(([campo, rotulo, f]) => (
+                <button
+                  key={campo}
+                  className={campoAno === campo ? "on" : ""}
+                  onClick={() => setCampoAno(campo)}
+                >
+                  {rotulo}
+                </button>
+              ))}
+            </div>
+            <MultiLine
+              porAno={u.monthlyPorAno || {}}
+              campo={campoAno}
+              fmt={campoAno === "qtd" ? num : brl}
+            />
+          </CardContent>
+        </Card>
+
         <Card className="tile tile-compare">
           <CardHeader>
             <CardTitle>Grupos vs media</CardTitle>

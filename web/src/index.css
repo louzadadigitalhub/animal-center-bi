@@ -1045,6 +1045,45 @@ table,
   height: auto;
 }
 
+/* Alternador das quatro metricas do comparativo entre anos */
+.anos-abas {
+  display: flex;
+  gap: 2px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 3px;
+  margin-bottom: var(--s3);
+  overflow-x: auto;
+}
+
+.anos-abas button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.anos-abas button:hover {
+  color: var(--text);
+}
+
+.anos-abas button.on {
+  background: var(--surface-3);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.tile-anos {
+  min-width: 0;
+}
+
 .bars {
   display: grid;
   gap: var(--s3);

@@ -410,3 +410,67 @@ export function VolumeTicket({ pessoas = [], brl }) {
     </svg>
   );
 }
+
+/* Anos sobrepostos — as quatro linhas da p1 do BI antigo. O portal ja tinha
+   o historico desde 2023; faltava so guardar a serie mensal por ano. */
+export function MultiLine({ porAno = {}, campo = "fat", fmt, h = 200 }) {
+  const anos = Object.keys(porAno).sort();
+  if (!anos.length) return <p className="hint">Sem historico no recorte.</p>;
+  const w = 560, padLeft = 44, top = 16, base = h - 34;
+  const series = anos.map((a) => porAno[a][campo] || []);
+  const max = Math.max(1, ...series.flat());
+  const xAt = (i) => padLeft + (i * (w - padLeft - 14)) / 11;
+  const yAt = (v) => base - (v / max) * (base - top);
+  const MES = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
+
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} className="chart" role="img" aria-label="Comparativo entre anos">
+      <Grads id={`ml-${campo}`} />
+      <Grid w={w} top={top} base={base} max={max} padLeft={padLeft} steps={3} />
+      {series.map((vals, si) => {
+        /* So desenha ate o ultimo mes com dado: senao o ano corrente
+           despenca para zero em outubro e parece queda, nao mes futuro. */
+        const ate = vals.reduce((u, v, i) => (v ? i : u), -1);
+        if (ate < 0) return null;
+        const pts = vals.slice(0, ate + 1).map((v, i) => `${xAt(i)},${yAt(v)}`).join(" ");
+        const cor = SERIES[si % SERIES.length];
+        const atual = si === series.length - 1;
+        return (
+          <g key={anos[si]}>
+            <polyline
+              points={pts}
+              fill="none"
+              stroke={cor}
+              strokeWidth={atual ? 2.6 : 1.6}
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              opacity={atual ? 1 : 0.65}
+            />
+            {atual
+              ? vals.slice(0, ate + 1).map((v, i) => (
+                  <g key={i}>
+                    <title>{`${MES[i]} ${anos[si]}: ${fmt ? fmt(v) : v}`}</title>
+                    <circle cx={xAt(i)} cy={yAt(v)} r="2.8" fill="var(--surface-1)" stroke={cor} strokeWidth="1.6" />
+                  </g>
+                ))
+              : null}
+          </g>
+        );
+      })}
+      {MES.map((m, i) => (
+        <text key={i} x={xAt(i)} y={h - 18} textAnchor="middle" fontSize="9" fill={AXIS}>
+          {m}
+        </text>
+      ))}
+      <line x1={padLeft} y1={base} x2={w - 14} y2={base} stroke={GRID} />
+      {anos.map((a, i) => (
+        <g key={a}>
+          <rect x={padLeft + i * 58} y={h - 10} width="10" height="3" rx="1.5" fill={SERIES[i % SERIES.length]} />
+          <text x={padLeft + i * 58 + 14} y={h - 6} fontSize="9" fill={AXIS}>
+            {a}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
