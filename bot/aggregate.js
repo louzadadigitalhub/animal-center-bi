@@ -53,13 +53,6 @@ function parseDate(s) {
 
 function unitOf(row) {
   if (row._sede === "filial") return "filial";
-  const blob = norm(
-    [
-      pick(row, ["unidade", "loja", "empresa", "filial", "caixa"]),
-      pick(row, ["usuario", "usuário", "funcionario", "funcionário", "vendedor", "responsavel"]),
-    ].join(" ")
-  );
-  if (FILIAL_HINTS.some((h) => blob.includes(norm(h)))) return "filial";
   return "matriz";
 }
 
