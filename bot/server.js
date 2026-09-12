@@ -54,10 +54,10 @@ async function tick() {
     const { scrape } = await import("./scrape.js");
     const r = await scrape();
     lastError = null;
-    console.log(new Date().toISOString(), "scrape ok", r);
+    console.log(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape ok", r);
   } catch (err) {
     lastError = String(err && err.stack ? err.stack : err);
-    console.error(new Date().toISOString(), "scrape fail", lastError);
+    console.error(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape fail", lastError);
   } finally {
     running = false;
   }

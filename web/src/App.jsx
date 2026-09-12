@@ -568,7 +568,9 @@ export default function App() {
   const demo = useMemo(() => getView(unit, year, month), [unit, year, month]);
   const u = live?.view ? { ...demo, ...live.view } : demo;
   const label = periodLabel(year, month);
-  const fonte = live?.ok ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR")}` : "Aguardando robô";
+  const fonte = live?.ok
+    ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
+    : "Aguardando robô";
   const api = import.meta.env.VITE_API_URL || "";
 
   useEffect(() => {

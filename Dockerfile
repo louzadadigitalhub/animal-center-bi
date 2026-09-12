@@ -19,6 +19,7 @@ RUN cd web && npm run build
 COPY bot/ bot/
 
 ENV NODE_ENV=production
+ENV TZ=America/Sao_Paulo
 ENV PORT=8787
 ENV DATA_DIR=/data
 ENV WEB_DIR=/app/web/dist

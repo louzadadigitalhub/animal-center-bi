@@ -23,11 +23,36 @@ const EMAIL = process.env.SIMPLES_VET_EMAIL;
 const PASSWORD = process.env.SIMPLES_VET_PASSWORD;
 const LOGIN_URL = process.env.SIMPLES_VET_LOGIN_URL || "https://app.simples.vet/login/login.php";
 
+const TZ = process.env.TZ || "America/Sao_Paulo";
+
+function nowBrasilia(d = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-GB", {
+      timeZone: TZ,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value])
+  );
+  return {
+    y: Number(parts.year),
+    m: Number(parts.month),
+    d: Number(parts.day),
+    h: Number(parts.hour),
+    min: Number(parts.minute),
+    s: Number(parts.second),
+  };
+}
+
 function todayBR() {
-  const d = new Date();
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${d.getFullYear()}`;
+  const p = nowBrasilia();
+  return `${String(p.d).padStart(2, "0")}/${String(p.m).padStart(2, "0")}/${p.y}`;
 }
 
 function parseCsv(text) {
@@ -88,14 +113,20 @@ async function setDateRange(page, from, to) {
 }
 
 function monthStartBR() {
-  const d = new Date();
-  return `01/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  const p = nowBrasilia();
+  return `01/${String(p.m).padStart(2, "0")}/${p.y}`;
 }
 
 function monthEndBR() {
-  const d = new Date();
-  const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-  return `${String(last).padStart(2, "0")}/${String(d.getMonth() + 1).padStart(2, "0")}/${d.getFullYear()}`;
+  const p = nowBrasilia();
+  const last = new Date(Date.UTC(p.y, p.m, 0)).getUTCDate();
+  return `${String(last).padStart(2, "0")}/${String(p.m).padStart(2, "0")}/${p.y}`;
+}
+
+function agoraBrasiliaIso(d = new Date()) {
+  const p = nowBrasilia(d);
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${p.y}-${pad(p.m)}-${pad(p.d)}T${pad(p.h)}:${pad(p.min)}:${pad(p.s)}-03:00`;
 }
 
 function moneyBR(s) {
@@ -233,7 +264,7 @@ function applyRecebimentos(snapshot, caixa, from, unit) {
     if (dailyFat.some((d) => d.fat)) view.dailyFat = dailyFat;
   }
   snapshot.caixaOficial = snapshot.caixaOficial || {};
-  snapshot.caixaOficial[unit] = { ...pack, url: caixa.url, at: new Date().toISOString(), period: caixa.period };
+  snapshot.caixaOficial[unit] = { ...pack, url: caixa.url, at: agoraBrasiliaIso(), period: caixa.period };
   return snapshot;
 }
 
@@ -290,6 +321,7 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
   const context = await browser.newContext({
     acceptDownloads: true,
     locale: "pt-BR",
+    timezoneId: TZ,
   });
   const page = await context.newPage();
   page.setDefaultTimeout(60000);
@@ -374,7 +406,7 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
           view.dailyFat = dailyM;
         }
         snapshot.caixaOficial = snapshot.caixaOficial || {};
-        snapshot.caixaOficial.matriz = { ...packM, at: new Date().toISOString() };
+        snapshot.caixaOficial.matriz = { ...packM, at: agoraBrasiliaIso() };
       }
     } else if (caixaTodos) {
       snapshot = applyRecebimentos(snapshot, caixaTodos, from, "matriz");
@@ -386,7 +418,7 @@ export async function scrape({ from = monthStartBR(), to = monthEndBR() } = {}) 
       JSON.stringify(
         {
           ok: true,
-          at: new Date().toISOString(),
+          at: agoraBrasiliaIso(),
           from,
           to,
           rows: objects.length,
