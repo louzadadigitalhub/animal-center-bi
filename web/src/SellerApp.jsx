@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
 import { ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
 import { SignOut } from "@phosphor-icons/react/SignOut";
 import { UserCircle } from "@phosphor-icons/react/UserCircle";
 import { LockKey } from "@phosphor-icons/react/LockKey";
-import { Camera } from "@phosphor-icons/react/Camera";
-import { Trash } from "@phosphor-icons/react/Trash";
 import { Toaster, sileo } from "sileo";
 import "sileo/styles.css";
 import "./seller.css";
@@ -57,116 +55,6 @@ function Bars({ rows, maxHint }) {
         </li>
       ))}
     </ol>
-  );
-}
-
-/* Reduz para 512px quadrado antes de subir.
-   Corta centralizado, reencoda e, de quebra, joga fora o EXIF (inclusive GPS). */
-function toSquare(file, size = 512) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const lado = Math.min(img.width, img.height);
-      const cv = document.createElement("canvas");
-      cv.width = size;
-      cv.height = size;
-      const ctx = cv.getContext("2d");
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(img, (img.width - lado) / 2, (img.height - lado) / 2, lado, lado, 0, 0, size, size);
-      cv.toBlob(
-        (b) => (b ? resolve(b) : reject(new Error("nao deu para processar a imagem"))),
-        "image/webp",
-        0.86
-      );
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("arquivo nao e uma imagem"));
-    };
-    img.src = url;
-  });
-}
-
-function FotoDoTime({ me, onChange }) {
-  const [busy, setBusy] = useState(false);
-  const [erro, setErro] = useState("");
-  const input = useRef(null);
-  const src = me.foto ? `/api/foto/${me.id}?v=${me.foto}` : null;
-
-  async function enviar(e) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-    setErro("");
-    setBusy(true);
-    try {
-      const blob = await toSquare(file);
-      const r = await fetch("/api/me/foto", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "image/webp" },
-        body: blob,
-      });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error || "nao subiu");
-      onChange(data.foto);
-    } catch (e2) {
-      setErro(e2.message || "nao subiu");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function remover() {
-    setBusy(true);
-    setErro("");
-    try {
-      const r = await fetch("/api/me/foto", { method: "DELETE", credentials: "include" });
-      const data = await r.json();
-      if (!data.ok) throw new Error(data.error || "nao removeu");
-      onChange(null);
-    } catch (e2) {
-      setErro(e2.message || "nao removeu");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <section className="seller-card seller-foto">
-      <h2>Sua foto</h2>
-      <p className="seller-note">
-        E ela que aparece no telao do corredor quando voce entra no podio.
-      </p>
-      <div className="foto-row">
-        <div className={`foto-preview ${busy ? "is-busy" : ""}`}>
-          {src ? <img src={src} alt="" /> : <span>{iniciais(me.nome)}</span>}
-        </div>
-        <div className="foto-acoes">
-          <input
-            ref={input}
-            type="file"
-            accept="image/jpeg,image/png,image/webp"
-            onChange={enviar}
-            hidden
-          />
-          <button type="button" className="foto-btn" onClick={() => input.current?.click()} disabled={busy}>
-            <Camera weight="fill" />
-            {busy ? "Enviando…" : src ? "Trocar foto" : "Escolher foto"}
-          </button>
-          {src ? (
-            <button type="button" className="foto-btn ghost" onClick={remover} disabled={busy}>
-              <Trash />
-              Remover
-            </button>
-          ) : null}
-          <small className="seller-muted">JPG, PNG ou WebP · cortamos quadrado aqui mesmo</small>
-        </div>
-      </div>
-      {erro ? <p className="seller-err">{erro}</p> : null}
-    </section>
   );
 }
 
@@ -378,8 +266,6 @@ export default function SellerApp() {
           </small>
         </article>
       </section>
-
-      <FotoDoTime me={me} onChange={(v) => setMe((m) => ({ ...m, foto: v }))} />
 
       <section className="seller-card">
         <h2>Comparativo</h2>
