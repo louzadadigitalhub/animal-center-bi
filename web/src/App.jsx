@@ -468,16 +468,23 @@ function Pesquisa({ u }) {
   );
 }
 
+function dreCell(row, campo) {
+  const n = campo === "valor" ? row.valor : row[campo];
+  const conhecido = row.conhecido || /Receita|Recebimento|Resultado|Lucro/.test(row.linha);
+  if (!conhecido && !n) return "—";
+  return brl(n || 0);
+}
+
 function Dre({ u }) {
+  const linhas = u.dre || [];
   return (
     <div className="bento">
       <section className="card span-12">
         <header>
           <h2>DRE {u.id === "consolidado" ? "consolidada" : `da ${u.nome.toLowerCase()}`}</h2>
           <p>
-            {u.id === "consolidado"
-              ? "As duas casas. Cada linha diz de onde veio. Custo ainda e rascunho ate o financeiro entrar."
-              : "Receita menos custo desta casa."}
+            Receita e recebimento vêm do SimplesVet. Pessoal, aluguel e o resto do custo ainda não entram nesse robô — por
+            isso aparecem como traço, não como zero.
           </p>
         </header>
         <div className="table-wrap">
@@ -495,14 +502,14 @@ function Dre({ u }) {
               </tr>
             </thead>
             <tbody>
-              {u.dre.map((row) => (
+              {linhas.map((row) => (
                 <tr key={row.linha} className={row.destaque ? "now" : ""}>
                   <td>{row.linha}</td>
-                  <td className={row.valor < 0 ? "down" : ""}>{brl(row.valor)}</td>
+                  <td className={row.valor < 0 ? "down" : ""}>{dreCell(row, "valor")}</td>
                   {u.id === "consolidado" ? (
                     <>
-                      <td>{brl(row.matriz || 0)}</td>
-                      <td>{brl(row.filial || 0)}</td>
+                      <td>{dreCell(row, "matriz")}</td>
+                      <td>{dreCell(row, "filial")}</td>
                     </>
                   ) : null}
                 </tr>

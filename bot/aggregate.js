@@ -368,6 +368,24 @@ export function aggregate(rows) {
     };
   }
 
+  function syncDre(view) {
+    if (!view) return;
+    const rec = Math.round(view.caixa?.receitaTotal || view.recebido || view.fat || 0);
+    const venda = Math.round(view.fatVenda || rec);
+    const known = {
+      "Receita bruta (vendas)": venda,
+      Recebimentos: rec,
+      "Receita liquida": venda,
+      "Lucro bruto": rec,
+      "Resultado operacional": rec,
+    };
+    view.dre = (view.dre || []).map((row) => ({
+      ...row,
+      valor: known[row.linha] != null ? known[row.linha] : row.valor,
+      conhecido: known[row.linha] != null,
+    }));
+  }
+
   const years = [...new Set(parsed.map((r) => r.dt.y).filter(Boolean))].sort();
   const views = {};
   for (const unit of ["matriz", "filial", "consolidado"]) {
@@ -375,6 +393,23 @@ export function aggregate(rows) {
     for (const year of years) {
       views[unit][year] = { all: slice(unit, year, "all") };
       for (let m = 0; m < 12; m++) views[unit][year][m] = slice(unit, year, m);
+      syncDre(views[unit][year].all);
+      for (let m = 0; m < 12; m++) syncDre(views[unit][year][m]);
+    }
+  }
+  for (const year of years) {
+    const keys = ["all", ...Array.from({ length: 12 }, (_, i) => i)];
+    for (const k of keys) {
+      const c = views.consolidado[year][k];
+      const mz = views.matriz[year][k];
+      const fl = views.filial[year][k];
+      if (!c?.dre) continue;
+      c.dre = c.dre.map((row, i) => ({
+        ...row,
+        matriz: mz?.dre?.[i]?.valor || 0,
+        filial: fl?.dre?.[i]?.valor || 0,
+        conhecido: row.conhecido,
+      }));
     }
   }
 

@@ -304,6 +304,14 @@ function applyRecebimentos(snapshot, caixa, from, unit) {
     view.fat = pack.receitaTotal;
     view.recebido = pack.receitaTotal;
     if (dailyFat.some((d) => d.fat)) view.dailyFat = dailyFat;
+    if (view.dre) {
+      for (const row of view.dre) {
+        if (row.linha === "Recebimentos" || row.linha === "Lucro bruto" || row.linha === "Resultado operacional") {
+          row.valor = pack.receitaTotal;
+          row.conhecido = true;
+        }
+      }
+    }
   }
   snapshot.caixaOficial = snapshot.caixaOficial || {};
   snapshot.caixaOficial[unit] = { ...pack, url: caixa.url, at: agoraBrasiliaIso(), period: caixa.period };
