@@ -328,6 +328,55 @@ input {
   font-weight: 700;
 }
 
+/* Duas saidas para quem nao e da diretoria: o telao e o painel da vendedora */
+.portao-saidas {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: var(--s2);
+}
+
+.portao-saidas > span {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+}
+
+.portao-saida {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: 11px var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  color: var(--text-2);
+  text-decoration: none;
+  font-size: 14px;
+  transition: border-color var(--fast) var(--ease), color var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.portao-saida svg {
+  flex: none;
+  color: var(--accent-text);
+}
+
+.portao-saida small {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.portao-saida:hover {
+  border-color: var(--line-2);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+
 .portao-nota {
   margin-top: var(--s5);
   padding-top: var(--s4);

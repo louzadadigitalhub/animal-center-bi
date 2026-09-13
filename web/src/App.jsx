@@ -1493,7 +1493,7 @@ export default function App() {
         <form className="portao-caixa" onSubmit={entrar}>
           <img src="/logo-dark.png" alt="" />
           <h1>Painel da diretoria</h1>
-          <p>Acesso restrito. Vendedoras entram em /eu com o PIN.</p>
+          <p>Acesso restrito da diretoria.</p>
           {erro ? <p className="portao-erro">{erro}</p> : null}
           <label>
             E-mail
@@ -1506,7 +1506,22 @@ export default function App() {
           <button type="submit" disabled={ocupado || !email || !senha}>
             {ocupado ? "Entrando…" : "Entrar"}
           </button>
-          <p className="portao-nota">O ranking do corredor nao pede senha: /ranking</p>
+          {/* Quem cai aqui sem ser da diretoria costuma ser a vendedora
+              procurando o painel dela, ou alguem ligando a TV do corredor.
+              Os dois caminhos ficam a um clique em vez de exigir decorar URL. */}
+          <div className="portao-saidas">
+            <span>Não é você?</span>
+            <a href="/ranking" className="portao-saida">
+              <MonitorPlay size={16} weight="fill" />
+              Ranking do corredor
+              <small>sem senha</small>
+            </a>
+            <a href="/eu" className="portao-saida">
+              <UsersThree size={16} weight="fill" />
+              Acesso das vendedoras
+              <small>entra com PIN</small>
+            </a>
+          </div>
         </form>
       </div>
     );
