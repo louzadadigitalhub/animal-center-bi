@@ -15,6 +15,8 @@ import {
   syncPeopleFromSales,
 } from "./people.js";
 import { aggregate } from "./aggregate.js";
+import { IDS, PAGINAS, filtrarView, listarPerfis, removerPerfil, salvarPerfil, viewPublicaRanking } from "./acesso.js";
+import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
 process.on("uncaughtException", (err) => {
   console.error("uncaught", err);
@@ -46,7 +48,7 @@ app.use((req, res, next) => {
   const origin = process.env.FRONTEND_ORIGIN || "*";
   res.setHeader("Access-Control-Allow-Origin", origin);
   res.setHeader("Access-Control-Allow-Methods", "GET,POST,DELETE,OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
   if (origin !== "*") res.setHeader("Access-Control-Allow-Credentials", "true");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
@@ -147,7 +149,7 @@ app.get("/api/health", async (_req, res) => {
   });
 });
 
-app.get("/api/espelho", async (_req, res) => {
+app.get("/api/espelho", exigeDiretoria(), async (_req, res) => {
   try {
     const e = JSON.parse(await readFile(join(DATA_DIR, "espelho.json"), "utf8"));
     res.json({ ok: true, ...e });
@@ -156,7 +158,7 @@ app.get("/api/espelho", async (_req, res) => {
   }
 });
 
-app.get("/api/caixa", async (_req, res) => {
+app.get("/api/caixa", exigeDiretoria(), async (_req, res) => {
   const snap = await loadSnapshot();
   if (!snap) return res.status(503).json({ ok: false, error: "ainda sem dados" });
   res.json({
@@ -216,7 +218,88 @@ app.get("/api/me/dashboard", async (req, res) => {
   res.json({ ok: true, me, view });
 });
 
-app.get("/api/snapshot", async (req, res) => {
+/* Telao do corredor: sem login, e por isso sem nada de tutor. Se a TV
+   continuasse chamando /api/snapshot, trancar a tela nao adiantaria nada —
+   a URL aberta entregaria os 221 telefones do mesmo jeito. */
+app.get("/api/ranking", async (req, res) => {
+  const snap = await loadSnapshot();
+  if (!snap?.snapshot?.views) return res.status(503).json({ ok: false, error: "ainda sem dados" });
+  const unit = String(req.query.unit || "matriz");
+  const periodo = String(req.query.periodo || "mes");
+  const br = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const view =
+    periodo === "hoje"
+      ? snap.snapshot.hoje?.[unit]
+      : periodo === "semana"
+        ? snap.snapshot.semana?.[unit]
+        : snap.snapshot.views[unit]?.[br.getFullYear()]?.[periodo === "ano" ? "all" : br.getMonth()];
+  res.json({ ok: true, at: snap.at, rows: snap.rows, ...(viewPublicaRanking(view) || {}) });
+});
+
+/* Quem sou eu e o que posso ver. A tela usa para montar o menu; o servidor
+   nao confia nisso — o filtro de dado acontece no /api/snapshot. */
+app.get("/api/perfil", async (req, res) => {
+  if (!authConfigurada()) {
+    return res.status(503).json({ ok: false, error: "painel sem autenticacao configurada" });
+  }
+  const perfil = await quemE(req);
+  if (!perfil) return res.status(401).json({ ok: false, error: "entre para ver o painel" });
+  res.json({ ok: true, perfil, paginas: PAGINAS });
+});
+
+app.get("/api/perfis", exigeDiretoria({ admin: true }), async (_req, res) => {
+  res.json({ ok: true, perfis: await listarPerfis(), paginas: PAGINAS });
+});
+
+app.post("/api/perfis", exigeDiretoria({ admin: true }), async (req, res) => {
+  const email = String(req.body?.email || "");
+  const paginas = req.body?.paginas;
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: "email invalido" });
+  }
+  const r = await salvarPerfil(email, paginas === "todas" ? "todas" : paginas);
+  if (!r.ok) return res.status(400).json(r);
+  res.json({ ok: true, perfis: await listarPerfis() });
+});
+
+app.delete("/api/perfis", exigeDiretoria({ admin: true }), async (req, res) => {
+  const r = await removerPerfil(String(req.body?.email || ""));
+  if (!r.ok) return res.status(400).json(r);
+  res.json({ ok: true, perfis: await listarPerfis() });
+});
+
+/* Convite. A chave de servico do Supabase cria contas e NAO pode ir para o
+   navegador, entao a chamada sai daqui. Sem ela configurada, a admin ainda
+   pode liberar abas de quem ja tem conta — so nao cria conta nova pelo painel. */
+app.post("/api/perfis/convidar", exigeDiretoria({ admin: true }), async (req, res) => {
+  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
+  if (!chave) {
+    return res.status(503).json({ ok: false, error: "convite indisponivel: falta SUPABASE_SERVICE_ROLE_KEY" });
+  }
+  const email = String(req.body?.email || "");
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ ok: false, error: "email invalido" });
+  }
+  try {
+    const r = await fetch(`${url}/auth/v1/invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", apikey: chave, Authorization: `Bearer ${chave}` },
+      body: JSON.stringify({ email }),
+    });
+    if (!r.ok) {
+      const t = await r.text();
+      return res.status(400).json({ ok: false, error: `Supabase recusou: ${t.slice(0, 160)}` });
+    }
+    await salvarPerfil(email, Array.isArray(req.body?.paginas) ? req.body.paginas : []);
+    res.json({ ok: true, perfis: await listarPerfis() });
+  } catch (err) {
+    console.error("convite", err);
+    res.status(502).json({ ok: false, error: "nao deu para falar com o Supabase" });
+  }
+});
+
+app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
   const snap = await loadSnapshot();
   if (!snap?.snapshot?.views) {
     res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet", lastError });
@@ -244,7 +327,11 @@ app.get("/api/snapshot", async (req, res) => {
     hoje: snap.snapshot.hoje?.[unit] || null,
     semana: snap.snapshot.semana?.[unit] || null,
     clientesStatus: snap.snapshot.clientesStatus?.[unit] || null,
-    view: view ? { ...view, dailyFat } : null,
+    /* O recorte sai do servidor ja podado: a conta que nao tem a aba
+       Clientes nao recebe o array de clientes, nem o telefone deles. */
+    view: view ? filtrarView({ ...view, dailyFat }, req.perfil.paginas) : null,
+    paginas: req.perfil.paginas,
+    admin: req.perfil.admin,
   });
 });
 

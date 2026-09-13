@@ -20,6 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import { Num } from "./anim.jsx";
 import Podium, { Ambient } from "./Podium.jsx";
 import { Toaster, sileo } from "sileo";
+import { apiFetch, supa, supaConfigurado } from "./supa.js";
 import "sileo/styles.css";
 import { Badge } from "./components/ui/badge.jsx";
 
@@ -956,8 +957,12 @@ function Tv({ u, label, fotos, live }) {
   );
 }
 
-export default function App() {
-  const [page, setPage] = useState("vendas");
+function Painel({ perfil, aoSair }) {
+  /* O menu so mostra o que a conta pode ver. Isto e conveniencia: o filtro
+     que vale acontece no servidor, que poda o proprio snapshot. */
+  const podeVer = (id) => perfil.paginas === "todas" || (perfil.paginas || []).includes(id);
+  const navVisivel = NAV.filter((n) => podeVer(n.id));
+  const [page, setPage] = useState(navVisivel[0]?.id || "vendas");
   const [unit, setUnit] = useState("matriz");
   /* Abria sempre em Set/2026 porque ano e mês estavam escritos na mão.
      A tela de vendedor já derivava da data; o painel não. */
@@ -1053,7 +1058,7 @@ export default function App() {
     setCarregando(!guardado);
 
     const q = `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}`;
-    fetch(q)
+    apiFetch(q)
       .then((r) => r.json())
       .then((j) => (j.ok ? j : { ok: false }))
       .catch(() => ({ ok: false }))
@@ -1105,7 +1110,7 @@ export default function App() {
           </div>
         </div>
         <nav>
-          {NAV.map((item) => {
+          {navVisivel.map((item) => {
             const Icon = item.icon;
             return (
               <button key={item.id} className={page === item.id ? "on" : ""} onClick={() => go(item.id)}>
@@ -1180,6 +1185,18 @@ export default function App() {
                 </option>
               ))}
             </select>
+            {perfil.admin ? (
+              <button
+                type="button"
+                className="conta-sair"
+                onClick={() => setPage(page === "contas" ? navVisivel[0]?.id || "vendas" : "contas")}
+              >
+                {page === "contas" ? "Voltar ao painel" : "Contas"}
+              </button>
+            ) : null}
+            <button type="button" className="conta-sair" onClick={aoSair} title={perfil.email}>
+              Sair
+            </button>
             <button
               type="button"
               className="theme-toggle"
@@ -1193,7 +1210,7 @@ export default function App() {
         </header>
 
         <div className="crumb">
-          <h1>{NAV.find((n) => n.id === page)?.label}</h1>
+          <h1>{page === "contas" ? "Contas" : NAV.find((n) => n.id === page)?.label}</h1>
           <div className="crumb-meta">
             <span>
               {u.casa} · {label}
@@ -1213,6 +1230,7 @@ export default function App() {
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} />}
         {page === "tv" && <Tv u={u} label={label} fotos={live?.fotos} live={live} />}
+        {page === "contas" && perfil.admin ? <Contas /> : null}
       </div>
       <nav className="dock" aria-label="Atalhos">
         {DOCK.map((item) => {
@@ -1233,4 +1251,244 @@ export default function App() {
       <Toaster position="bottom-right" theme={theme} offset={{ bottom: 20, right: 20 }} />
     </div>
   );
+}
+
+
+/* ---------- Contas e permissoes (so a admin) ---------- */
+
+function Contas() {
+  const [perfis, setPerfis] = useState([]);
+  const [paginas, setPaginas] = useState([]);
+  const [email, setEmail] = useState("");
+  const [erro, setErro] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+
+  const carregar = () =>
+    apiFetch("/api/perfis")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.ok) throw new Error(j.error || "nao deu");
+        setPerfis(j.perfis);
+        setPaginas(j.paginas);
+      })
+      .catch((e) => setErro(e.message));
+
+  useEffect(() => {
+    carregar();
+  }, []);
+
+  async function alternar(conta, id) {
+    if (conta.paginas === "todas") return;
+    const tem = conta.paginas.includes(id);
+    const novas = tem ? conta.paginas.filter((x) => x !== id) : [...conta.paginas, id];
+    setPerfis((ps) => ps.map((p) => (p.email === conta.email ? { ...p, paginas: novas } : p)));
+    const r = await apiFetch("/api/perfis", {
+      method: "POST",
+      body: JSON.stringify({ email: conta.email, paginas: novas }),
+    }).then((x) => x.json());
+    if (!r.ok) {
+      sileo.error({ title: "Nao salvou", description: r.error });
+      carregar();
+    }
+  }
+
+  async function convidar(e) {
+    e.preventDefault();
+    setErro("");
+    setOcupado(true);
+    try {
+      const r = await apiFetch("/api/perfis/convidar", {
+        method: "POST",
+        body: JSON.stringify({ email, paginas: [] }),
+      }).then((x) => x.json());
+      if (!r.ok) throw new Error(r.error);
+      setPerfis(r.perfis);
+      setEmail("");
+      sileo.success({ title: "Convite enviado", description: `${email} recebe um e-mail para criar a senha.` });
+    } catch (e2) {
+      setErro(e2.message || "nao deu para convidar");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function remover(conta) {
+    const r = await apiFetch("/api/perfis", {
+      method: "DELETE",
+      body: JSON.stringify({ email: conta.email }),
+    }).then((x) => x.json());
+    if (r.ok) setPerfis(r.perfis);
+    else sileo.error({ title: "Nao removeu", description: r.error });
+  }
+
+  return (
+    <div className="bento">
+      <section className="card span-12">
+        <header>
+          <h2>Convidar</h2>
+          <p>A pessoa recebe um e-mail do Supabase para criar a propria senha. Ela entra sem aba nenhuma ate voce liberar abaixo.</p>
+        </header>
+        <form className="seller-filters" onSubmit={convidar}>
+          <input
+            type="email"
+            required
+            placeholder="email@animalcenter.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={{ flex: 1, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-ctl)", padding: "10px 12px", color: "inherit" }}
+          />
+          <button type="submit" className="conta-sair" disabled={ocupado || !email}>
+            {ocupado ? "Enviando…" : "Convidar"}
+          </button>
+        </form>
+        {erro ? <p className="portao-erro">{erro}</p> : null}
+      </section>
+
+      <section className="card span-12">
+        <header>
+          <h2>Quem ve o que</h2>
+          <p>Clique numa aba para liberar ou tirar. O ponto amarelo marca as que mostram dado pessoal de tutor.</p>
+        </header>
+        <div className="contas">
+          {perfis.map((c) => (
+            <div key={c.email} className="conta">
+              <div className="conta-topo">
+                <strong>{c.email}</strong>
+                {c.admin ? (
+                  <span className="ui-badge ui-badge-solid">admin · ve tudo</span>
+                ) : (
+                  <button type="button" className="conta-sair" onClick={() => remover(c)}>
+                    Remover acesso
+                  </button>
+                )}
+              </div>
+              {c.admin ? null : (
+                <div className="conta-abas">
+                  {paginas.map((pg) => (
+                    <button
+                      key={pg.id}
+                      type="button"
+                      className={`${c.paginas.includes(pg.id) ? "on" : ""} ${pg.sensivel ? "sensivel" : ""}`}
+                      onClick={() => alternar(c, pg.id)}
+                    >
+                      {pg.nome}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          {!perfis.length ? <p className="hint">Ninguem alem de voce ainda.</p> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* ---------- Portao ----------
+   Identidade vem do Supabase. As permissoes vem do servidor, que e quem de
+   fato poda o dado — a tela so usa a lista para montar o menu. */
+
+export default function App() {
+  const [sessao, setSessao] = useState(undefined);
+  const [perfil, setPerfil] = useState(null);
+  const [erro, setErro] = useState("");
+  const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+
+  useEffect(() => {
+    if (!supa) {
+      setSessao(null);
+      return undefined;
+    }
+    supa.auth.getSession().then(({ data }) => setSessao(data.session || null));
+    const { data: sub } = supa.auth.onAuthStateChange((_e, s) => {
+      setSessao(s || null);
+      if (!s) setPerfil(null);
+    });
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!sessao) return;
+    apiFetch("/api/perfil")
+      .then((r) => r.json())
+      .then((j) => (j.ok ? setPerfil(j.perfil) : setErro(j.error)))
+      .catch(() => setErro("nao deu para falar com o servidor"));
+  }, [sessao]);
+
+  async function entrar(e) {
+    e.preventDefault();
+    setErro("");
+    setOcupado(true);
+    const { error } = await supa.auth.signInWithPassword({ email, password: senha });
+    if (error) setErro(error.message === "Invalid login credentials" ? "E-mail ou senha nao conferem." : error.message);
+    setOcupado(false);
+  }
+
+  const sair = async () => {
+    await supa?.auth.signOut();
+    setPerfil(null);
+  };
+
+  if (!supaConfigurado) {
+    return (
+      <div className="portao">
+        <div className="portao-caixa">
+          <h1>Painel sem autenticacao configurada</h1>
+          <p>
+            Faltam VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no build, e SUPABASE_URL no servidor.
+            Enquanto isso o painel fica fechado — e o jeito certo de falhar, porque ele carrega
+            telefone e endereco de tutor.
+          </p>
+          <p className="portao-nota">O ranking do corredor segue no ar em /ranking.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (sessao === undefined) return <div className="portao"><p className="hint">Carregando…</p></div>;
+
+  if (!sessao) {
+    return (
+      <div className="portao">
+        <form className="portao-caixa" onSubmit={entrar}>
+          <img src="/logo-dark.png" alt="" />
+          <h1>Painel da diretoria</h1>
+          <p>Acesso restrito. Vendedoras entram em /eu com o PIN.</p>
+          {erro ? <p className="portao-erro">{erro}</p> : null}
+          <label>
+            E-mail
+            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
+          </label>
+          <label>
+            Senha
+            <input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" />
+          </label>
+          <button type="submit" disabled={ocupado || !email || !senha}>
+            {ocupado ? "Entrando…" : "Entrar"}
+          </button>
+          <p className="portao-nota">O ranking do corredor nao pede senha: /ranking</p>
+        </form>
+      </div>
+    );
+  }
+
+  if (!perfil) return <div className="portao"><p className="hint">{erro || "Conferindo seu acesso…"}</p></div>;
+
+  const semAba = perfil.paginas !== "todas" && !(perfil.paginas || []).length;
+  if (semAba) {
+    return (
+      <div className="portao">
+        <div className="portao-caixa">
+          <h1>Conta sem aba liberada</h1>
+          <p>Sua conta existe, mas ainda nao recebeu nenhuma aba. Peca para a diretoria liberar em Contas.</p>
+          <button type="button" className="conta-sair" onClick={sair}>Sair</button>
+        </div>
+      </div>
+    );
+  }
+
+  return <Painel perfil={perfil} aoSair={sair} />;
 }

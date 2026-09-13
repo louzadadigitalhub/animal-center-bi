@@ -223,6 +223,191 @@ input {
   min-height: 100dvh;
 }
 
+/* Telao do corredor: sem sidebar, o podio ocupa a tela toda */
+.app-tv {
+  grid-template-columns: 1fr;
+}
+
+.app-tv .main {
+  padding: var(--s4);
+  max-width: none;
+}
+
+.app-tv .tv {
+  min-height: calc(100dvh - var(--s8));
+}
+
+/* ---------- Entrada do painel ---------- */
+
+.portao {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--s5);
+}
+
+.portao-caixa {
+  width: min(420px, 100%);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow);
+  padding: var(--s8);
+  animation: rise 0.5s var(--ease) both;
+}
+
+.portao-caixa img {
+  width: 46px;
+  height: 46px;
+  border-radius: var(--r-ctl);
+  display: block;
+}
+
+.portao-caixa h1 {
+  margin: var(--s4) 0 var(--s1);
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.portao-caixa p {
+  margin: 0 0 var(--s5);
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.portao-caixa label {
+  display: grid;
+  gap: 6px;
+  margin-bottom: var(--s3);
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.portao-caixa input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 12px var(--s3);
+  color: var(--text);
+  outline: none;
+}
+
+.portao-caixa input:focus {
+  border-color: var(--line-2);
+}
+
+.portao-caixa button[type="submit"] {
+  width: 100%;
+  margin-top: var(--s2);
+  border: 0;
+  border-radius: var(--r-ctl);
+  padding: 13px;
+  background: var(--grad);
+  color: #04202c;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.portao-caixa button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.portao-erro {
+  color: var(--neg);
+  font-size: 13px;
+  margin: 0 0 var(--s3);
+}
+
+.portao-erro::before {
+  content: "! ";
+  font-weight: 700;
+}
+
+.portao-nota {
+  margin-top: var(--s5);
+  padding-top: var(--s4);
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+/* ---------- Contas e permissoes ---------- */
+
+.contas {
+  display: grid;
+  gap: var(--s3);
+}
+
+.conta {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+}
+
+.conta-topo {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+}
+
+.conta-topo strong {
+  font-size: 14px;
+}
+
+.conta-abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+
+.conta-abas button {
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-3);
+  border-radius: var(--r-pill);
+  padding: 5px 11px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background var(--fast) var(--ease), color var(--fast) var(--ease);
+}
+
+.conta-abas button.on {
+  background: var(--accent-wash);
+  border-color: var(--line-2);
+  color: var(--accent-text);
+  font-weight: 600;
+}
+
+.conta-abas button.sensivel::after {
+  content: " ·";
+  color: var(--warn);
+}
+
+.conta-sair {
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text-2);
+  border-radius: var(--r-ctl);
+  padding: 7px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.conta-sair:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
 aside {
   display: flex;
   flex-direction: column;

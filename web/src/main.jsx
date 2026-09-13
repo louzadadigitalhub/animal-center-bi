@@ -2,16 +2,20 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import SellerApp from "./SellerApp.jsx";
+import RankingPublico from "./RankingPublico.jsx";
 import "./index.css";
 
 // Tema aplicado antes de renderizar: vale para o dashboard e para /eu
 document.documentElement.dataset.theme = localStorage.getItem("ac-theme") || "dark";
 
-const seller = window.location.pathname === "/eu" || window.location.pathname.startsWith("/eu/");
+const rota = window.location.pathname;
+const seller = rota === "/eu" || rota.startsWith("/eu/");
+// /ranking e o telao do corredor: publico, sem login, sem dado de tutor
+const ranking = rota === "/ranking" || rota.startsWith("/ranking/");
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    {seller ? <SellerApp /> : <App />}
+    {ranking ? <RankingPublico /> : seller ? <SellerApp /> : <App />}
   </StrictMode>
 );
 
