@@ -7,6 +7,7 @@ import { ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
 import { Syringe } from "@phosphor-icons/react/Syringe";
 import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { Table } from "@phosphor-icons/react/Table";
+import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
 import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { List } from "@phosphor-icons/react/List";
@@ -962,7 +963,12 @@ function Painel({ perfil, aoSair }) {
   /* O menu so mostra o que a conta pode ver. Isto e conveniencia: o filtro
      que vale acontece no servidor, que poda o proprio snapshot. */
   const podeVer = (id) => perfil.paginas === "todas" || (perfil.paginas || []).includes(id);
-  const navVisivel = NAV.filter((n) => podeVer(n.id));
+  /* Admin nao e uma aba de dado, e um lugar. Por isso fica fora do NAV e so
+     aparece para quem administra. */
+  const navVisivel = [
+    ...NAV.filter((n) => podeVer(n.id)),
+    ...(perfil.admin ? [{ id: "admin", label: "Admin", icon: ShieldCheck }] : []),
+  ];
   const [page, setPage] = useState(navVisivel[0]?.id || "vendas");
   const [unit, setUnit] = useState("matriz");
   /* Abria sempre em Set/2026 porque ano e mês estavam escritos na mão.
@@ -1186,15 +1192,11 @@ function Painel({ perfil, aoSair }) {
                 </option>
               ))}
             </select>
-            {perfil.admin ? (
-              <button
-                type="button"
-                className="conta-sair"
-                onClick={() => setPage(page === "contas" ? navVisivel[0]?.id || "vendas" : "contas")}
-              >
-                {page === "contas" ? "Voltar ao painel" : "Contas"}
+            {perfil.admin ? null : (
+              <button type="button" className="conta-sair" onClick={() => setPage("admin")}>
+                Minha conta
               </button>
-            ) : null}
+            )}
             <button type="button" className="conta-sair" onClick={aoSair} title={perfil.email}>
               Sair
             </button>
@@ -1211,7 +1213,7 @@ function Painel({ perfil, aoSair }) {
         </header>
 
         <div className="crumb">
-          <h1>{page === "contas" ? "Contas" : NAV.find((n) => n.id === page)?.label}</h1>
+          <h1>{page === "admin" ? (perfil.admin ? "Admin" : "Minha conta") : NAV.find((n) => n.id === page)?.label}</h1>
           <div className="crumb-meta">
             <span>
               {u.casa} · {label}
@@ -1231,7 +1233,7 @@ function Painel({ perfil, aoSair }) {
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} />}
         {page === "tv" && <Tv u={u} label={label} fotos={live?.fotos} live={live} />}
-        {page === "contas" && perfil.admin ? <Contas /> : null}
+        {page === "admin" ? <Admin perfil={perfil} /> : null}
       </div>
       <nav className="dock" aria-label="Atalhos">
         {DOCK.map((item) => {
@@ -1254,6 +1256,68 @@ function Painel({ perfil, aoSair }) {
   );
 }
 
+
+/* ---------- Trocar a propria senha ----------
+   Vale para qualquer conta, nao so a admin: quem recebeu senha provisoria
+   precisa poder trocar sem depender de outra pessoa. A troca vai direto ao
+   Supabase, entao a senha nova nunca passa pelo nosso servidor. */
+
+function TrocarSenha({ email }) {
+  const [nova, setNova] = useState("");
+  const [repete, setRepete] = useState("");
+  const [erro, setErro] = useState("");
+  const [ok, setOk] = useState(false);
+  const [ocupado, setOcupado] = useState(false);
+
+  async function salvar(e) {
+    e.preventDefault();
+    setErro("");
+    setOk(false);
+    if (nova.length < 8) return setErro("Use ao menos 8 caracteres.");
+    if (nova !== repete) return setErro("As duas nao batem.");
+    setOcupado(true);
+    const { error } = await getSupa().auth.updateUser({ password: nova });
+    setOcupado(false);
+    if (error) return setErro(error.message);
+    setNova("");
+    setRepete("");
+    setOk(true);
+    sileo.success({ title: "Senha trocada", description: "Vale a partir de agora." });
+  }
+
+  return (
+    <section className="card span-12">
+      <header>
+        <h2>Minha senha</h2>
+        <p>Voce esta em {email}. A senha nova vai direto ao Supabase e nao passa pelo nosso servidor.</p>
+      </header>
+      <form className="senha-form" onSubmit={salvar}>
+        <label>
+          Senha nova
+          <input type="password" value={nova} onChange={(e) => setNova(e.target.value)} autoComplete="new-password" minLength={8} required />
+        </label>
+        <label>
+          Repita
+          <input type="password" value={repete} onChange={(e) => setRepete(e.target.value)} autoComplete="new-password" required />
+        </label>
+        <button type="submit" className="conta-sair" disabled={ocupado || !nova || !repete}>
+          {ocupado ? "Trocando…" : "Trocar senha"}
+        </button>
+      </form>
+      {erro ? <p className="portao-erro">{erro}</p> : null}
+      {ok ? <p className="ok">Senha trocada.</p> : null}
+    </section>
+  );
+}
+
+function Admin({ perfil }) {
+  return (
+    <div className="bento">
+      <TrocarSenha email={perfil.email} />
+      {perfil.admin ? <Contas /> : null}
+    </div>
+  );
+}
 
 /* ---------- Contas e permissoes (so a admin) ---------- */
 
