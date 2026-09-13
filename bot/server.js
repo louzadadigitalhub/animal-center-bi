@@ -9,6 +9,8 @@ import {
   cookieHeader,
   loginPerson,
   personDashboard,
+  photoFile,
+  photoMap,
   publicStaff,
   readCookie,
   readSession,
@@ -218,6 +220,19 @@ app.get("/api/me/dashboard", async (req, res) => {
   res.json({ ok: true, me, view });
 });
 
+/* Foto da equipe. Publica de proposito: o telao do corredor nao tem login e
+   precisa mostrar o rosto no podio. E so isso — nenhum dado de tutor passa
+   por aqui, e o tipo sai do conteudo do arquivo, nao do que o cliente pede. */
+app.get("/api/foto/:id", async (req, res) => {
+  const info = await photoFile(String(req.params.id || ""));
+  if (!info) return res.status(404).json({ ok: false, error: "sem foto" });
+  res.setHeader("Content-Type", info.type);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Content-Disposition", "inline");
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.sendFile(info.path);
+});
+
 /* Telao do corredor: sem login, e por isso sem nada de tutor. Se a TV
    continuasse chamando /api/snapshot, trancar a tela nao adiantaria nada —
    a URL aberta entregaria os 221 telefones do mesmo jeito. */
@@ -246,7 +261,8 @@ app.get("/api/ranking", async (req, res) => {
       : periodo === "semana"
         ? snap.snapshot.semana?.[unit]
         : snap.snapshot.views[unit]?.[br.getFullYear()]?.[periodo === "ano" ? "all" : br.getMonth()];
-  res.json({ ok: true, at: snap.at, rows: snap.rows, ...(viewPublicaRanking(view) || {}) });
+  const fotos = await photoMap().catch(() => ({}));
+  res.json({ ok: true, at: snap.at, rows: snap.rows, fotos, ...(viewPublicaRanking(view) || {}) });
 });
 
 /* Quem sou eu e o que posso ver. A tela usa para montar o menu; o servidor
@@ -343,6 +359,7 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
     /* O recorte sai do servidor ja podado: a conta que nao tem a aba
        Clientes nao recebe o array de clientes, nem o telefone deles. */
     view: view ? filtrarView({ ...view, dailyFat }, req.perfil.paginas) : null,
+    fotos: await photoMap().catch(() => ({})),
     paginas: req.perfil.paginas,
     admin: req.perfil.admin,
   });

@@ -57,6 +57,7 @@ export default function RankingPublico() {
           <Podium
             equipe={equipe}
             brl={brl}
+            fotos={dados?.fotos}
             diagnostico={`${dados?.casa || ""} · ${dados?.diaLabel || ""} · ${equipe.length} pessoa(s)`}
           />
         </div>
