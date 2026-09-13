@@ -1503,6 +1503,25 @@ table,
 
 /* ================= TABELAS ================= */
 
+/* Dica de rolagem lateral. So aparece onde a tabela nao cabe. */
+.table-wrap {
+  position: relative;
+}
+
+@media (max-width: 640px) {
+  .table-wrap::after {
+    content: "arraste para o lado →";
+    position: sticky;
+    left: 0;
+    display: block;
+    padding-top: var(--s2);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;
@@ -2566,15 +2585,49 @@ tr.click:hover td,
   .kpi {
     grid-column: span 12;
   }
-  table.rank {
-    min-width: 0;
-  }
-  table.rank th:nth-child(n + 4),
-  table.rank td:nth-child(n + 4) {
-    display: none;
-  }
+  /* Antes eu escondia da 4a coluna em diante no celular, entao ticket e
+     faturamento simplesmente sumiam e so voltavam deitando o aparelho.
+     Agora a tabela rola de lado e as duas primeiras colunas ficam presas,
+     senao ao rolar voce perde de quem e a linha. */
   table {
-    min-width: 420px;
+    min-width: 520px;
+  }
+
+  table.rank {
+    min-width: 620px;
+  }
+
+  table.rank th:nth-child(1),
+  table.rank td:nth-child(1),
+  table.rank th:nth-child(2),
+  table.rank td:nth-child(2) {
+    position: sticky;
+    z-index: 2;
+    background: var(--surface-1);
+  }
+
+  table.rank th:nth-child(1),
+  table.rank td:nth-child(1) {
+    left: 0;
+    width: 30px;
+    min-width: 30px;
+  }
+
+  table.rank th:nth-child(2),
+  table.rank td:nth-child(2) {
+    left: 30px;
+    /* o fio marca onde a parte fixa acaba e a rolagem comeca */
+    box-shadow: 1px 0 0 var(--line);
+  }
+
+  table.rank tr.now td:nth-child(1),
+  table.rank tr.now td:nth-child(2) {
+    background: color-mix(in srgb, var(--accent-wash) 100%, var(--surface-1));
+  }
+
+  table.rank tr.click:hover td:nth-child(1),
+  table.rank tr.click:hover td:nth-child(2) {
+    background: color-mix(in srgb, var(--accent-wash) 100%, var(--surface-1));
   }
   .mini .track {
     width: 100%;
