@@ -778,7 +778,69 @@ function dreCell(row, campo) {
   return brl(n || 0);
 }
 
+/* Antes esta pagina mostrava seis linhas de custo que eu inventei, todas
+   em zero e renderizadas como traco. O SimplesVet ja mantem o
+   demonstrativo com o plano de contas real da clinica, entao agora a
+   tela desenha a arvore deles — cada unidade com a propria, porque as
+   duas nao tem a mesma estrutura nem os mesmos nomes de categoria. */
 function Dre({ u }) {
+  const real = u.dreReal;
+  if (!real?.partes?.length) return <DreAntiga u={u} />;
+
+  return (
+    <div className="bento">
+      {real.partes.map((parte) => (
+        <DreArvore key={parte.unit} parte={parte} regime={real.regime} varias={real.partes.length > 1} />
+      ))}
+    </div>
+  );
+}
+
+const RECADO_ESTAGIO = {
+  fechado: null,
+  "em curso": "Mês em curso: já entram os lançamentos agendados até o fim do mês, então o resultado ainda vai mudar.",
+  futuro:
+    "Mês que ainda não chegou. Aluguel, salário e parcelas já estão lançados; a receita, não. O saldo aqui não é previsão de prejuízo — é despesa comprometida sem a venda correspondente.",
+};
+
+function DreArvore({ parte, regime, varias }) {
+  const casa = parte.unit === "filial" ? "São Cristóvão" : "Animal Center";
+  const recado = RECADO_ESTAGIO[parte.estagio];
+  return (
+    <section className="card span-12">
+      <header>
+        <h2>{varias ? `DRE · ${casa}` : "DRE"}</h2>
+        <p>
+          Demonstrativo do SimplesVet, {parte.periodo}, regime de {regime}. As categorias são as que a
+          clínica lança no portal.
+        </p>
+      </header>
+      {recado ? <p className="dre-aviso">{recado}</p> : null}
+      <div className="table-wrap">
+        <table className="dre">
+          <thead>
+            <tr>
+              <th>Categoria</th>
+              <th>Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {parte.linhas.map((l, i) => (
+              <tr key={`${l.nome}-${i}`} className={l.total ? "now" : ""}>
+                <td style={{ paddingLeft: `calc(var(--s3) + ${l.nivel * 18}px)` }}>{l.nome}</td>
+                <td className={l.valor < 0 ? "down" : ""}>{brl(l.valor)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+/* Enquanto o robo do demonstrativo nao tiver passado por um ano, a tela
+   cai na tabela antiga em vez de ficar em branco. */
+function DreAntiga({ u }) {
   const linhas = u.dre || [];
   return (
     <div className="bento">
@@ -786,8 +848,8 @@ function Dre({ u }) {
         <header>
           <h2>DRE {u.id === "consolidado" ? "consolidada" : `da ${(u.nome || "unidade").toLowerCase()}`}</h2>
           <p>
-            Receita e recebimento vêm do SimplesVet. Pessoal, aluguel e o resto do custo ainda não entram nesse robô — por
-            isso aparecem como traço, não como zero.
+            Ainda sem o demonstrativo do SimplesVet para este ano. Receita e recebimento saem das vendas;
+            as linhas de custo aparecem como traço porque não há fonte, e traço não é zero.
           </p>
         </header>
         <div className="table-wrap">

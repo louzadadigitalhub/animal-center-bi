@@ -17,6 +17,7 @@ import {
   syncPeopleFromSales,
 } from "./people.js";
 import { aggregate } from "./aggregate.js";
+import { dreDoPortal } from "./dre.js";
 import { IDS, PAGINAS, filtrarView, listarPerfis, removerPerfil, salvarPerfil, viewPublicaRanking } from "./acesso.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
@@ -90,6 +91,13 @@ async function loadSnapshot() {
   }
 }
 
+/* O demonstrativo muda no ritmo da contabilidade, nao no das vendas, e
+   ler as duas unidades custa dois logins. De 6 em 6 horas ja basta, e
+   sempre dentro do tick — o coletor faz logout para trocar de ambiente,
+   entao rodando solto ele derrubaria a sessao do scrape no meio. */
+const DRE_MS = Number(process.env.DRE_MS || 6 * 60 * 60 * 1000);
+let ultimoDre = 0;
+
 async function tick() {
   if (running) return;
   running = true;
@@ -98,6 +106,18 @@ async function tick() {
     const r = await scrape();
     lastError = null;
     console.log(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape ok", r);
+    if (Date.now() - ultimoDre > DRE_MS) {
+      ultimoDre = Date.now();
+      try {
+        const { collectDre } = await import("./collect-dre.js");
+        const ano = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })).getFullYear();
+        console.log("dre ok", await collectDre(ano, DATA_DIR));
+      } catch (err) {
+        /* DRE que falha nao pode derrubar o scrape: o painel continua
+           servindo vendas com o demonstrativo da ultima coleta. */
+        console.error("dre fail", String(err?.message || err));
+      }
+    }
   } catch (err) {
     lastError = String(err && err.stack ? err.stack : err);
     console.error(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape fail", lastError);
@@ -358,7 +378,16 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
     clientesStatus: snap.snapshot.clientesStatus?.[unit] || null,
     /* O recorte sai do servidor ja podado: a conta que nao tem a aba
        Clientes nao recebe o array de clientes, nem o telefone deles. */
-    view: view ? filtrarView({ ...view, dailyFat }, req.perfil.paginas) : null,
+    /* O DRE de verdade vem do demonstrativo do SimplesVet, nao do nosso
+       agregador: as linhas de custo nunca estiveram nas vendas. Entra
+       aqui e passa pelo filtrarView como todo o resto — conta sem a aba
+       DRE nao recebe custo nenhum. */
+    view: view
+      ? filtrarView(
+          { ...view, dailyFat, dreReal: await dreDoPortal(DATA_DIR, unit, year, month).catch(() => null) },
+          req.perfil.paginas
+        )
+      : null,
     fotos: await photoMap().catch(() => ({})),
     paginas: req.perfil.paginas,
     admin: req.perfil.admin,

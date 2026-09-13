@@ -40,7 +40,7 @@ const CAMPOS = {
   recorrencia: ["recorrentes", "novos", "monthlyQtd", "monthlyFat", "hourly"],
   vacinas: ["vacinas", "vacinasTop", "vacinasAplicadas"],
   pesquisa: ["nps"],
-  dre: ["dre", "fat", "fatVenda", "caixa"],
+  dre: ["dre", "dreReal", "fat", "fatVenda", "caixa"],
   tv: ["equipe"],
 };
 

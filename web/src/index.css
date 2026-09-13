@@ -414,6 +414,44 @@ input {
   border-color: var(--line-2);
 }
 
+/* ---------- DRE ---------- */
+
+/* A arvore do demonstrativo e longa; as linhas de total precisam saltar
+   para dar onde a vista descansar. */
+table.dre td:last-child {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+table.dre tr.now td {
+  font-weight: 600;
+  color: var(--text);
+}
+
+table.dre tr:not(.now) td {
+  color: var(--text-2);
+}
+
+/* Num DRE toda despesa ja vem com o sinal de menos, entao a setinha do
+   .down so repete a informacao e suja a coluna. */
+table.dre td.down::before {
+  content: none;
+}
+
+.dre-aviso {
+  margin: 0 0 var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--warn);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 /* ---------- Contas e permissoes ---------- */
 
 .convite {
