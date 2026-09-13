@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import {
   createHmac,
   randomBytes,
@@ -24,6 +24,7 @@ if (existsSync(envPath)) {
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 
 const PEOPLE_FILE = join(DATA_DIR, "people.json");
+const PHOTO_DIR = join(DATA_DIR, "fotos");
 const HIST_FILE = join(DATA_DIR, "vendas-hist.json");
 const ACESSOS_FILE = join(DATA_DIR, "acessos.txt");
 const SECRET_FILE = join(DATA_DIR, "session-secret.txt");
@@ -175,6 +176,39 @@ export async function loadSalesRows() {
   return Array.isArray(cur) ? cur : [];
 }
 
+/* Linhas ja parseadas, guardadas na memoria e refeitas so quando o arquivo
+   muda de verdade.
+
+   Antes, cada troca de mes no painel da vendedora relia o historico do disco
+   e reparsava tudo: ~5,8 s por clique com as 99 mil linhas da VPS. O robo
+   reescreve o arquivo a cada 2 minutos, entao entre duas raspagens o
+   resultado e sempre o mesmo — refazer a cada clique era trabalho jogado
+   fora.
+
+   A chave e o mtime dos dois arquivos: se o robo gravou, o cache cai
+   sozinho, sem prazo chutado. */
+let cacheVendas = { assinatura: null, linhas: null };
+
+async function assinaturaArquivos() {
+  const marca = async (f) => {
+    try {
+      const st = await stat(f);
+      return `${st.mtimeMs}:${st.size}`;
+    } catch {
+      return "0";
+    }
+  };
+  return `${await marca(HIST_FILE)}|${await marca(VENDAS_FILE)}`;
+}
+
+export async function vendasParseadas() {
+  const assinatura = await assinaturaArquivos();
+  if (cacheVendas.assinatura === assinatura && cacheVendas.linhas) return cacheVendas.linhas;
+  const linhas = parseSales(await loadSalesRows());
+  cacheVendas = { assinatura, linhas };
+  return linhas;
+}
+
 export async function mergeSalesHistory(rows) {
   if (!Array.isArray(rows) || !rows.length) return { added: 0, total: 0 };
   await mkdir(DATA_DIR, { recursive: true });
@@ -246,7 +280,7 @@ export async function syncPeopleFromSales() {
       /* o painel principal nao depende deste arquivo */
     }
   }
-  const rows = parseSales(await loadSalesRows());
+  const rows = await vendasParseadas();
   const byUser = new Map();
   for (const r of rows) {
     if (!r.user || isSystemName(r.user)) continue;
@@ -320,7 +354,90 @@ export function publicStaff(people) {
     nome: p.nome,
     casa: p.casa,
     unit: p.unit,
+    foto: p.foto?.v || null,
   }));
+}
+
+/* ---------- Fotos ----------
+   O tipo vem do conteudo, nao do header nem da extensao que o cliente mandou.
+   SVG fica de fora de proposito: e XML, pode carregar script, e a foto
+   aparece num telao publico. */
+
+const MAGIC = [
+  {
+    ext: "jpg",
+    type: "image/jpeg",
+    test: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  },
+  {
+    ext: "png",
+    type: "image/png",
+    test: (b) => b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
+  },
+  {
+    ext: "webp",
+    type: "image/webp",
+    test: (b) =>
+      b.subarray(0, 4).toString("latin1") === "RIFF" && b.subarray(8, 12).toString("latin1") === "WEBP",
+  },
+];
+
+export function sniffImage(buf) {
+  if (!Buffer.isBuffer(buf) || buf.length < 16) return null;
+  return MAGIC.find((m) => m.test(buf)) || null;
+}
+
+/* O nome do arquivo sai do id da sessao (ja e slug: [a-z0-9-]).
+   Nada que o cliente mande entra no caminho. */
+function photoPath(id, ext) {
+  const safe = slug(id);
+  if (!safe) return null;
+  return join(PHOTO_DIR, `${safe}.${ext}`);
+}
+
+export async function savePhoto(id, buf) {
+  const kind = sniffImage(buf);
+  if (!kind) return { ok: false, error: "manda JPG, PNG ou WebP" };
+  const doc = await loadPeopleDoc();
+  const person = doc.people.find((p) => p.id === id);
+  if (!person) return { ok: false, error: "pessoa nao encontrada" };
+  const dest = photoPath(id, kind.ext);
+  if (!dest) return { ok: false, error: "id invalido" };
+  await mkdir(PHOTO_DIR, { recursive: true });
+  // troca de formato nao pode deixar o arquivo antigo para tras
+  await Promise.all(MAGIC.map((m) => rm(photoPath(id, m.ext), { force: true })));
+  await writeFile(dest, buf);
+  person.foto = { ext: kind.ext, v: Date.now() };
+  await savePeopleDoc(doc);
+  return { ok: true, foto: person.foto.v };
+}
+
+export async function removePhoto(id) {
+  const doc = await loadPeopleDoc();
+  const person = doc.people.find((p) => p.id === id);
+  if (!person) return { ok: false, error: "pessoa nao encontrada" };
+  await Promise.all(MAGIC.map((m) => rm(photoPath(id, m.ext), { force: true })));
+  delete person.foto;
+  await savePeopleDoc(doc);
+  return { ok: true };
+}
+
+export async function photoFile(id) {
+  const doc = await loadPeopleDoc();
+  const person = doc.people.find((p) => p.id === id);
+  if (!person?.foto) return null;
+  const kind = MAGIC.find((m) => m.ext === person.foto.ext);
+  const path = kind && photoPath(id, kind.ext);
+  return path ? { path, type: kind.type, v: person.foto.v } : null;
+}
+
+/* Mapa id -> versao. Vai no snapshot para a TV saber quem tem foto
+   sem disparar um 404 por pessoa. */
+export async function photoMap() {
+  const doc = await loadPeopleDoc();
+  const out = {};
+  for (const p of doc.people) if (p.foto?.v) out[p.id] = p.foto.v;
+  return out;
 }
 
 function tooManyFails(ip) {
@@ -395,7 +512,7 @@ export async function readSession(token) {
   const doc = await loadPeopleDoc();
   const person = doc.people.find((p) => p.id === data.id);
   if (!person) return null;
-  return { id: person.id, nome: person.nome, casa: person.casa, unit: person.unit, role: person.role };
+  return { id: person.id, nome: person.nome, casa: person.casa, unit: person.unit, role: person.role, foto: person.foto?.v || null };
 }
 
 export function cookieHeader(token, req) {
@@ -483,7 +600,7 @@ function deltaPct(now, prev) {
 }
 
 export async function personDashboard(nome, year, month) {
-  const parsed = parseSales(await loadSalesRows());
+  const parsed = await vendasParseadas();
   const mine = parsed.filter((r) => norm(r.user) === norm(nome));
   const cur = mine.filter((r) => inPeriod(r, year, month));
   const prevM = month === "all" ? null : shiftMonth(year, month, -1);
@@ -493,9 +610,13 @@ export async function personDashboard(nome, year, month) {
   const prevS = summarize(prev);
   const agoS = summarize(yearAgo);
 
-  const monthly = Array.from({ length: 12 }, (_, m) =>
-    Math.round(mine.filter((r) => inPeriod(r, year, m)).reduce((a, r) => a + r.valor, 0))
-  );
+  /* Uma passada em vez de doze: o filter dentro do Array.from varria a lista
+     inteira uma vez por mes. */
+  const monthly = Array(12).fill(0);
+  for (const r of mine) {
+    if (r.dt?.y === year && r.dt.m >= 1 && r.dt.m <= 12) monthly[r.dt.m - 1] += r.valor;
+  }
+  for (let m = 0; m < 12; m += 1) monthly[m] = Math.round(monthly[m]);
   const monthsWithData = new Set(mine.map((r) => `${r.dt.y}-${r.dt.m}`));
 
   return {

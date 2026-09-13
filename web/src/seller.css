@@ -366,3 +366,23 @@
     grid-template-columns: 1.3fr 1fr 1fr;
   }
 }
+
+
+/* Enquanto busca um recorte novo, a tela segue mostrando o anterior. Sem um
+   sinal, o numero do mes passado fica no ar e passa por verdadeiro. */
+.seller[data-carregando="1"]::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 60;
+  background: var(--grad);
+  animation: carregando 1s linear infinite;
+}
+
+.seller[data-carregando="1"] .seller-kpis strong {
+  opacity: 0.45;
+  transition: opacity var(--fast) var(--ease);
+}

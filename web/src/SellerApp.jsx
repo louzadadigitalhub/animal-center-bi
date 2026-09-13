@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight } from "@phosphor-icons/react/ArrowUpRight";
 import { ArrowDownRight } from "@phosphor-icons/react/ArrowDownRight";
 import { SignOut } from "@phosphor-icons/react/SignOut";
@@ -71,19 +71,40 @@ export default function SellerApp() {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [boot, setBoot] = useState(true);
+  const [carregando, setCarregando] = useState(false);
+
+  /* Cada recorte ja visto fica guardado, entao voltar para um mes anterior
+     e instantaneo em vez de nova ida ao servidor. */
+  const cache = useRef(new Map());
 
   async function loadMe(y = year, m = month) {
-    const r = await fetch(`/api/me/dashboard?year=${y}&month=${m}`, { credentials: "include" });
-    if (r.status === 401) {
-      setMe(null);
-      setView(null);
-      return false;
+    const chave = `${y}|${m}`;
+    const guardado = cache.current.get(chave);
+    if (guardado) {
+      setMe(guardado.me);
+      setView(guardado.view);
     }
-    const data = await r.json();
-    if (!data.ok) throw new Error(data.error || "falhou");
-    setMe(data.me);
-    setView(data.view);
-    return true;
+    /* Sem nada guardado a tela segue mostrando o recorte anterior, marcado
+       como carregando. Zerar faria o numero piscar e voltar diferente, o que
+       parece defeito. */
+    setCarregando(!guardado);
+    try {
+      const r = await fetch(`/api/me/dashboard?year=${y}&month=${m}`, { credentials: "include" });
+      if (r.status === 401) {
+        setMe(null);
+        setView(null);
+        return false;
+      }
+      const data = await r.json();
+      if (!data.ok) throw new Error(data.error || "falhou");
+      cache.current.set(chave, { me: data.me, view: data.view });
+      if (cache.current.size > 14) cache.current.delete(cache.current.keys().next().value);
+      setMe(data.me);
+      setView(data.view);
+      return true;
+    } finally {
+      setCarregando(false);
+    }
   }
 
   useEffect(() => {
@@ -207,7 +228,7 @@ export default function SellerApp() {
   const period = month === "all" ? `Ano ${year}` : `${MONTHS[month]} ${year}`;
 
   return (
-    <div className="seller">
+    <div className="seller" data-carregando={carregando ? "1" : undefined} aria-busy={carregando}>
       <Toaster position="top-center" offset={{ top: 16 }} />
       <header className="seller-top">
         <div>
