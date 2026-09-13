@@ -221,6 +221,19 @@ app.get("/api/me/dashboard", async (req, res) => {
 /* Telao do corredor: sem login, e por isso sem nada de tutor. Se a TV
    continuasse chamando /api/snapshot, trancar a tela nao adiantaria nada —
    a URL aberta entregaria os 221 telefones do mesmo jeito. */
+/* O Vite embute VITE_* no build, mas o EasyPanel injeta variavel em runtime:
+   o build dentro do container nao as veria e o front acharia que o Supabase
+   nao esta configurado. Entregar a configuracao por aqui desacopla o build
+   do ambiente — a mesma imagem serve qualquer projeto.
+   A chave publishable e publica por desenho; a secret nunca sai daqui. */
+app.get("/api/config", (_req, res) => {
+  res.json({
+    ok: true,
+    supabaseUrl: process.env.SUPABASE_URL || "",
+    supabaseKey: process.env.SUPABASE_PUBLISHABLE_KEY || process.env.SUPABASE_ANON_KEY || "",
+  });
+});
+
 app.get("/api/ranking", async (req, res) => {
   const snap = await loadSnapshot();
   if (!snap?.snapshot?.views) return res.status(503).json({ ok: false, error: "ainda sem dados" });
@@ -272,10 +285,10 @@ app.delete("/api/perfis", exigeDiretoria({ admin: true }), async (req, res) => {
    navegador, entao a chamada sai daqui. Sem ela configurada, a admin ainda
    pode liberar abas de quem ja tem conta — so nao cria conta nova pelo painel. */
 app.post("/api/perfis/convidar", exigeDiretoria({ admin: true }), async (req, res) => {
-  const chave = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const chave = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   const url = (process.env.SUPABASE_URL || "").replace(/\/+$/, "");
   if (!chave) {
-    return res.status(503).json({ ok: false, error: "convite indisponivel: falta SUPABASE_SERVICE_ROLE_KEY" });
+    return res.status(503).json({ ok: false, error: "convite indisponivel: falta SUPABASE_SECRET_KEY" });
   }
   const email = String(req.body?.email || "");
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {

@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import { Num } from "./anim.jsx";
 import Podium, { Ambient } from "./Podium.jsx";
 import { Toaster, sileo } from "sileo";
-import { apiFetch, supa, supaConfigurado } from "./supa.js";
+import { apiFetch, getSupa, iniciarSupa } from "./supa.js";
 import "sileo/styles.css";
 import { Badge } from "./components/ui/badge.jsx";
 
@@ -1390,6 +1390,7 @@ function Contas() {
    fato poda o dado — a tela so usa a lista para montar o menu. */
 
 export default function App() {
+  const [configurado, setConfigurado] = useState(undefined);
   const [sessao, setSessao] = useState(undefined);
   const [perfil, setPerfil] = useState(null);
   const [erro, setErro] = useState("");
@@ -1398,16 +1399,26 @@ export default function App() {
   const [ocupado, setOcupado] = useState(false);
 
   useEffect(() => {
-    if (!supa) {
-      setSessao(null);
-      return undefined;
-    }
-    supa.auth.getSession().then(({ data }) => setSessao(data.session || null));
-    const { data: sub } = supa.auth.onAuthStateChange((_e, s) => {
-      setSessao(s || null);
-      if (!s) setPerfil(null);
+    let vivo = true;
+    let inscricao = null;
+    iniciarSupa().then((c) => {
+      if (!vivo) return;
+      setConfigurado(Boolean(c));
+      if (!c) {
+        setSessao(null);
+        return;
+      }
+      c.auth.getSession().then(({ data }) => vivo && setSessao(data.session || null));
+      const { data: sub } = c.auth.onAuthStateChange((_e, s) => {
+        setSessao(s || null);
+        if (!s) setPerfil(null);
+      });
+      inscricao = sub;
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      vivo = false;
+      inscricao?.subscription?.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
@@ -1422,25 +1433,27 @@ export default function App() {
     e.preventDefault();
     setErro("");
     setOcupado(true);
-    const { error } = await supa.auth.signInWithPassword({ email, password: senha });
+    const { error } = await getSupa().auth.signInWithPassword({ email, password: senha });
     if (error) setErro(error.message === "Invalid login credentials" ? "E-mail ou senha nao conferem." : error.message);
     setOcupado(false);
   }
 
   const sair = async () => {
-    await supa?.auth.signOut();
+    await getSupa()?.auth.signOut();
     setPerfil(null);
   };
 
-  if (!supaConfigurado) {
+  if (configurado === undefined) return <div className="portao"><p className="hint">Carregando…</p></div>;
+
+  if (!configurado) {
     return (
       <div className="portao">
         <div className="portao-caixa">
           <h1>Painel sem autenticacao configurada</h1>
           <p>
-            Faltam VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no build, e SUPABASE_URL no servidor.
-            Enquanto isso o painel fica fechado — e o jeito certo de falhar, porque ele carrega
-            telefone e endereco de tutor.
+            Faltam SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no servidor. Enquanto isso o painel
+            fica fechado — e o jeito certo de falhar, porque ele carrega telefone e endereco
+            de tutor.
           </p>
           <p className="portao-nota">O ranking do corredor segue no ar em /ranking.</p>
         </div>
