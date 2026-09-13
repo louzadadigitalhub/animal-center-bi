@@ -1431,9 +1431,32 @@ table,
 .vt-medida b {
   font-family: var(--mono);
   font-variant-numeric: tabular-nums;
-  color: var(--text);
+  color: var(--text-3);
   font-weight: 500;
   text-align: right;
+}
+
+/* Quem esta na media ou acima dela sai do cinza. */
+.vt-medida b.acima {
+  color: var(--text);
+}
+
+.vt-medida .track {
+  position: relative;
+  overflow: visible;
+}
+
+/* O risco da media, deitado sobre a pista */
+.vt-medida .alvo {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--text-3);
+  opacity: 0.55;
+  pointer-events: none;
 }
 
 /* A segunda medida em tom diferente, para nao parecer a mesma barra

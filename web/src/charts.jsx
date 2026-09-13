@@ -388,11 +388,31 @@ export function Treemap({ slices = [], brl }) {
    Virou HTML. Nao tem viewBox para esticar, o nome fica deitado e legivel,
    e cada medida tem a propria escala — sao grandezas diferentes, entao
    dividir o mesmo eixo entre elas nunca ia ajudar a ler. */
+/* Duas medidas lado a lado, cada uma na propria escala, com um risco
+   marcando a media da equipe.
+
+   O risco nao e enfeite. Os tickets aqui vao de uns R$ 80 a uns R$ 220 e
+   toda barra sai do zero, entao nenhuma barra ocupa menos de um terco da
+   pista e todas viram um bloco quase igual — impossivel ordenar de olho.
+   Cortar o eixo resolveria a vista e mentiria na proporcao. O risco
+   resolve sem mentir: a barra continua verdadeira e a leitura vira
+   "acima ou abaixo da media", que e a pergunta que se faz olhando isso.
+   Ideia emprestada do bullet target de amicro.vercel.app/mono-charts. */
 export function VolumeTicket({ pessoas = [], brl }) {
   const dados = [...pessoas].filter((p) => p.vendas).sort((a, b) => b.vendas - a.vendas).slice(0, 12);
   if (!dados.length) return <p className="hint">Sem vendas no recorte.</p>;
   const maxV = Math.max(1, ...dados.map((p) => p.vendas));
   const maxT = Math.max(1, ...dados.map((p) => p.ticket || 0));
+
+  /* Ticket da equipe e faturamento sobre vendas, nao a media dos tickets:
+     a media das medias daria o mesmo peso a quem fez 5 vendas e a quem
+     fez 250. */
+  const somaV = dados.reduce((s, p) => s + p.vendas, 0);
+  const somaF = dados.reduce((s, p) => s + (p.fat ?? (p.ticket || 0) * p.vendas), 0);
+  const medV = somaV / dados.length;
+  const medT = somaV ? somaF / somaV : 0;
+
+  const marca = (v, max) => `${Math.min(100, (v / max) * 100)}%`;
 
   return (
     <div className="vt">
@@ -409,20 +429,26 @@ export function VolumeTicket({ pessoas = [], brl }) {
           <span className="vt-medida">
             <span className="track">
               <i style={{ width: `${(p.vendas / maxV) * 100}%` }} />
+              <em className="alvo" style={{ left: marca(medV, maxV) }} />
             </span>
-            <b>{p.vendas}</b>
+            <b className={p.vendas >= medV ? "acima" : undefined}>{p.vendas}</b>
           </span>
           <span className="vt-medida vt-ticket">
             <span className="track">
               <i style={{ width: `${((p.ticket || 0) / maxT) * 100}%` }} />
+              <em className="alvo" style={{ left: marca(medT, maxT) }} />
             </span>
-            <b>{brl ? brl(p.ticket) : p.ticket}</b>
+            <b className={(p.ticket || 0) >= medT ? "acima" : undefined}>
+              {brl ? brl(p.ticket) : p.ticket}
+            </b>
           </span>
         </div>
       ))}
       <p className="hint">
-        Cada coluna tem a propria escala: a barra compara pessoas dentro da mesma medida, nao uma
-        medida com a outra. Quem vende muito nem sempre vende caro.
+        O risco em cada pista e a media da equipe: {Math.round(medV)} vendas e{" "}
+        {brl ? brl(medT) : Math.round(medT)} de ticket. Cada coluna tem a propria escala, entao a
+        barra compara pessoas dentro da mesma medida, nao uma medida com a outra. Quem vende muito
+        nem sempre vende caro.
       </p>
     </div>
   );
