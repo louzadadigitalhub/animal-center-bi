@@ -20,7 +20,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import { Num } from "./anim.jsx";
 import Podium, { Ambient } from "./Podium.jsx";
 import { Toaster, sileo } from "sileo";
-import { apiFetch, getSupa, iniciarSupa } from "./supa.js";
+import * as Supa from "./supa.js";
+const { apiFetch, getSupa, iniciarSupa } = Supa;
 import "sileo/styles.css";
 import { Badge } from "./components/ui/badge.jsx";
 
@@ -1446,16 +1447,39 @@ export default function App() {
   if (configurado === undefined) return <div className="portao"><p className="hint">Carregando…</p></div>;
 
   if (!configurado) {
+    const explica = {
+      "deploy-antigo": {
+        t: "O servidor ainda e o antigo",
+        d: "A rota /api/config nao existe nessa versao: o servidor devolveu a propria pagina no lugar da configuracao. Refaca o deploy com o codigo novo — se o EasyPanel reaproveitar camada, mude o BUILD_MARK no Dockerfile.",
+      },
+      "sem-variaveis": {
+        t: "Faltam as variaveis no servidor",
+        d: "O servidor esta novo e respondeu, mas veio vazio. Defina SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no EasyPanel e reinicie o servico.",
+      },
+      "servidor-fora": {
+        t: "O servidor nao respondeu",
+        d: "Nao deu para falar com /api/config. Veja se o container esta de pe em /api/version.",
+      },
+      "resposta-estranha": {
+        t: "Resposta inesperada do servidor",
+        d: "A rota /api/config respondeu algo que nao e JSON. Veja o log do container.",
+      },
+    }[Supa.motivo] || {
+      t: "Painel sem autenticacao configurada",
+      d: "Faltam SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no servidor.",
+    };
     return (
       <div className="portao">
         <div className="portao-caixa">
-          <h1>Painel sem autenticacao configurada</h1>
+          <h1>{explica.t}</h1>
+          <p>{explica.d}</p>
           <p>
-            Faltam SUPABASE_URL e SUPABASE_PUBLISHABLE_KEY no servidor. Enquanto isso o painel
-            fica fechado — e o jeito certo de falhar, porque ele carrega telefone e endereco
-            de tutor.
+            Enquanto isso o painel fica fechado — e o jeito certo de falhar, porque ele carrega
+            telefone e endereco de tutor.
           </p>
-          <p className="portao-nota">O ranking do corredor segue no ar em /ranking.</p>
+          <p className="portao-nota">
+            O ranking do corredor segue no ar em /ranking. Diagnostico: <code>{Supa.motivo || "?"}</code>
+          </p>
         </div>
       </div>
     );

@@ -13,19 +13,41 @@ import { createClient } from "@supabase/supabase-js";
 let cliente = null;
 let pronto = null;
 
+/* Por que nao ligou. Sao tres causas com conserto diferente, e uma
+   mensagem generica faria caçar no escuro. */
+export let motivo = null;
+
 export function iniciarSupa() {
   if (pronto) return pronto;
   pronto = fetch("/api/config")
-    .then((r) => r.json())
-    .then((c) => {
-      if (c?.supabaseUrl && c?.supabaseKey) {
-        cliente = createClient(c.supabaseUrl, c.supabaseKey, {
-          auth: { persistSession: true, autoRefreshToken: true },
-        });
+    .then(async (r) => {
+      const txt = await r.text();
+      /* Servidor antigo nao tem /api/config: o fallback do SPA devolve o
+         index.html, entao vem HTML no lugar de JSON. */
+      if (txt.trimStart().startsWith("<")) {
+        motivo = "deploy-antigo";
+        return null;
       }
+      let c;
+      try {
+        c = JSON.parse(txt);
+      } catch {
+        motivo = "resposta-estranha";
+        return null;
+      }
+      if (!c?.supabaseUrl || !c?.supabaseKey) {
+        motivo = "sem-variaveis";
+        return null;
+      }
+      cliente = createClient(c.supabaseUrl, c.supabaseKey, {
+        auth: { persistSession: true, autoRefreshToken: true },
+      });
       return cliente;
     })
-    .catch(() => null);
+    .catch(() => {
+      motivo = "servidor-fora";
+      return null;
+    });
   return pronto;
 }
 
