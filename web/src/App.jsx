@@ -339,7 +339,7 @@ function Equipe({ u, onOpen }) {
       <section className="card span-12">
         <header>
           <h2>Volume x ticket</h2>
-          <p>Barra e quantidade de vendas, ponto e ticket medio. Quem vende muito nem sempre vende caro.</p>
+          <p>Duas medidas lado a lado, cada uma com a propria escala.</p>
         </header>
         <VolumeTicket pessoas={u.equipe} brl={brl} />
       </section>

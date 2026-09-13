@@ -379,77 +379,55 @@ export function Treemap({ slices = [], brl }) {
   );
 }
 
-/* Volume x ticket por pessoa, eixo duplo — a p7 do BI antigo. Barra e
-   quantidade, ponto e ticket: quem vende muito nem sempre vende caro. */
+/* Volume x ticket por pessoa.
+
+   Era um SVG de eixo duplo desenhado para 620x280 e esticado ate 1102x498
+   pelo card: o rotulo do eixo caia em cima do valor do topo, os nomes
+   rotacionados invadiam a legenda e sobrava um vao enorme no meio.
+
+   Virou HTML. Nao tem viewBox para esticar, o nome fica deitado e legivel,
+   e cada medida tem a propria escala — sao grandezas diferentes, entao
+   dividir o mesmo eixo entre elas nunca ia ajudar a ler. */
 export function VolumeTicket({ pessoas = [], brl }) {
-  const dados = [...pessoas].filter((p) => p.vendas).sort((a, b) => b.vendas - a.vendas).slice(0, 10);
+  const dados = [...pessoas].filter((p) => p.vendas).sort((a, b) => b.vendas - a.vendas).slice(0, 12);
   if (!dados.length) return <p className="hint">Sem vendas no recorte.</p>;
-  const w = 620, h = 280, padLeft = 46, padRight = 52, top = 24, padBaixo = 76;
-  const base = h - padBaixo;
   const maxV = Math.max(1, ...dados.map((p) => p.vendas));
   const maxT = Math.max(1, ...dados.map((p) => p.ticket || 0));
-  const bw = (w - padLeft - padRight) / dados.length;
-  const xAt = (i) => padLeft + i * bw + bw / 2;
-  const yT = (t) => base - ((t || 0) / maxT) * (base - top);
-  const linha = dados.map((p, i) => `${xAt(i)},${yT(p.ticket)}`).join(" ");
-  const passos = 4;
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="chart" role="img" aria-label="Volume e ticket por pessoa">
-      <Grads id="vt" />
-      {/* Eixo da esquerda: quantidade. Eixo da direita: ticket. Sem o da
-          direita os pontos flutuavam numa escala invisivel e pareciam
-          espalhados ao acaso. */}
-      {Array.from({ length: passos + 1 }, (_, i) => {
-        const y = base - ((base - top) * i) / passos;
-        return (
-          <g key={i}>
-            <line x1={padLeft} y1={y} x2={w - padRight} y2={y} stroke={GRID} />
-            <text x={padLeft - 6} y={y - 3} textAnchor="end" fontSize="9" fill={AXIS}>
-              {Math.round((maxV / passos) * i)}
-            </text>
-            <text x={w - padRight + 6} y={y - 3} fontSize="9" fill="var(--accent-text)">
-              {Math.round((maxT / passos) * i)}
-            </text>
-          </g>
-        );
-      })}
-      <text x={padLeft - 6} y={top - 10} textAnchor="end" fontSize="9" fill={AXIS} fontWeight="600">
-        vendas
-      </text>
-      <text x={w - padRight + 6} y={top - 10} fontSize="9" fill="var(--accent-text)" fontWeight="600">
-        ticket R$
-      </text>
-
-      {dados.map((p, i) => {
-        const bh = (p.vendas / maxV) * (base - top);
-        return (
-          <g key={p.nome}>
-            <title>{`${p.nome}: ${p.vendas} vendas · ticket ${brl ? brl(p.ticket) : p.ticket}`}</title>
-            <rect className="bar-grow" style={{ animationDelay: `${i * 40}ms` }} x={padLeft + i * bw + 4} y={base - bh} width={Math.max(3, bw - 10)} height={bh} rx="3" fill="url(#vt-off)" />
-            <text x={xAt(i)} y={h - 26} textAnchor="end" fontSize="8" fill={AXIS} transform={`rotate(-38 ${xAt(i)} ${h - 26})`}>
-              {p.nome.split(" ")[0]}
-            </text>
-          </g>
-        );
-      })}
-
-      {/* A linha liga os pontos: sem ela pareciam bolinhas soltas */}
-      <polyline points={linha} fill="none" stroke="var(--cyan)" strokeWidth="1.8" strokeLinejoin="round" opacity="0.75" />
+    <div className="vt">
+      <div className="vt-cab">
+        <span />
+        <span>Quantidade de vendas</span>
+        <span>Ticket medio</span>
+      </div>
       {dados.map((p, i) => (
-        <circle key={`t-${p.nome}`} className="dot" style={{ animationDelay: `${260 + i * 40}ms` }} cx={xAt(i)} cy={yT(p.ticket)} r="3.4" fill="var(--surface-1)" stroke="var(--cyan)" strokeWidth="1.8" />
+        <div className="vt-linha" key={p.nome} style={{ animationDelay: `${i * 35}ms` }}>
+          <span className="vt-nome" title={p.nome}>
+            {p.nome}
+          </span>
+          <span className="vt-medida">
+            <span className="track">
+              <i style={{ width: `${(p.vendas / maxV) * 100}%` }} />
+            </span>
+            <b>{p.vendas}</b>
+          </span>
+          <span className="vt-medida vt-ticket">
+            <span className="track">
+              <i style={{ width: `${((p.ticket || 0) / maxT) * 100}%` }} />
+            </span>
+            <b>{brl ? brl(p.ticket) : p.ticket}</b>
+          </span>
+        </div>
       ))}
-
-      <line x1={padLeft} y1={base} x2={w - padRight} y2={base} stroke={GRID} />
-      <g>
-        <rect x={padLeft} y={h - 11} width="9" height="7" rx="2" fill="url(#vt-off)" />
-        <text x={padLeft + 13} y={h - 5} fontSize="9" fill={AXIS}>quantidade de vendas</text>
-        <circle cx={padLeft + 142} cy={h - 8} r="3.2" fill="var(--surface-1)" stroke="var(--cyan)" strokeWidth="1.6" />
-        <text x={padLeft + 150} y={h - 5} fontSize="9" fill={AXIS}>ticket medio</text>
-      </g>
-    </svg>
+      <p className="hint">
+        Cada coluna tem a propria escala: a barra compara pessoas dentro da mesma medida, nao uma
+        medida com a outra. Quem vende muito nem sempre vende caro.
+      </p>
+    </div>
   );
 }
+
 
 /* Anos sobrepostos — as quatro linhas da p1 do BI antigo. O portal ja tinha
    o historico desde 2023; faltava so guardar a serie mensal por ano. */

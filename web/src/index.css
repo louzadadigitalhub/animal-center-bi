@@ -1347,6 +1347,87 @@ table,
   min-width: 0;
 }
 
+/* ---------- Volume x ticket ---------- */
+
+.vt {
+  display: grid;
+  gap: var(--s2);
+}
+
+.vt-cab,
+.vt-linha {
+  display: grid;
+  grid-template-columns: minmax(96px, 1.1fr) minmax(0, 2fr) minmax(0, 2fr);
+  gap: var(--s4);
+  align-items: center;
+}
+
+.vt-cab {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  font-weight: 600;
+  padding-bottom: var(--s2);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: var(--s1);
+}
+
+.vt-linha {
+  font-size: 13px;
+  color: var(--text-2);
+  animation: rise 0.4s var(--ease) both;
+}
+
+.vt-nome {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vt-medida {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(54px, auto);
+  gap: var(--s3);
+  align-items: center;
+}
+
+.vt-medida b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  font-weight: 500;
+  text-align: right;
+}
+
+/* A segunda medida em tom diferente, para nao parecer a mesma barra
+   continuando do outro lado */
+.vt-ticket .track i {
+  background: var(--bar-off-b);
+}
+
+@media (max-width: 720px) {
+  .vt-cab,
+  .vt-linha {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    gap: var(--s2) var(--s3);
+  }
+  .vt-cab span:first-child {
+    display: none;
+  }
+  .vt-cab span:nth-child(2) {
+    grid-column: 1 / -1;
+  }
+  .vt-cab span:nth-child(3) {
+    display: none;
+  }
+  .vt-nome {
+    grid-column: 1 / -1;
+    color: var(--text);
+    font-weight: 600;
+  }
+}
+
 .bars {
   display: grid;
   gap: var(--s3);
