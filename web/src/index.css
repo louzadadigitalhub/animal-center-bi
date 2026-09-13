@@ -416,9 +416,34 @@ input {
 
 /* ---------- Contas e permissoes ---------- */
 
+.convite {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.convite input {
+  flex: 1 1 220px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 10px var(--s3);
+  color: var(--text);
+  outline: none;
+}
+
+.convite input:focus {
+  border-color: var(--line-2);
+}
+
+/* Cada conta e um bloco largo; em tela grande cabem duas lado a lado sem
+   espremer as pilulas de aba. */
 .contas {
   display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
   gap: var(--s3);
+  align-items: start;
 }
 
 .conta {
@@ -715,8 +740,19 @@ aside nav button.on::before {
   box-shadow: 0 4px 14px -4px rgba(62, 200, 240, 0.55);
 }
 
-.period[hidden] {
+/* display:flex vence o atributo hidden, entao cada um precisa dizer que
+   some. Sem isso o hidden do JSX nao esconde nada. */
+.period[hidden],
+.units[hidden],
+.periodos[hidden] {
   display: none;
+}
+
+.acoes {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 .period {

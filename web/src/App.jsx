@@ -767,13 +767,24 @@ function Pesquisa({ u }) {
   );
 }
 
+/* Custo sem fonte no robo vira traco, nao zero: zero afirma que nao houve
+   despesa, e a gente so nao sabe. Recuperada de a0a9bec — eu a apaguei sem
+   querer ao reescrever a pagina de Pesquisa cortando o arquivo por indice,
+   e as tres chamadas ficaram orfas derrubando a DRE inteira. */
+function dreCell(row, campo) {
+  const n = campo === "valor" ? row.valor : row[campo];
+  const conhecido = row.conhecido || /Receita|Recebimento|Resultado|Lucro/.test(row.linha);
+  if (!conhecido && !n) return "—";
+  return brl(n || 0);
+}
+
 function Dre({ u }) {
   const linhas = u.dre || [];
   return (
     <div className="bento">
       <section className="card span-12">
         <header>
-          <h2>DRE {u.id === "consolidado" ? "consolidada" : `da ${u.nome.toLowerCase()}`}</h2>
+          <h2>DRE {u.id === "consolidado" ? "consolidada" : `da ${(u.nome || "unidade").toLowerCase()}`}</h2>
           <p>
             Receita e recebimento vêm do SimplesVet. Pessoal, aluguel e o resto do custo ainda não entram nesse robô — por
             isso aparecem como traço, não como zero.
@@ -1131,7 +1142,7 @@ function Painel({ perfil, aoSair }) {
 
       <div className="main" data-carregando={carregando ? "1" : undefined} aria-busy={carregando}>
         <header className="top">
-          <div className="units">
+          <div className="units" hidden={page === "admin"}>
             {[
               ["matriz", "Matriz"],
               ["filial", "Filial 1"],
@@ -1142,7 +1153,7 @@ function Painel({ perfil, aoSair }) {
               </button>
             ))}
           </div>
-          <div className="periodos" role="tablist" aria-label="Recorte">
+          <div className="periodos" role="tablist" aria-label="Recorte" hidden={page === "admin"}>
             {[
               ["hoje", "Hoje"],
               ["semana", "Semana"],
@@ -1167,7 +1178,10 @@ function Painel({ perfil, aoSair }) {
               </button>
             ))}
           </div>
-          <div className="period" hidden={periodo === "hoje" || periodo === "semana"}>
+          {/* Data de um lado, conta do outro. Estavam no mesmo div e o
+              hidden levava junto o Sair e o tema: quem clicava em "Hoje"
+              ficava sem como sair. */}
+          <div className="period" hidden={page === "admin" || periodo === "hoje" || periodo === "semana"}>
             <CalendarBlank size={16} />
             <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
               {yearsOn.map((y) => (
@@ -1192,7 +1206,9 @@ function Painel({ perfil, aoSair }) {
                 </option>
               ))}
             </select>
-            {perfil.admin ? null : (
+          </div>
+          <div className="acoes">
+            {perfil.admin || page === "admin" ? null : (
               <button type="button" className="conta-sair" onClick={() => setPage("admin")}>
                 Minha conta
               </button>
@@ -1215,12 +1231,23 @@ function Painel({ perfil, aoSair }) {
         <div className="crumb">
           <h1>{page === "admin" ? (perfil.admin ? "Admin" : "Minha conta") : NAV.find((n) => n.id === page)?.label}</h1>
           <div className="crumb-meta">
-            <span>
-              {u.casa} · {label}
-            </span>
-            <Badge variant={live?.ok ? "default" : "outline"} className={live?.ok ? "pill-live border-0" : "pill-wait"}>
-              {fonte}
-            </Badge>
+            {page === "admin" ? (
+              <>
+                <span>{perfil.email}</span>
+                <Badge variant={perfil.admin ? "default" : "outline"} className={perfil.admin ? "pill-live border-0" : "pill-wait"}>
+                  {perfil.admin ? "administradora" : "acesso limitado"}
+                </Badge>
+              </>
+            ) : (
+              <>
+                <span>
+                  {u.casa} · {label}
+                </span>
+                <Badge variant={live?.ok ? "default" : "outline"} className={live?.ok ? "pill-live border-0" : "pill-wait"}>
+                  {fonte}
+                </Badge>
+              </>
+            )}
           </div>
         </div>
 
@@ -1262,7 +1289,7 @@ function Painel({ perfil, aoSair }) {
    precisa poder trocar sem depender de outra pessoa. A troca vai direto ao
    Supabase, entao a senha nova nunca passa pelo nosso servidor. */
 
-function TrocarSenha({ email }) {
+function TrocarSenha({ email, largura = "span-12" }) {
   const [nova, setNova] = useState("");
   const [repete, setRepete] = useState("");
   const [erro, setErro] = useState("");
@@ -1286,7 +1313,7 @@ function TrocarSenha({ email }) {
   }
 
   return (
-    <section className="card span-12">
+    <section className={`card ${largura}`}>
       <header>
         <h2>Minha senha</h2>
         <p>Voce esta em {email}. A senha nova vai direto ao Supabase e nao passa pelo nosso servidor.</p>
@@ -1310,10 +1337,14 @@ function TrocarSenha({ email }) {
   );
 }
 
+/* Contas devolve secoes soltas, nao um .bento proprio: dois grids
+   encaixados faziam o de dentro virar um item de 1 coluna em 12, e
+   "Convidar" e "Quem ve o que" ficavam num filete com o conteudo
+   vazando pra fora do card. */
 function Admin({ perfil }) {
   return (
     <div className="bento">
-      <TrocarSenha email={perfil.email} />
+      <TrocarSenha email={perfil.email} largura={perfil.admin ? "span-5" : "span-12"} />
       {perfil.admin ? <Contas /> : null}
     </div>
   );
@@ -1387,20 +1418,19 @@ function Contas() {
   }
 
   return (
-    <div className="bento">
-      <section className="card span-12">
+    <>
+      <section className="card span-7">
         <header>
           <h2>Convidar</h2>
           <p>A pessoa recebe um e-mail do Supabase para criar a propria senha. Ela entra sem aba nenhuma ate voce liberar abaixo.</p>
         </header>
-        <form className="seller-filters" onSubmit={convidar}>
+        <form className="convite" onSubmit={convidar}>
           <input
             type="email"
             required
             placeholder="email@animalcenter.com"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{ flex: 1, background: "var(--surface-2)", border: "1px solid var(--line)", borderRadius: "var(--r-ctl)", padding: "10px 12px", color: "inherit" }}
           />
           <button type="submit" className="conta-sair" disabled={ocupado || !email}>
             {ocupado ? "Enviando…" : "Convidar"}
@@ -1446,7 +1476,7 @@ function Contas() {
           {!perfis.length ? <p className="hint">Ninguem alem de voce ainda.</p> : null}
         </div>
       </section>
-    </div>
+    </>
   );
 }
 
