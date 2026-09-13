@@ -44,7 +44,9 @@ export async function quemE(req) {
 /* Falha fechada: sem SUPABASE_URL as rotas protegidas nao abrem. E o modo de
    falha certo — se a configuracao sumir, o painel para em vez de servir 221
    telefones de tutor para quem pedir. */
-export function exigeDiretoria({ admin = false } = {}) {
+/* pagina: exige uma aba especifica, nao so "tem alguma aba". A conta que
+   ve Vendas nao pode baixar a planilha de custo por saber a URL. */
+export function exigeDiretoria({ admin = false, pagina = "" } = {}) {
   return async (req, res, next) => {
     if (!authConfigurada()) {
       return res.status(503).json({
@@ -61,6 +63,9 @@ export function exigeDiretoria({ admin = false } = {}) {
     }
     if (admin && !perfil.admin) {
       return res.status(403).json({ ok: false, error: "so a conta admin faz isso" });
+    }
+    if (pagina && perfil.paginas !== "todas" && !perfil.paginas.includes(pagina)) {
+      return res.status(403).json({ ok: false, error: `sua conta nao tem a aba ${pagina}` });
     }
     req.perfil = perfil;
     next();

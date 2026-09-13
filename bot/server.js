@@ -17,7 +17,7 @@ import {
   syncPeopleFromSales,
 } from "./people.js";
 import { aggregate } from "./aggregate.js";
-import { dreDoPortal } from "./dre.js";
+import { dreDoPortal, matrizAnual } from "./dre.js";
 import { IDS, PAGINAS, filtrarView, listarPerfis, removerPerfil, salvarPerfil, viewPublicaRanking } from "./acesso.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
@@ -392,6 +392,24 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
     paginas: req.perfil.paginas,
     admin: req.perfil.admin,
   });
+});
+
+/* A planilha para o contador. Ano inteiro, nao o mes da tela: quem fecha
+   exercicio quer as doze colunas de uma vez. Exige a aba DRE — sem isso
+   bastaria saber a URL para baixar o custo da clinica. */
+app.get("/api/dre.xlsx", exigeDiretoria({ pagina: "dre" }), async (req, res) => {
+  const unit = String(req.query.unit || "matriz");
+  const year = Number(req.query.year) || new Date().getFullYear();
+  const matriz = await matrizAnual(DATA_DIR, unit, year).catch(() => null);
+  if (!matriz) {
+    return res.status(404).json({ ok: false, error: "ainda sem demonstrativo para esse ano" });
+  }
+  const { planilhaDre } = await import("./dre-export.js");
+  const buf = await planilhaDre(matriz);
+  const nome = `DRE-${unit === "consolidado" ? "as-duas" : unit}-${year}.xlsx`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${nome}"`);
+  res.send(Buffer.from(buf));
 });
 
 app.use(express.static(WEB_DIR));

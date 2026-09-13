@@ -783,16 +783,72 @@ function dreCell(row, campo) {
    demonstrativo com o plano de contas real da clinica, entao agora a
    tela desenha a arvore deles — cada unidade com a propria, porque as
    duas nao tem a mesma estrutura nem os mesmos nomes de categoria. */
-function Dre({ u }) {
+function Dre({ u, year }) {
   const real = u.dreReal;
   if (!real?.partes?.length) return <DreAntiga u={u} />;
 
   return (
     <div className="bento">
+      <ExportarDre u={u} year={year} />
       {real.partes.map((parte) => (
         <DreArvore key={parte.unit} parte={parte} regime={real.regime} varias={real.partes.length > 1} />
       ))}
     </div>
+  );
+}
+
+/* Excel sai do servidor com o ano inteiro; PDF sai da impressao do
+   proprio navegador. Gerar PDF no servidor pediria um segundo Chromium
+   ao lado do que o robo ja usa para raspar, e a VPS nao tem folga pra
+   isso — a impressao nao custa memoria nenhuma e sai igual a tela. */
+function ExportarDre({ u, year }) {
+  const [baixando, setBaixando] = useState(false);
+
+  async function excel() {
+    setBaixando(true);
+    try {
+      const r = await apiFetch(`/api/dre.xlsx?unit=${u.id}&year=${year}`);
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || `servidor respondeu ${r.status}`);
+      }
+      /* Nao da para apontar um <a href> direto: a rota pede o token no
+         cabecalho, e navegacao nao carrega cabecalho. */
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `DRE-${u.id === "consolidado" ? "as-duas" : u.id}-${year}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      sileo.success({ title: "Planilha baixada", description: "Ano inteiro, uma aba por unidade." });
+    } catch (e) {
+      sileo.error({ title: "Nao deu para baixar", description: e.message });
+    } finally {
+      setBaixando(false);
+    }
+  }
+
+  return (
+    <section className="card span-12 dre-export">
+      <div>
+        <h2>Mandar para o contador</h2>
+        <p>
+          A planilha traz os doze meses de {year} e uma aba por unidade, com os valores como número —
+          dá para somar e filtrar em cima. O PDF sai igual a esta tela.
+        </p>
+      </div>
+      <div className="dre-export-botoes">
+        <button type="button" className="conta-sair" onClick={excel} disabled={baixando}>
+          {baixando ? "Gerando…" : "Baixar Excel"}
+        </button>
+        <button type="button" className="conta-sair" onClick={() => window.print()}>
+          Salvar PDF
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -1320,7 +1376,7 @@ function Painel({ perfil, aoSair }) {
         {page === "recorrencia" && <Recorrencia u={u} status={live?.clientesStatus} onOpen={setDetail} />}
         {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
         {page === "pesquisa" && <Pesquisa u={u} />}
-        {page === "dre" && <Dre u={u} />}
+        {page === "dre" && <Dre u={u} year={year} />}
         {page === "tv" && <Tv u={u} label={label} fotos={live?.fotos} live={live} />}
         {page === "admin" ? <Admin perfil={perfil} /> : null}
       </div>

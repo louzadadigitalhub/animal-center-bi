@@ -452,6 +452,122 @@ table.dre td.down::before {
   line-height: 1.5;
 }
 
+.dre-export {
+  display: flex;
+  gap: var(--s4);
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+}
+
+.dre-export h2 {
+  margin: 0 0 4px;
+}
+
+.dre-export p {
+  margin: 0;
+  max-width: 62ch;
+}
+
+.dre-export-botoes {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+
+/* ---------- Impressao: o PDF do contador ----------
+   Sai da propria tela. Gerar PDF no servidor pediria subir um segundo
+   Chromium ao lado do que o robo usa pra raspar, e a VPS nao tem folga.
+   Aqui e so tirar a moldura do painel e voltar ao preto no branco —
+   tinta colorida de fundo escuro nao se imprime. */
+@media print {
+  aside,
+  .mob-top,
+  .dock,
+  .top,
+  .drawer-bg,
+  .scrim,
+  .dre-export,
+  [data-sileo-viewport],
+  [data-sileo-canvas] {
+    display: none !important;
+  }
+
+  .app,
+  .main,
+  .card,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  .card {
+    border: 0 !important;
+    break-inside: auto;
+  }
+
+  .main {
+    display: block !important;
+  }
+
+  .bento {
+    display: block !important;
+  }
+
+  table.dre {
+    width: 100%;
+    font-size: 10pt;
+  }
+
+  table.dre td,
+  table.dre th {
+    color: #000 !important;
+    border-color: #ccc !important;
+  }
+
+  table.dre td.down {
+    color: #b00 !important;
+  }
+
+  /* O realce da linha de total e um box-shadow ciano. Fundo o navegador
+     nem imprime por padrao, mas o shadow sim — entao vira um filete
+     cinza, que separa a hierarquia sem pedir tinta colorida. */
+  table.dre tr.now td {
+    background: transparent !important;
+    box-shadow: inset 2px 0 0 #888 !important;
+  }
+
+  /* Linha de total nao pode ficar orfa no pe da pagina, longe dos
+     filhos que ela soma. */
+  table.dre tr.now {
+    break-inside: avoid;
+    break-after: avoid;
+  }
+
+  thead {
+    display: table-header-group;
+  }
+
+  .crumb h1 {
+    font-size: 18pt;
+    color: #000 !important;
+  }
+
+  .dre-aviso {
+    border: 1px solid #999 !important;
+    border-left: 3px solid #b8860b !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  @page {
+    margin: 14mm;
+  }
+}
+
 /* ---------- Contas e permissoes ---------- */
 
 .convite {

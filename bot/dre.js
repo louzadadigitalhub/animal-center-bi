@@ -95,6 +95,43 @@ function fatiar(bloco, year, month, agora) {
   };
 }
 
+/* A matriz do ano inteira, para exportar. A tela mostra um mes por vez,
+   mas o contador quer as doze colunas de uma vez para fechar o exercicio.
+   Vai junto o indice do ultimo mes realizado: as colunas seguintes tem
+   despesa lancada e receita ainda nao vendida, e quem le a planilha
+   precisa saber disso sem ter que deduzir. */
+export async function matrizAnual(dataDir, unit, year) {
+  const d = await ler(dataDir);
+  if (!d || Number(d.ano) !== Number(year)) return null;
+  const agora = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const ultimoRealizado =
+    year < agora.getFullYear() ? 11 : year > agora.getFullYear() ? -1 : agora.getMonth();
+
+  const unidades = unit === "consolidado" ? ["matriz", "filial"] : [unit];
+  const partes = unidades
+    .map((u) => {
+      const b = d.unidades[u];
+      if (!b?.linhas?.length) return null;
+      return {
+        unit: u,
+        ambiente: b.ambiente,
+        meses: b.meses,
+        linhas: b.linhas.map((l) => ({
+          nome: l.nome,
+          nivel: l.nivel,
+          total: l.total,
+          valores: l.valores,
+          acumulado: l.valores
+            .slice(0, ultimoRealizado + 1)
+            .reduce((a, v) => a + (v || 0), 0),
+        })),
+      };
+    })
+    .filter(Boolean);
+  if (!partes.length) return null;
+  return { at: d.at, regime: d.regime, ano: Number(year), ultimoRealizado, partes };
+}
+
 export async function dreDoPortal(dataDir, unit, year, month) {
   const d = await ler(dataDir);
   if (!d || Number(d.ano) !== Number(year)) return null;
