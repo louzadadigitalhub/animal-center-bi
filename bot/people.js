@@ -210,13 +210,26 @@ export async function vendasParseadas() {
 }
 
 export async function mergeSalesHistory(rows) {
-  if (!Array.isArray(rows) || !rows.length) return { added: 0, total: 0 };
+  if (!Array.isArray(rows) || !rows.length) return { added: 0, total: 0, gravou: false };
   await mkdir(DATA_DIR, { recursive: true });
-  const prev = await readJson(HIST_FILE, []);
-  const map = new Map();
-  for (const row of Array.isArray(prev) ? prev : []) {
-    map.set(saleKey(row), row);
+
+  /* Texto cru, nao so o parse: a decisao de gravar e comparando os bytes
+     que sairiam com os que ja estao la. */
+  let cru = "";
+  try {
+    cru = await readFile(HIST_FILE, "utf8");
+  } catch {
+    /* primeira vez */
   }
+  let prev = [];
+  try {
+    prev = cru ? JSON.parse(cru) : [];
+  } catch {
+    prev = [];
+  }
+
+  const map = new Map();
+  for (const row of Array.isArray(prev) ? prev : []) map.set(saleKey(row), row);
   let added = 0;
   for (const row of rows) {
     const k = saleKey(row);
@@ -224,8 +237,27 @@ export async function mergeSalesHistory(rows) {
     map.set(k, row);
   }
   const merged = [...map.values()];
-  await writeFile(HIST_FILE, JSON.stringify(merged));
-  return { added, total: merged.length };
+  const novo = JSON.stringify(merged);
+
+  /* Gravar a cada chamada trocava o mtime do historico, e o
+     vendasParseadas() usa mtime+tamanho como chave de cache: o arquivo
+     reescrito identico derrubava o cache e forcava reparse do historico
+     inteiro. Comparar linha a linha nao resolvia — ha chaves de venda
+     repetidas (997 linhas viram 978), e entre duas linhas que disputam a
+     mesma chave a comparacao acusava mudanca para sempre enquanto o
+     resultado final nem mexia. */
+  const gravou = novo !== cru;
+  if (gravou) await writeFile(HIST_FILE, novo);
+  return { added, total: merged.length, gravou };
+}
+
+/* So a lista de quem e quem, direto do people.json. Serve a tela de
+   login das vendedoras e a de PIN no Admin: nenhuma das duas precisa
+   reprocessar venda, e era isso que fazia elas demorarem. Descobrir
+   gente nova e trabalho do ciclo do robo, nao de quem abre a pagina. */
+export async function listPeople() {
+  const doc = await loadPeopleDoc();
+  return doc.people;
 }
 
 async function sessionSecret() {

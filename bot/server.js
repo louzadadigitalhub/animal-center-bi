@@ -16,6 +16,7 @@ import {
   readCookie,
   readSession,
   syncPeopleFromSales,
+  listPeople,
 } from "./people.js";
 import { aggregate } from "./aggregate.js";
 import { dreDoPortal, matrizAnual } from "./dre.js";
@@ -131,6 +132,9 @@ async function tick() {
     const r = await scrape();
     lastError = null;
     console.log(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape ok", r);
+    /* Gente nova aparece aqui, no ciclo, e nao quando alguem abre a tela
+       de login. Este sync relê e reprocessa o historico inteiro. */
+    await syncPeopleFromSales().catch((e) => console.error("sync gente fail", String(e?.message || e)));
   } catch (err) {
     lastError = String(err && err.stack ? err.stack : err);
     console.error(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape fail", lastError);
@@ -211,8 +215,7 @@ app.get("/api/caixa", exigeDiretoria(), async (_req, res) => {
 
 app.get("/api/auth/staff", async (_req, res) => {
   try {
-    const { people } = await syncPeopleFromSales();
-    res.json({ ok: true, staff: publicStaff(people) });
+    res.json({ ok: true, staff: publicStaff(await listPeople()) });
   } catch (err) {
     res.status(500).json({ ok: false, error: "nao deu para listar o time" });
     console.error("staff fail", err);
