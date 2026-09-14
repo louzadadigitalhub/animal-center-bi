@@ -45,7 +45,7 @@ const CAMPOS = {
 };
 
 /* Sempre presentes: sao o cabecalho da tela, nao dado de negocio. */
-const BASE = ["id", "nome", "casa", "diaLabel", "dias"];
+const BASE = ["id", "nome", "casa", "diaLabel", "dias", "rotulosSerie", "intervalo"];
 
 export function filtrarView(view, paginas) {
   if (!view) return view;

@@ -993,6 +993,46 @@ aside nav button.on::before {
   display: none;
 }
 
+/* Campos "de tal a tal data" na barra do topo */
+.intervalo {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  flex-wrap: wrap;
+  color: var(--text-3);
+}
+
+.intervalo[hidden] {
+  display: none;
+}
+
+.intervalo input {
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  border-radius: var(--r-ctl);
+  padding: 8px 10px;
+  min-height: 38px;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--text);
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.intervalo input:focus {
+  outline: none;
+  border-color: var(--line-2);
+}
+
+/* O seletor nativo desenha o icone quase preto no tema escuro. */
+[data-theme="dark"] .intervalo input::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.6);
+}
+
+.intervalo-ate {
+  font-size: 12px;
+}
+
 .acoes {
   display: flex;
   gap: var(--s2);

@@ -1,6 +1,6 @@
 import express from "express";
 import { existsSync, readFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -122,6 +122,41 @@ async function coletarDre() {
        custo o resto do turno. */
     ultimoDre = 0;
   }
+}
+
+/* O aggregate custa caro (varre e reagrupa o historico inteiro), entao
+   fica em memoria chaveado por mtime+tamanho do vendas.json, igual ao
+   vendasParseadas. Sem isso, cada filtro de data reprocessaria tudo. */
+let aggCache = { chave: "", agg: null };
+
+async function aggregado() {
+  const arq = join(DATA_DIR, "vendas.json");
+  let chave;
+  try {
+    const st = await stat(arq);
+    chave = `${st.mtimeMs}:${st.size}`;
+  } catch {
+    return null;
+  }
+  if (aggCache.chave === chave) return aggCache.agg;
+  const rows = JSON.parse(await readFile(arq, "utf8"));
+  const agg = aggregate(rows);
+  aggCache = { chave, agg };
+  return agg;
+}
+
+/* "2026-09-01" -> {y,m,d}. Recusa o que nao for exatamente uma data. */
+function dataDaTela(txt) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(txt || ""));
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mes = Number(m[2]);
+  const d = Number(m[3]);
+  if (mes < 1 || mes > 12 || d < 1 || d > 31) return null;
+  /* Date normaliza 31/02 para 03/03; comparar de volta pega isso. */
+  const t = new Date(Date.UTC(y, mes - 1, d));
+  if (t.getUTCFullYear() !== y || t.getUTCMonth() + 1 !== mes || t.getUTCDate() !== d) return null;
+  return { y, m: mes, d };
 }
 
 async function tick() {
@@ -393,7 +428,23 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
   const unit = String(req.query.unit || "matriz");
   const year = Number(req.query.year || 2026);
   const month = req.query.month === "all" ? "all" : Number(req.query.month ?? 8);
-  const view = snap.snapshot.views[unit]?.[year]?.[month];
+
+  /* Recorte "de tal a tal data" nao cabe no snapshot pre-calculado (ele
+     so guarda mes e ano), entao sai do aggregate em cache. */
+  const de = dataDaTela(req.query.de);
+  const ate = dataDaTela(req.query.ate);
+  let view;
+  let erroIntervalo = null;
+  if (req.query.de || req.query.ate) {
+    if (!de || !ate) erroIntervalo = "datas invalidas";
+    else {
+      const agg = await aggregado().catch(() => null);
+      view = agg?.intervalo(unit, de, ate) || undefined;
+      if (!view) erroIntervalo = "a data final e anterior a inicial";
+    }
+  } else {
+    view = snap.snapshot.views[unit]?.[year]?.[month];
+  }
   const cap = Math.max(Number(view?.caixa?.receitaTotal || view?.fat) || 0, 1);
   const dailyFat = (view?.dailyFat || []).map((row) => {
     let fat = Number(row.fat) || 0;
@@ -418,9 +469,17 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
        agregador: as linhas de custo nunca estiveram nas vendas. Entra
        aqui e passa pelo filtrarView como todo o resto — conta sem a aba
        DRE nao recebe custo nenhum. */
+    erroIntervalo,
+    /* O demonstrativo do SimplesVet so existe por mes fechado, entao num
+       recorte livre ele nao vai: a aba DRE avisa em vez de mostrar um
+       numero que nao corresponde ao intervalo pedido. */
     view: view
       ? filtrarView(
-          { ...view, dailyFat, dreReal: await dreDoPortal(DATA_DIR, unit, year, month).catch(() => null) },
+          {
+            ...view,
+            dailyFat,
+            dreReal: de ? null : await dreDoPortal(DATA_DIR, unit, year, month).catch(() => null),
+          },
           req.perfil.paginas
         )
       : null,

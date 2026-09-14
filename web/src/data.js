@@ -58,6 +58,14 @@ export function hojeBR() {
   return new Date(agora.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
 }
 
+/* Data no formato que o <input type="date"> entende. toISOString() nao
+   serve: ele converte para UTC e, de madrugada no Brasil, devolve o dia
+   seguinte. Aqui o dia sai dos campos locais do proprio Date. */
+export function isoBR(d) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 function lastCompleteMonth(year) {
   const h = hojeBR();
   if (year < h.getFullYear()) return 11;

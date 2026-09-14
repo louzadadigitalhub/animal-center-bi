@@ -15,7 +15,7 @@ import { X } from "@phosphor-icons/react/X";
 import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
 import { DailyBars, Donut, Hourly, LineChart, Radar, MultiLine, SparkBars, Treemap, VolumeTicket } from "./charts";
-import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily } from "./data";
+import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR } from "./data";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
@@ -66,7 +66,12 @@ function Vendas({ u, year, porMes }) {
   const mesesComoDias = (u.monthlyFat || []).map((fat, i) => ({ d: i + 1, fat: Math.round(fat || 0) }));
   const fatSeries = u.monthlyFat.map((n) => n || 0);
   const groupsDonut = u.grupos.map((g) => ({ nome: g.nome, value: g.valor, hint: brl(g.valor) }));
-  const alerts = u.grupos.filter((g) => g.valor < g.media);
+  /* media vem null quando o recorte nao tem um ano de referencia (periodo
+     livre, semana). Comparar contra null daria sempre falso e a tela
+     diria "nenhum grupo abaixo da media", o que nao e verdade — e que
+     nao da para saber. */
+  const temMedia = u.grupos.some((g) => g.media != null);
+  const alerts = temMedia ? u.grupos.filter((g) => g.media != null && g.valor < g.media) : [];
   const cx = u.caixa || {
     noDia: 0,
     posteriores: 0,
@@ -133,10 +138,18 @@ function Vendas({ u, year, porMes }) {
         <Card className="tile tile-inflow">
           <CardHeader>
             <CardTitle>Entrada</CardTitle>
-            <CardDescription>{porMes ? "Caixa por mes (data da baixa)" : "Caixa por dia (data da baixa)"}</CardDescription>
+            <CardDescription>
+              {u.intervalo
+                ? `Caixa por ${u.intervalo.passo} no período escolhido`
+                : porMes
+                  ? "Caixa por mes (data da baixa)"
+                  : "Caixa por dia (data da baixa)"}
+            </CardDescription>
           </CardHeader>
           <CardContent>
-            {porMes ? (
+            {u.rotulosSerie ? (
+              <DailyBars days={u.dailyFat || []} h={340} rotulos={u.rotulosSerie} />
+            ) : porMes ? (
               <DailyBars days={mesesComoDias} h={340} rotulos={MONTHS} />
             ) : daily.length ? (
               <DailyBars days={daily} h={340} />
@@ -176,11 +189,22 @@ function Vendas({ u, year, porMes }) {
                 </button>
               ))}
             </div>
-            <MultiLine
-              porAno={u.monthlyPorAno || {}}
-              campo={campoAno}
-              fmt={campoAno === "qtd" ? num : brl}
-            />
+            {/* Num recorte livre a serie mensal por ano nao existe: o
+                grafico jogava o total do periodo no mes da ponta e
+                desenhava uma linha rente a zero com um pico, como se os
+                outros meses tivessem sido fracos. */}
+            {u.intervalo ? (
+              <p className="hint">
+                Este gráfico compara o ano mês a mês, então não vale para um período escolhido à mão —
+                as datas não fecham mês. Volte para Mês ou Ano para vê-lo.
+              </p>
+            ) : (
+              <MultiLine
+                porAno={u.monthlyPorAno || {}}
+                campo={campoAno}
+                fmt={campoAno === "qtd" ? num : brl}
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -192,7 +216,7 @@ function Vendas({ u, year, porMes }) {
           <CardContent>
           <div className="bars">
             {u.grupos.map((g) => (
-              <div key={g.nome} className={g.valor < g.media ? "row warn" : "row"}>
+              <div key={g.nome} className={g.media != null && g.valor < g.media ? "row warn" : "row"}>
                 <span>{g.nome}</span>
                 <div className="track">
                   <i style={{ width: `${Math.min(100, (g.valor / maxG) * 100)}%` }} />
@@ -211,7 +235,12 @@ function Vendas({ u, year, porMes }) {
               </div>
             ))}
           </div>
-          {alerts.length ? (
+          {!temMedia ? (
+            <p className="hint">
+              A média mensal é do ano corrente, então não existe para um período escolhido à mão. Os
+              valores acima são do recorte; a comparação volta em Mês ou Ano.
+            </p>
+          ) : alerts.length ? (
             <ul className="alerts">
               {alerts.map((g) => (
                 <li key={g.nome}>
@@ -785,6 +814,25 @@ function dreCell(row, campo) {
    duas nao tem a mesma estrutura nem os mesmos nomes de categoria. */
 function Dre({ u, year }) {
   const real = u.dreReal;
+  /* O demonstrativo do SimplesVet e fechado por mes: nao existe recorte
+     de 3 a 17. Dizer isso e melhor do que cair na tabela antiga com a
+     mensagem errada ("ainda sem demonstrativo para este ano"). */
+  if (u.intervalo) {
+    return (
+      <div className="bento">
+        <section className="card span-12">
+          <header>
+            <h2>DRE</h2>
+            <p>
+              O demonstrativo vem fechado por mês do SimplesVet, então não há como recortá-lo de{" "}
+              {u.intervalo.de.split("-").reverse().join("/")} a {u.intervalo.ate.split("-").reverse().join("/")}.
+              Escolha Mês ou Ano para ver o DRE; as outras abas continuam respeitando o período.
+            </p>
+          </header>
+        </section>
+      </div>
+    );
+  }
   if (!real?.partes?.length) return <DreAntiga u={u} />;
 
   return (
@@ -1108,6 +1156,10 @@ function Painel({ perfil, aoSair }) {
   /* hoje e semana ja vem dentro da mesma resposta do snapshot, entao trocar
      para eles nao custa rede nenhuma. Mes e ano e que mudam a busca. */
   const [periodo, setPeriodo] = useState("mes");
+  /* Recorte livre "de tal a tal". Comeca no mes corrente para o primeiro
+     clique ja mostrar algo em vez de dois campos vazios. */
+  const [de, setDe] = useState(() => isoBR(new Date(hoje.getFullYear(), hoje.getMonth(), 1)));
+  const [ate, setAte] = useState(() => isoBR(hoje));
   const [live, setLive] = useState(null);
   const [detail, setDetail] = useState(null);
   const [menu, setMenu] = useState(false);
@@ -1132,6 +1184,7 @@ function Painel({ perfil, aoSair }) {
   const demo = useMemo(() => getView(unit, year, month), [unit, year, month]);
   const recorte =
     periodo === "hoje" ? live?.hoje : periodo === "semana" ? live?.semana : live?.view;
+  const noIntervalo = periodo === "intervalo";
   const u = recorte ? { ...demo, ...recorte } : demo;
   const yearsOn = [...new Set([...(live?.years || []), ...(u.compareYears || []).filter((c) => c.qtd || c.fat).map((c) => c.ano), year])].filter(Boolean).sort((a, b) => a - b);
   const label =
@@ -1139,7 +1192,9 @@ function Painel({ perfil, aoSair }) {
       ? `Hoje · ${u.diaLabel || ""}`
       : periodo === "semana"
         ? `Semana · ${u.diaLabel || ""}${u.dias ? ` · ${u.dias} dia(s)` : ""}`
-        : periodLabel(year, month);
+        : noIntervalo
+          ? `${u.diaLabel || "escolha as datas"}${u.dias ? ` · ${u.dias} dia(s)` : ""}`
+          : periodLabel(year, month);
   const fonte = live?.ok
     ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
     : "Aguardando robô";
@@ -1185,7 +1240,7 @@ function Painel({ perfil, aoSair }) {
 
   useEffect(() => {
     let vivo = true;
-    const chave = `${unit}|${year}|${month}`;
+    const chave = noIntervalo ? `${unit}|${de}|${ate}` : `${unit}|${year}|${month}`;
     const guardado = cache.current.get(chave);
     if (guardado) setLive(guardado);
     /* Sem nada guardado, seguimos mostrando o recorte anterior marcado como
@@ -1193,7 +1248,9 @@ function Painel({ perfil, aoSair }) {
        pior que dado velho: seria numero inventado sem aviso. */
     setCarregando(!guardado);
 
-    const q = `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}`;
+    const q = noIntervalo
+      ? `${api}/api/snapshot?unit=${unit}&de=${de}&ate=${ate}`
+      : `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}`;
     apiFetch(q)
       .then((r) => r.json())
       .then((j) => (j.ok ? j : { ok: false }))
@@ -1222,7 +1279,7 @@ function Painel({ perfil, aoSair }) {
     return () => {
       vivo = false;
     };
-  }, [api, unit, year, month, tentativa]);
+  }, [api, unit, year, month, tentativa, noIntervalo, de, ate]);
 
   return (
     <div className={`app ${menu ? "menu-open" : ""}`}>
@@ -1277,6 +1334,7 @@ function Painel({ perfil, aoSair }) {
               ["semana", "Semana"],
               ["mes", "Mês"],
               ["ano", "Ano"],
+              ["intervalo", "Período"],
             ].map(([id, rotulo]) => (
               <button
                 key={id}
@@ -1299,7 +1357,13 @@ function Painel({ perfil, aoSair }) {
           {/* Data de um lado, conta do outro. Estavam no mesmo div e o
               hidden levava junto o Sair e o tema: quem clicava em "Hoje"
               ficava sem como sair. */}
-          <div className="period" hidden={page === "admin" || periodo === "hoje" || periodo === "semana"}>
+          <div className="intervalo" hidden={page === "admin" || !noIntervalo}>
+            <CalendarBlank size={16} />
+            <input type="date" value={de} max={ate} onChange={(e) => setDe(e.target.value)} aria-label="Data inicial" />
+            <span className="intervalo-ate">até</span>
+            <input type="date" value={ate} min={de} max={isoBR(hoje)} onChange={(e) => setAte(e.target.value)} aria-label="Data final" />
+          </div>
+          <div className="period" hidden={page === "admin" || noIntervalo || periodo === "hoje" || periodo === "semana"}>
             <CalendarBlank size={16} />
             <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
               {yearsOn.map((y) => (

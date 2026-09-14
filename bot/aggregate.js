@@ -201,7 +201,11 @@ export function aggregate(rows) {
     ];
     const grupos = gruposNomes.map((nome) => {
       const valor = Math.round(byGrupo[nome] || 0);
-      const ref = year != null ? grupoRef(unit, year, month, nome) : { media: valor, antes: 0 };
+      /* Sem ano de referencia nao ha media mensal para comparar. Devolvia
+         o proprio valor, o que fazia todo grupo aparecer exatamente na
+         media — um numero inventado. null deixa a tela dizer que nao da
+         para comparar neste recorte. */
+      const ref = year != null ? grupoRef(unit, year, month, nome) : { media: null, antes: 0 };
       /* Sem ano passado nao existe variacao. Devolvo null, nao 0: zero diz
          "ficou igual", e a tela precisa saber que nao ha com que comparar. */
       const vsAno = ref.antes ? Math.round(((valor - ref.antes) / ref.antes) * 100) : null;
@@ -564,5 +568,72 @@ export function aggregate(rows) {
     }
   }
 
-  return { headers, count: parsed.length, years, views, hoje, semana, clientesStatus };
+  /* Recorte "de tal a tal data". Mesmo caminho da semana — slice() com
+     predicado livre —, so que com as pontas vindas da tela.
+
+     A serie do grafico troca de passo conforme o tamanho: ate uns tres
+     meses vai dia a dia; acima disso vira mes, senao um intervalo de dois
+     anos desenharia setecentas barras de um pixel. */
+  const DIAS_MAX_DIARIO = 92;
+  const doisDig = (n) => String(n).padStart(2, "0");
+
+  function intervalo(unit, de, ate) {
+    if (!de || !ate) return null;
+    const iniMs = Date.UTC(de.y, de.m - 1, de.d);
+    const fimMs = Date.UTC(ate.y, ate.m - 1, ate.d);
+    if (!Number.isFinite(iniMs) || !Number.isFinite(fimMs) || fimMs < iniMs) return null;
+
+    const dentro = (dt) => {
+      const t = Date.UTC(dt.y, dt.m - 1, dt.d);
+      return t >= iniMs && t <= fimMs;
+    };
+    const v = slice(unit, null, "all", null, dentro);
+
+    const dias = Math.round((fimMs - iniMs) / 86400000) + 1;
+    const porDia = dias <= DIAS_MAX_DIARIO;
+
+    const soma = new Map();
+    for (const r of parsed) {
+      if (unit !== "consolidado" && r.unit !== unit) continue;
+      if (!r.dt?.y || !dentro(r.dt)) continue;
+      const k = porDia
+        ? `${r.dt.y}-${doisDig(r.dt.m)}-${doisDig(r.dt.d)}`
+        : `${r.dt.y}-${doisDig(r.dt.m)}`;
+      soma.set(k, (soma.get(k) || 0) + r.valor);
+    }
+
+    const serie = [];
+    const rotulos = [];
+    if (porDia) {
+      for (let t = iniMs; t <= fimMs; t += 86400000) {
+        const d = new Date(t);
+        const k = `${d.getUTCFullYear()}-${doisDig(d.getUTCMonth() + 1)}-${doisDig(d.getUTCDate())}`;
+        serie.push({ d: serie.length + 1, fat: Math.round(soma.get(k) || 0) });
+        rotulos.push(`${doisDig(d.getUTCDate())}/${doisDig(d.getUTCMonth() + 1)}`);
+      }
+    } else {
+      const cur = new Date(Date.UTC(de.y, de.m - 1, 1));
+      const fimMes = Date.UTC(ate.y, ate.m - 1, 1);
+      while (cur.getTime() <= fimMes) {
+        const k = `${cur.getUTCFullYear()}-${doisDig(cur.getUTCMonth() + 1)}`;
+        serie.push({ d: serie.length + 1, fat: Math.round(soma.get(k) || 0) });
+        rotulos.push(`${doisDig(cur.getUTCMonth() + 1)}/${String(cur.getUTCFullYear()).slice(2)}`);
+        cur.setUTCMonth(cur.getUTCMonth() + 1);
+      }
+    }
+
+    const rot = (x) => `${doisDig(x.d)}/${doisDig(x.m)}/${x.y}`;
+    v.dailyFat = serie;
+    v.rotulosSerie = rotulos;
+    v.diaLabel = `${rot(de)} a ${rot(ate)}`;
+    v.dias = dias;
+    v.intervalo = {
+      de: `${de.y}-${doisDig(de.m)}-${doisDig(de.d)}`,
+      ate: `${ate.y}-${doisDig(ate.m)}-${doisDig(ate.d)}`,
+      passo: porDia ? "dia" : "mes",
+    };
+    return v;
+  }
+
+  return { headers, count: parsed.length, years, views, hoje, semana, clientesStatus, intervalo };
 }
