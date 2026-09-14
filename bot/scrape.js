@@ -2,6 +2,7 @@ import { chromium } from "playwright";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { findChrome } from "./chrome.js";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
 
@@ -323,39 +324,6 @@ function subCaixa(a, b) {
   const out = {};
   for (const k of keys) out[k] = Math.max(0, Math.round((a?.[k] || 0) - (b?.[k] || 0)));
   return out;
-}
-
-function findChrome() {
-  const roots = [
-    process.env.PLAYWRIGHT_CHROMIUM_PATH,
-    process.env.PLAYWRIGHT_BROWSERS_PATH,
-    "/ms-playwright",
-    "/root/.cache/ms-playwright",
-    "/home/pwuser/.cache/ms-playwright",
-  ].filter(Boolean);
-  const names = ["headless_shell", "chrome", "chromium"];
-  const walk = (dir, depth = 0) => {
-    if (!dir || !existsSync(dir) || depth > 5) return null;
-    try {
-      for (const ent of readdirSync(dir, { withFileTypes: true })) {
-        const p = join(dir, ent.name);
-        if (ent.isFile() && names.includes(ent.name)) return p;
-        if (ent.isDirectory()) {
-          const hit = walk(p, depth + 1);
-          if (hit) return hit;
-        }
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  };
-  for (const root of roots) {
-    if (existsSync(root) && names.some((n) => root.endsWith("/" + n))) return root;
-    const hit = walk(root);
-    if (hit) return hit;
-  }
-  return null;
 }
 
 async function exportVendas(page, from, to) {

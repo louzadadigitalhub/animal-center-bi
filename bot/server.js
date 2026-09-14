@@ -8,6 +8,7 @@ import {
   clientIp,
   cookieHeader,
   loginPerson,
+  trocarPin,
   personDashboard,
   photoFile,
   photoMap,
@@ -97,6 +98,30 @@ async function loadSnapshot() {
    entao rodando solto ele derrubaria a sessao do scrape no meio. */
 const DRE_MS = Number(process.env.DRE_MS || 6 * 60 * 60 * 1000);
 let ultimoDre = 0;
+/* O estado da coleta sai no /api/status. Antes o unico sinal era um
+   console.error no log do container: quando o DRE falhou em producao a
+   tela so ficou sem custo, sem dizer por que. */
+let dreStatus = { at: null, ok: null, erro: null, unidades: [] };
+
+async function coletarDre() {
+  if (Date.now() - ultimoDre <= DRE_MS) return;
+  ultimoDre = Date.now();
+  const agoraBr = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  try {
+    const { collectDre } = await import("./collect-dre.js");
+    const r = await collectDre(agoraBr.getFullYear(), DATA_DIR);
+    dreStatus = { at: new Date().toISOString(), ok: true, erro: null, unidades: r.unidades };
+    console.log("dre ok", r);
+  } catch (err) {
+    const erro = String(err?.message || err);
+    dreStatus = { at: new Date().toISOString(), ok: false, erro, unidades: [] };
+    console.error("dre fail", erro);
+    /* Falhou: tenta de novo no proximo ciclo em vez de so daqui a seis
+       horas. Sem isso, um erro pego logo no boot deixava o painel sem
+       custo o resto do turno. */
+    ultimoDre = 0;
+  }
+}
 
 async function tick() {
   if (running) return;
@@ -106,22 +131,13 @@ async function tick() {
     const r = await scrape();
     lastError = null;
     console.log(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape ok", r);
-    if (Date.now() - ultimoDre > DRE_MS) {
-      ultimoDre = Date.now();
-      try {
-        const { collectDre } = await import("./collect-dre.js");
-        const ano = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })).getFullYear();
-        console.log("dre ok", await collectDre(ano, DATA_DIR));
-      } catch (err) {
-        /* DRE que falha nao pode derrubar o scrape: o painel continua
-           servindo vendas com o demonstrativo da ultima coleta. */
-        console.error("dre fail", String(err?.message || err));
-      }
-    }
   } catch (err) {
     lastError = String(err && err.stack ? err.stack : err);
     console.error(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape fail", lastError);
   } finally {
+    /* Fora do try do scrape: o demonstrativo nao depende das vendas, e
+       antes um scrape que falhava levava junto a coleta de custo. */
+    await coletarDre().catch(() => {});
     running = false;
   }
 }
@@ -167,6 +183,7 @@ app.get("/api/health", async (_req, res) => {
     rows: snap?.rows || 0,
     anos: snap?.snapshot?.years || espelho?.anos || [],
     filialOk: Boolean(espelho?.filialOk || snap?.caixa?.filial?.receitaTotal),
+    dre: dreStatus,
     historico: espelho?.historico || {},
   });
 });
@@ -294,6 +311,22 @@ app.get("/api/perfil", async (req, res) => {
   const perfil = await quemE(req);
   if (!perfil) return res.status(401).json({ ok: false, error: "entre para ver o painel" });
   res.json({ ok: true, perfil, paginas: PAGINAS });
+});
+
+/* Trocar o PIN de alguem do time. So a admin.
+
+   O PIN volta em claro nesta resposta e em nenhum outro lugar: o disco
+   guarda so o hash. Se a admin fechar a tela sem copiar, nao ha como
+   recuperar — tem que gerar outro. E de proposito; e a mesma razao pela
+   qual o Supabase nao mostra a senha dela. */
+app.post("/api/equipe/pin", exigeDiretoria({ admin: true }), async (req, res) => {
+  const id = String(req.body?.id || "");
+  const pin = String(req.body?.pin || "");
+  if (!id) return res.status(400).json({ ok: false, error: "falta dizer de quem" });
+  const r = await trocarPin(id, pin);
+  if (!r.ok) return res.status(r.status || 400).json({ ok: false, error: r.error });
+  console.log("pin trocado", id, "por", req.perfil.email);
+  res.json({ ok: true, pin: r.pin, nome: r.nome });
 });
 
 app.get("/api/perfis", exigeDiretoria({ admin: true }), async (_req, res) => {

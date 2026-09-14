@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { opcoesChrome } from "./chrome.js";
 
 const env = Object.fromEntries(
   readFileSync(new URL("../.env", import.meta.url), "utf8")
@@ -126,7 +127,7 @@ async function lerDemonstrativo(page, ano) {
    do caminho. */
 export async function collectDre(ano = new Date().getFullYear(), dataDir = DATA_PADRAO) {
   await mkdir(dataDir, { recursive: true });
-  const browser = await chromium.launch({ headless: true, args: ["--no-sandbox", "--disable-dev-shm-usage"] });
+  const browser = await chromium.launch(opcoesChrome());
   try {
     return await coletar(browser, ano, dataDir);
   } finally {

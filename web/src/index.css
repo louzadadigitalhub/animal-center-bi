@@ -414,6 +414,97 @@ input {
   border-color: var(--line-2);
 }
 
+/* ---------- PIN da equipe ---------- */
+
+.pins {
+  display: grid;
+  gap: var(--s2);
+}
+
+.pin-linha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+}
+
+.pin-quem {
+  display: grid;
+  gap: 2px;
+}
+
+.pin-quem strong {
+  font-size: 14px;
+}
+
+.pin-quem small {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.pin-acoes,
+.pin-form {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pin-form input {
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 8px var(--s3);
+  color: var(--text);
+  outline: none;
+  width: 118px;
+  font-family: var(--mono);
+  letter-spacing: 0.18em;
+}
+
+.pin-form input:focus {
+  border-color: var(--line-2);
+}
+
+/* Aparece uma vez so, entao precisa saltar e ser facil de copiar. */
+.pin-revelado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-bottom: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line-2);
+  border-left: 3px solid var(--cyan);
+  border-radius: var(--r-ctl);
+  background: var(--accent-wash);
+}
+
+.pin-revelado small {
+  display: block;
+  color: var(--text-2);
+  font-size: 11px;
+  margin-bottom: 2px;
+}
+
+.pin-revelado strong {
+  font-family: var(--mono);
+  font-size: 26px;
+  letter-spacing: 0.22em;
+  color: var(--text);
+}
+
+.pin-revelado-acoes {
+  display: flex;
+  gap: var(--s2);
+}
+
 /* ---------- DRE ---------- */
 
 /* A arvore do demonstrativo e longa; as linhas de total precisam saltar

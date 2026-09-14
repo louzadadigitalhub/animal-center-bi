@@ -358,6 +358,50 @@ export function publicStaff(people) {
   }));
 }
 
+/* ---------- PIN: trocar pelo painel ----------
+
+   O PIN so existe em claro no instante em que nasce. Guardamos scrypt
+   com sal, entao nao ha como "mostrar o PIN atual" numa tela — a
+   informacao nao existe mais depois de gravada. O que da e definir um
+   novo e devolver esse valor uma unica vez, na resposta, para a admin
+   copiar e repassar. Nada disso e escrito em disco em claro. */
+
+const PIN_OBVIOS = new Set([
+  "000000", "111111", "222222", "333333", "444444", "555555",
+  "666666", "777777", "888888", "999999", "123456", "654321",
+]);
+
+export function pinValido(pin) {
+  const limpo = String(pin || "").replace(/\D/g, "");
+  if (limpo.length !== PIN_LEN) return { ok: false, erro: `o PIN tem ${PIN_LEN} digitos` };
+  if (PIN_OBVIOS.has(limpo)) return { ok: false, erro: "esse PIN e facil demais de adivinhar" };
+  return { ok: true, pin: limpo };
+}
+
+/* pin vazio = sorteia um. Devolve o PIN em claro para quem chamou
+   mostrar uma vez; o disco so recebe o hash. */
+export async function trocarPin(id, pin = "") {
+  const doc = await loadPeopleDoc();
+  const pessoa = doc.people.find((p) => p.id === id);
+  if (!pessoa) return { ok: false, status: 404, error: "nao achei essa pessoa" };
+
+  let novo;
+  if (pin) {
+    const v = pinValido(pin);
+    if (!v.ok) return { ok: false, status: 400, error: v.erro };
+    novo = v.pin;
+  } else {
+    novo = newPin();
+  }
+
+  pessoa.pinHash = hashPin(novo);
+  pessoa.pinTrocadoEm = new Date().toISOString();
+  /* Mudar pinTrocadoEm ja derruba quem estava logado com o PIN antigo:
+     o token guarda esse carimbo e o readSession compara. */
+  await savePeopleDoc(doc);
+  return { ok: true, pin: novo, nome: pessoa.nome };
+}
+
 /* ---------- Fotos ----------
    O tipo vem do conteudo, nao do header nem da extensao que o cliente mandou.
    SVG fica de fora de proposito: e XML, pode carregar script, e a foto
@@ -489,7 +533,11 @@ export async function loginPerson(id, pin, ip) {
 async function signSession(person) {
   const secret = await sessionSecret();
   const exp = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
-  const payload = Buffer.from(JSON.stringify({ id: person.id, exp }), "utf8").toString("base64url");
+  /* v carrega o carimbo da ultima troca de PIN. Sessao aqui e token HMAC
+     sem estado — nao ha tabela para apagar —, entao e assim que trocar o
+     PIN derruba quem ja estava dentro com o antigo. */
+  const v = person.pinTrocadoEm || person.createdAt || "";
+  const payload = Buffer.from(JSON.stringify({ id: person.id, exp, v }), "utf8").toString("base64url");
   const sig = createHmac("sha256", secret).update(payload).digest("base64url");
   return `${payload}.${sig}`;
 }
@@ -512,6 +560,8 @@ export async function readSession(token) {
   const doc = await loadPeopleDoc();
   const person = doc.people.find((p) => p.id === data.id);
   if (!person) return null;
+  const v = person.pinTrocadoEm || person.createdAt || "";
+  if ((data.v || "") !== v) return null;
   return { id: person.id, nome: person.nome, casa: person.casa, unit: person.unit, role: person.role, foto: person.foto?.v || null };
 }
 

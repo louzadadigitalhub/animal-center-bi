@@ -1464,7 +1464,139 @@ function Admin({ perfil }) {
     <div className="bento">
       <TrocarSenha email={perfil.email} largura={perfil.admin ? "span-5" : "span-12"} />
       {perfil.admin ? <Contas /> : null}
+      {perfil.admin ? <PinsEquipe /> : null}
     </div>
+  );
+}
+
+/* PIN da equipe.
+
+   Nao da para listar o PIN atual: ele fica em disco so como hash scrypt,
+   entao a informacao nao existe mais depois de gravada. O que a tela faz
+   e definir um novo — sorteado ou digitado — e mostrar esse valor uma
+   unica vez, para copiar e repassar. */
+function PinsEquipe() {
+  const [time, setTime] = useState([]);
+  const [erro, setErro] = useState("");
+  const [abertoId, setAbertoId] = useState("");
+  const [digitado, setDigitado] = useState("");
+  const [ocupado, setOcupado] = useState("");
+  const [revelado, setRevelado] = useState(null);
+
+  useEffect(() => {
+    fetch("/api/auth/staff")
+      .then((r) => r.json())
+      .then((j) => (j.ok ? setTime(j.staff || []) : Promise.reject(new Error(j.error))))
+      .catch((e) => setErro(e.message || "nao deu para listar o time"));
+  }, []);
+
+  async function trocar(pessoa, pin = "") {
+    setOcupado(pessoa.id);
+    setErro("");
+    try {
+      const r = await apiFetch("/api/equipe/pin", {
+        method: "POST",
+        body: JSON.stringify({ id: pessoa.id, pin }),
+      }).then((x) => x.json());
+      if (!r.ok) throw new Error(r.error);
+      setRevelado({ id: pessoa.id, nome: r.nome, pin: r.pin });
+      setAbertoId("");
+      setDigitado("");
+    } catch (e) {
+      setErro(e.message || "nao deu para trocar");
+    } finally {
+      setOcupado("");
+    }
+  }
+
+  return (
+    <section className="card span-12">
+      <header>
+        <h2>PIN da equipe</h2>
+        <p>
+          O PIN atual não aparece aqui: ele é guardado embaralhado, então nem o servidor consegue lê-lo
+          de volta. Gere um novo ou escolha um — ele aparece uma vez, para você copiar e repassar.
+        </p>
+      </header>
+
+      {revelado ? (
+        <div className="pin-revelado">
+          <div>
+            <small>PIN novo de {revelado.nome}</small>
+            <strong>{revelado.pin}</strong>
+          </div>
+          <div className="pin-revelado-acoes">
+            <button
+              type="button"
+              className="conta-sair"
+              onClick={() => {
+                navigator.clipboard?.writeText(revelado.pin);
+                sileo.success({ title: "Copiado", description: "Mande num canal privado, não no grupo." });
+              }}
+            >
+              Copiar
+            </button>
+            <button type="button" className="conta-sair" onClick={() => setRevelado(null)}>
+              Já anotei
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      {erro ? <p className="portao-erro">{erro}</p> : null}
+
+      <div className="pins">
+        {time.map((p) => (
+          <div key={p.id} className="pin-linha">
+            <div className="pin-quem">
+              <strong>{p.nome}</strong>
+              <small>{p.casa}</small>
+            </div>
+            {abertoId === p.id ? (
+              <form
+                className="pin-form"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  trocar(p, digitado);
+                }}
+              >
+                <input
+                  value={digitado}
+                  onChange={(e) => setDigitado(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                  placeholder="6 dígitos"
+                  inputMode="numeric"
+                  autoFocus
+                />
+                <button type="submit" className="conta-sair" disabled={digitado.length !== 6}>
+                  Salvar
+                </button>
+                <button type="button" className="conta-sair" onClick={() => setAbertoId("")}>
+                  Cancelar
+                </button>
+              </form>
+            ) : (
+              <div className="pin-acoes">
+                <button
+                  type="button"
+                  className="conta-sair"
+                  disabled={ocupado === p.id}
+                  onClick={() => trocar(p)}
+                >
+                  {ocupado === p.id ? "Gerando…" : "Gerar novo"}
+                </button>
+                <button type="button" className="conta-sair" onClick={() => { setAbertoId(p.id); setDigitado(""); }}>
+                  Escolher
+                </button>
+              </div>
+            )}
+          </div>
+        ))}
+        {!time.length && !erro ? <p className="hint">Carregando o time…</p> : null}
+      </div>
+      <p className="hint">
+        Trocar o PIN derruba a sessão de quem já estava dentro com o antigo — ela vai precisar entrar de novo.
+      </p>
+    </section>
   );
 }
 
