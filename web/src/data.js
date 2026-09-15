@@ -66,6 +66,17 @@ export function isoBR(d) {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
+/* Recua N meses / N dias no calendario local (ja no fuso de Brasilia
+   quando a data veio de hojeBR). 31 de marco menos 1 mes vira 3 de marco
+   no Date do JS — aceitavel para um atalho de periodo. */
+export function recuarMeses(d, n) {
+  return isoBR(new Date(d.getFullYear(), d.getMonth() - n, d.getDate()));
+}
+
+export function recuarDias(d, n) {
+  return isoBR(new Date(d.getFullYear(), d.getMonth(), d.getDate() - n));
+}
+
 function lastCompleteMonth(year) {
   const h = hojeBR();
   if (year < h.getFullYear()) return 11;

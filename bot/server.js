@@ -18,7 +18,7 @@ import {
   syncPeopleFromSales,
   listPeople,
 } from "./people.js";
-import { aggregate } from "./aggregate.js";
+import { aggregate, GRUPOS } from "./aggregate.js";
 import { dreDoPortal, matrizAnual } from "./dre.js";
 import { IDS, PAGINAS, filtrarView, listarPerfis, removerPerfil, salvarPerfil, viewPublicaRanking } from "./acesso.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
@@ -428,20 +428,25 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
   const unit = String(req.query.unit || "matriz");
   const year = Number(req.query.year || 2026);
   const month = req.query.month === "all" ? "all" : Number(req.query.month ?? 8);
+  const grupoQ = String(req.query.grupo || "");
+  const grupoOk = GRUPOS.includes(grupoQ) ? grupoQ : "";
 
-  /* Recorte "de tal a tal data" nao cabe no snapshot pre-calculado (ele
-     so guarda mes e ano), entao sai do aggregate em cache. */
+  /* Recorte livre e filtro de grupo nao cabem no snapshot pre-calculado
+     (ele so guarda mes e ano, com todos os grupos juntos). Os dois saem
+     do aggregate em cache, que ja leu vendas.json. */
   const de = dataDaTela(req.query.de);
   const ate = dataDaTela(req.query.ate);
   let view;
   let erroIntervalo = null;
+  const agg = await aggregado().catch(() => null);
   if (req.query.de || req.query.ate) {
     if (!de || !ate) erroIntervalo = "datas invalidas";
     else {
-      const agg = await aggregado().catch(() => null);
-      view = agg?.intervalo(unit, de, ate) || undefined;
+      view = agg?.intervalo(unit, de, ate, grupoOk || undefined) || undefined;
       if (!view) erroIntervalo = "a data final e anterior a inicial";
     }
+  } else if (agg) {
+    view = agg.recorte(unit, year, month, grupoOk);
   } else {
     view = snap.snapshot.views[unit]?.[year]?.[month];
   }
@@ -460,8 +465,8 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
     rows: snap.rows,
     headers: snap.snapshot.headers,
     years: snap.snapshot.years || [],
-    hoje: snap.snapshot.hoje?.[unit] || null,
-    semana: snap.snapshot.semana?.[unit] || null,
+    hoje: (agg ? agg.hojeDe(unit, grupoOk) : snap.snapshot.hoje?.[unit]) || null,
+    semana: (agg ? agg.semanaDe(unit, grupoOk) : snap.snapshot.semana?.[unit]) || null,
     clientesStatus: snap.snapshot.clientesStatus?.[unit] || null,
     /* O recorte sai do servidor ja podado: a conta que nao tem a aba
        Clientes nao recebe o array de clientes, nem o telefone deles. */

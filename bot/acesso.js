@@ -34,18 +34,18 @@ export const IDS = PAGINAS.map((p) => p.id);
    do servidor para quem nao tem a aba. */
 const CAMPOS = {
   vendas: ["fat", "fatVenda", "qtd", "caixa", "grupos", "dailyFat", "monthlyFat", "monthlyQtd", "monthlyPorAno", "monthlyFatPrev", "compareYears", "eletivas", "metaEletivas", "eletivasPct", "ticketCliente", "ticketVenda"],
-  ritmo: ["hourly", "consultas", "emergencia", "internacao", "examesQtd", "atendimentos", "vacinasAplicadas", "diaLabel", "fat", "caixa"],
+  ritmo: ["hourly", "consultas", "emergencia", "internacao", "plantao", "examesQtd", "atendimentos", "vacinasAplicadas", "diaLabel", "fat", "caixa", "grupos"],
   equipe: ["equipe"],
   clientes: ["clientes", "mapPoints", "racas", "especies", "genero", "origem", "novos"],
   recorrencia: ["recorrentes", "novos", "monthlyQtd", "monthlyFat", "hourly"],
-  vacinas: ["vacinas", "vacinasTop", "vacinasAplicadas"],
+  vacinas: ["vacinas", "vacinasTop", "vacinasTipo", "vacinasAplicadas", "vsPrev"],
   pesquisa: ["nps"],
   dre: ["dre", "dreReal", "fat", "fatVenda", "caixa"],
   tv: ["equipe"],
 };
 
 /* Sempre presentes: sao o cabecalho da tela, nao dado de negocio. */
-const BASE = ["id", "nome", "casa", "diaLabel", "dias", "rotulosSerie", "intervalo"];
+const BASE = ["id", "nome", "casa", "diaLabel", "dias", "rotulosSerie", "intervalo", "filtroGrupo", "vsPrev"];
 
 export function filtrarView(view, paginas) {
   if (!view) return view;

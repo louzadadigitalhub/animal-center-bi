@@ -481,7 +481,6 @@ input {
   margin-bottom: var(--s3);
   padding: var(--s3);
   border: 1px solid var(--line-2);
-  border-left: 3px solid var(--cyan);
   border-radius: var(--r-ctl);
   background: var(--accent-wash);
 }
@@ -535,7 +534,6 @@ table.dre td.down::before {
   margin: 0 0 var(--s3);
   padding: var(--s3);
   border: 1px solid var(--line);
-  border-left: 3px solid var(--warn);
   border-radius: var(--r-ctl);
   background: var(--surface-2);
   color: var(--text-2);
@@ -649,7 +647,6 @@ table.dre td.down::before {
 
   .dre-aviso {
     border: 1px solid #999 !important;
-    border-left: 3px solid #b8860b !important;
     background: #fff !important;
     color: #000 !important;
   }
@@ -953,6 +950,7 @@ aside nav button.on::before {
    precisam parecer da mesma familia. */
 .periodos {
   display: flex;
+  flex-wrap: wrap;
   background: var(--surface-1);
   border: 1px solid var(--line);
   border-radius: var(--r-pill);
@@ -1031,6 +1029,135 @@ aside nav button.on::before {
 
 .intervalo-ate {
   font-size: 12px;
+}
+
+.intervalo-presets {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.intervalo-presets button {
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  color: var(--text-2);
+  border-radius: var(--r-pill);
+  padding: 4px 10px;
+  min-height: 28px;
+  font-size: 11px;
+  font-family: var(--mono);
+  cursor: pointer;
+}
+
+.intervalo-presets button.on,
+.intervalo-presets button:hover {
+  color: var(--text);
+  border-color: var(--line-2);
+}
+
+.grupos-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: calc(var(--s3) * -1) 0 var(--s4);
+}
+
+.grupos-filtro[hidden] {
+  display: none;
+}
+
+.grupos-filtro button {
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  color: var(--text-2);
+  border-radius: var(--r-pill);
+  padding: 6px 12px;
+  min-height: 32px;
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.grupos-filtro button:hover {
+  color: var(--text);
+}
+
+.grupos-filtro button.on {
+  background: var(--grad);
+  color: #04202c;
+  font-weight: 600;
+  border-color: transparent;
+}
+
+.vacina-tipos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--s2);
+}
+
+.vacina-tipos button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  border: 1px solid var(--line);
+  background: var(--surface-1);
+  color: var(--text);
+  border-radius: var(--r-ctl);
+  padding: 12px 14px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+
+.vacina-tipos button:hover {
+  border-color: var(--line-2);
+}
+
+.vacina-tipos button.on {
+  border-color: color-mix(in srgb, var(--cyan) 55%, var(--line));
+  background: var(--accent-wash);
+}
+
+.vacina-tipos button span {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.vacina-tipos button b {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-style: normal;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--text-3);
+  white-space: nowrap;
+}
+
+.delta-up {
+  color: var(--pos);
+}
+
+.delta-down {
+  color: var(--neg);
+}
+
+.delta-na {
+  color: var(--text-3);
+}
+
+.vacina-tipo {
+  display: block;
+  font-size: 11px;
+  color: var(--text-3);
+  font-weight: 400;
 }
 
 .acoes {
@@ -2791,6 +2918,19 @@ tr.click:hover td,
 }
 
 @media (max-width: 760px) {
+  .grupos-filtro {
+    margin-top: 0;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+  .grupos-filtro button {
+    flex: 0 0 auto;
+  }
+  .vacina-tipos {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
   .podium {
     grid-template-columns: 1fr;
     gap: var(--s8);

@@ -56,10 +56,35 @@ function unitOf(row) {
   return "matriz";
 }
 
+export const GRUPOS = [
+  "Internamento",
+  "Consultas",
+  "Plantao",
+  "Cirurgias",
+  "Exames",
+  "Vacinas",
+  "Farmacia",
+  "Procedimentos",
+];
+
+const VACINA_TIPOS = [
+  "Polivalente",
+  "Raiva",
+  "FeLV",
+  "Quadrupla felina",
+  "Gripe",
+  "Giardia",
+  "Tosse dos canis",
+  "Outras",
+];
+
 function grupoOf(row) {
   const g = norm(pick(row, ["grupo", "categoria", "tipo", "grupo de produto"]));
   const p = norm(pick(row, ["produto", "servico", "serviço", "item", "descricao"]));
   const t = `${g} ${p}`;
+  /* Plantao vem antes de consulta: o produto e "Consulta de Plantao"
+     e cairia no grupo errado se a ordem fosse invertida. */
+  if (/plant/.test(t)) return "Plantao";
   if (/intern/.test(t)) return "Internamento";
   if (/consult|retorno/.test(t)) return "Consultas";
   if (/exam/.test(t)) return "Exames";
@@ -67,6 +92,86 @@ function grupoOf(row) {
   if (/vacin/.test(t)) return "Vacinas";
   if (/farmac|medic|pet ?shop|produto/.test(t)) return "Farmacia";
   return "Procedimentos";
+}
+
+export function vacinaTipo(produto) {
+  const t = norm(produto);
+  if (/anti-?rab|raiva/.test(t)) return "Raiva";
+  if (/poliv/.test(t)) return "Polivalente";
+  if (/felv/.test(t)) return "FeLV";
+  if (/quadr/.test(t)) return "Quadrupla felina";
+  if (/gripe/.test(t)) return "Gripe";
+  if (/giard/.test(t)) return "Giardia";
+  if (/tosse|canis/.test(t)) return "Tosse dos canis";
+  return "Outras";
+}
+
+function doisDig(n) {
+  return String(n).padStart(2, "0");
+}
+
+function rotData(p) {
+  return `${doisDig(p.d)}/${doisDig(p.m)}/${p.y}`;
+}
+
+function partsFromMs(ms) {
+  const d = new Date(ms);
+  return { y: d.getUTCFullYear(), m: d.getUTCMonth() + 1, d: d.getUTCDate() };
+}
+
+function predAnterior(year, month, day, dentro) {
+  if (dentro || year == null) return null;
+  if (day != null) {
+    const t = Date.UTC(year, month, day) - 86400000;
+    return (dt) => Date.UTC(dt.y, dt.m - 1, dt.d) === t;
+  }
+  if (month === "all") return (dt) => dt.y === year - 1;
+  const pm = month === 0 ? 11 : month - 1;
+  const py = month === 0 ? year - 1 : year;
+  return (dt) => dt.y === py && dt.m === pm + 1;
+}
+
+function rotuloAnterior(year, month, day, dentro) {
+  if (dentro || year == null) return null;
+  if (day != null) {
+    const p = partsFromMs(Date.UTC(year, month, day) - 86400000);
+    return rotData(p);
+  }
+  if (month === "all") return `ano ${year - 1}`;
+  const pm = month === 0 ? 11 : month - 1;
+  const py = month === 0 ? year - 1 : year;
+  return `${doisDig(pm + 1)}/${py}`;
+}
+
+function contarVacinas(rows) {
+  const byTipo = {};
+  const byNome = {};
+  for (const r of rows) {
+    if (r.grupo !== "Vacinas") continue;
+    const tipo = vacinaTipo(r.produto);
+    byTipo[tipo] = (byTipo[tipo] || 0) + 1;
+    if (r.produto) byNome[r.produto] = (byNome[r.produto] || 0) + 1;
+  }
+  return { byTipo, byNome };
+}
+
+function montarVacinas(list, prevList) {
+  const cur = contarVacinas(list);
+  const prev = contarVacinas(prevList || []);
+  const vsDe = (n, antes) => (antes > 0 ? Math.round(((n - antes) / antes) * 100) : null);
+  const vacinasTipo = VACINA_TIPOS.map((nome) => {
+    const n = cur.byTipo[nome] || 0;
+    const antes = prev.byTipo[nome] || 0;
+    return { nome, n, antes, vs: vsDe(n, antes) };
+  }).filter((t) => t.n || t.antes);
+  const vacinasTop = Object.entries(cur.byNome)
+    .map(([nome, n]) => {
+      const antes = prev.byNome[nome] || 0;
+      return { nome, n, tipo: vacinaTipo(nome), antes, vs: vsDe(n, antes) };
+    })
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 12);
+  return { vacinasTipo, vacinasTop };
 }
 
 export function aggregate(rows) {
@@ -164,9 +269,10 @@ export function aggregate(rows) {
     return { media: Math.round(media), antes: Math.round(antes) };
   }
 
-  function slice(unit, year, month, day, dentro) {
+  function slice(unit, year, month, day, dentro, grupo, prevDentro) {
     const list = parsed.filter((r) => {
       if (unit !== "consolidado" && r.unit !== unit) return false;
+      if (grupo && r.grupo !== grupo) return false;
       if (dentro) return dentro(r.dt);
       if (r.dt.y !== year) return false;
       if (month !== "all" && r.dt.m !== month + 1) return false;
@@ -190,15 +296,7 @@ export function aggregate(rows) {
       byGrupo[r.grupo] ??= 0;
       byGrupo[r.grupo] += r.valor;
     }
-    const gruposNomes = [
-      "Internamento",
-      "Consultas",
-      "Exames",
-      "Cirurgias",
-      "Farmacia",
-      "Vacinas",
-      "Procedimentos",
-    ];
+    const gruposNomes = GRUPOS;
     const grupos = gruposNomes.map((nome) => {
       const valor = Math.round(byGrupo[nome] || 0);
       /* Sem ano de referencia nao ha media mensal para comparar. Devolvia
@@ -214,7 +312,6 @@ export function aggregate(rows) {
     const qtd = list.length;
     const byRaca = {};
     const byEspecie = {};
-    const byVacina = {};
     const byBairro = {};
     const byCliente = {};
     const hourly = Array(24).fill(0);
@@ -224,7 +321,6 @@ export function aggregate(rows) {
       if (r.hora != null && r.hora >= 0 && r.hora < 24) hourly[r.hora] += 1;
       if (r.raca) byRaca[r.raca] = (byRaca[r.raca] || 0) + 1;
       if (r.especie) byEspecie[r.especie] = (byEspecie[r.especie] || 0) + 1;
-      if (r.grupo === "Vacinas" && r.produto) byVacina[r.produto] = (byVacina[r.produto] || 0) + 1;
       const bairro = r.bairro || "Sem bairro";
       byBairro[bairro] ??= { bairro, n: 0, fat: 0 };
       byBairro[bairro].n += 1;
@@ -264,10 +360,16 @@ export function aggregate(rows) {
     const especies = Object.entries(byEspecie)
       .map(([nome, n]) => ({ nome, n }))
       .sort((a, b) => b.n - a.n);
-    const vacinasTop = Object.entries(byVacina)
-      .map(([nome, n]) => ({ nome, n }))
-      .sort((a, b) => b.n - a.n)
-      .slice(0, 12);
+    const prevFn = prevDentro || predAnterior(year, month, day, dentro);
+    const prevList = prevFn
+      ? parsed.filter((r) => {
+          if (unit !== "consolidado" && r.unit !== unit) return false;
+          if (grupo && r.grupo !== grupo) return false;
+          return prevFn(r.dt);
+        })
+      : [];
+    const { vacinasTipo, vacinasTop } = montarVacinas(list, prevList);
+    const vsPrevRotulo = rotuloAnterior(year, month, day, dentro);
     const clientes = Object.values(byCliente)
       .map((c) => {
         const geo = locate({ cep: c.cep, bairro: c.bairro, id: c.codigo || c.nome });
@@ -363,6 +465,7 @@ export function aggregate(rows) {
         list.filter((r) => r.grupo === "Consultas").length + list.filter((r) => r.grupo === "Vacinas").length,
       emergencia: 0,
       internacao: list.filter((r) => r.grupo === "Internamento").length,
+      plantao: list.filter((r) => r.grupo === "Plantao").length,
       examesQtd: list.filter((r) => r.grupo === "Exames").length,
       eletivas: list.filter((r) => r.grupo === "Cirurgias").length,
       metaEletivas: Math.max(1, Math.round(list.filter((r) => r.grupo === "Cirurgias").length * 1.2)),
@@ -379,6 +482,9 @@ export function aggregate(rows) {
         .sort((a, b) => b.fat - a.fat),
       vacinas: vacinasTop.map((v) => ({ nome: v.nome, total: v.n, aplicada: v.n, vencida: 0, programada: 0 })),
       vacinasTop,
+      vacinasTipo,
+      vsPrev: vsPrevRotulo ? { rotulo: vsPrevRotulo } : null,
+      filtroGrupo: grupo || null,
       origem: [],
       hourly,
       racas,
@@ -575,9 +681,8 @@ export function aggregate(rows) {
      meses vai dia a dia; acima disso vira mes, senao um intervalo de dois
      anos desenharia setecentas barras de um pixel. */
   const DIAS_MAX_DIARIO = 92;
-  const doisDig = (n) => String(n).padStart(2, "0");
 
-  function intervalo(unit, de, ate) {
+  function intervalo(unit, de, ate, grupo) {
     if (!de || !ate) return null;
     const iniMs = Date.UTC(de.y, de.m - 1, de.d);
     const fimMs = Date.UTC(ate.y, ate.m - 1, ate.d);
@@ -587,14 +692,21 @@ export function aggregate(rows) {
       const t = Date.UTC(dt.y, dt.m - 1, dt.d);
       return t >= iniMs && t <= fimMs;
     };
-    const v = slice(unit, null, "all", null, dentro);
-
     const dias = Math.round((fimMs - iniMs) / 86400000) + 1;
+    const prevFim = iniMs - 86400000;
+    const prevIni = prevFim - (dias - 1) * 86400000;
+    const prevDentro = (dt) => {
+      const t = Date.UTC(dt.y, dt.m - 1, dt.d);
+      return t >= prevIni && t <= prevFim;
+    };
+    const v = slice(unit, null, "all", null, dentro, grupo, prevDentro);
+
     const porDia = dias <= DIAS_MAX_DIARIO;
 
     const soma = new Map();
     for (const r of parsed) {
       if (unit !== "consolidado" && r.unit !== unit) continue;
+      if (grupo && r.grupo !== grupo) continue;
       if (!r.dt?.y || !dentro(r.dt)) continue;
       const k = porDia
         ? `${r.dt.y}-${doisDig(r.dt.m)}-${doisDig(r.dt.d)}`
@@ -632,8 +744,80 @@ export function aggregate(rows) {
       ate: `${ate.y}-${doisDig(ate.m)}-${doisDig(ate.d)}`,
       passo: porDia ? "dia" : "mes",
     };
+    const pDe = partsFromMs(prevIni);
+    const pAte = partsFromMs(prevFim);
+    v.vsPrev = {
+      de: `${pDe.y}-${doisDig(pDe.m)}-${doisDig(pDe.d)}`,
+      ate: `${pAte.y}-${doisDig(pAte.m)}-${doisDig(pAte.d)}`,
+      rotulo: `${rot(pDe)} a ${rot(pAte)}`,
+    };
+    if (grupo) v.filtroGrupo = grupo;
     return v;
   }
 
-  return { headers, count: parsed.length, years, views, hoje, semana, clientesStatus, intervalo };
+  function recorte(unit, year, month, grupo) {
+    const g = GRUPOS.includes(grupo) ? grupo : "";
+    return slice(unit, year, month, null, null, g || undefined);
+  }
+
+  function hojeDe(unit, grupo) {
+    const g = GRUPOS.includes(grupo) ? grupo : "";
+    const now = todayParts();
+    const h = slice(unit, now.y, now.m - 1, now.d, null, g || undefined);
+    h.diaLabel = `${doisDig(now.d)}/${doisDig(now.m)}/${now.y}`;
+    if (g) h.filtroGrupo = g;
+    return h;
+  }
+
+  function semanaDe(unit, grupo) {
+    const g = GRUPOS.includes(grupo) ? grupo : "";
+    const now = todayParts();
+    const base = new Date(Date.UTC(now.y, now.m - 1, now.d));
+    const diaSemana = (base.getUTCDay() + 6) % 7;
+    const ini = new Date(base);
+    ini.setUTCDate(base.getUTCDate() - diaSemana);
+    const iniMs = ini.getTime();
+    const fimMs = base.getTime();
+    const dias = diaSemana + 1;
+    const prevFim = iniMs - 86400000;
+    const prevIni = prevFim - (dias - 1) * 86400000;
+    const sem = slice(
+      unit,
+      null,
+      "all",
+      null,
+      (dt) => {
+        const t = Date.UTC(dt.y, dt.m - 1, dt.d);
+        return t >= iniMs && t <= fimMs;
+      },
+      g || undefined,
+      (dt) => {
+        const t = Date.UTC(dt.y, dt.m - 1, dt.d);
+        return t >= prevIni && t <= prevFim;
+      }
+    );
+    const rotulo = (d) => `${doisDig(d.getUTCDate())}/${doisDig(d.getUTCMonth() + 1)}`;
+    sem.diaLabel = `${rotulo(ini)} a ${rotulo(base)}`;
+    sem.dias = dias;
+    sem.vsPrev = {
+      rotulo: `${rotulo(new Date(prevIni))} a ${rotulo(new Date(prevFim))}`,
+    };
+    if (g) sem.filtroGrupo = g;
+    return sem;
+  }
+
+  return {
+    headers,
+    count: parsed.length,
+    years,
+    views,
+    hoje,
+    semana,
+    clientesStatus,
+    intervalo,
+    recorte,
+    hojeDe,
+    semanaDe,
+    grupos: GRUPOS,
+  };
 }

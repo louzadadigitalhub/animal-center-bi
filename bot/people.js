@@ -118,6 +118,7 @@ function grupoOf(row) {
   const g = norm(pick(row, ["grupo", "categoria", "tipo", "grupo de produto"]));
   const p = norm(pick(row, ["produto", "servico", "serviço", "item", "descricao"]));
   const t = `${g} ${p}`;
+  if (/plant/.test(t)) return "Plantao";
   if (/intern/.test(t)) return "Internamento";
   if (/consult|retorno/.test(t)) return "Consultas";
   if (/exam/.test(t)) return "Exames";

@@ -10,12 +10,15 @@ import { Table } from "@phosphor-icons/react/Table";
 import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
 import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
+import { CaretUp } from "@phosphor-icons/react/CaretUp";
+import { CaretDown } from "@phosphor-icons/react/CaretDown";
+import { Minus } from "@phosphor-icons/react/Minus";
 import { List } from "@phosphor-icons/react/List";
 import { X } from "@phosphor-icons/react/X";
 import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
 import { DailyBars, Donut, Hourly, LineChart, Radar, MultiLine, SparkBars, Treemap, VolumeTicket } from "./charts";
-import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR } from "./data";
+import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR, recuarMeses, recuarDias } from "./data";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
@@ -25,6 +28,48 @@ import * as Supa from "./supa.js";
 const { apiFetch, getSupa, iniciarSupa } = Supa;
 import "sileo/styles.css";
 import { Badge } from "./components/ui/badge.jsx";
+
+const GRUPO_FILTROS = [
+  ["", "Todos"],
+  ["Internamento", "Internamento"],
+  ["Consultas", "Consultas"],
+  ["Plantao", "Plantão"],
+  ["Cirurgias", "Cirurgias"],
+  ["Vacinas", "Vacinas"],
+  ["Exames", "Exames"],
+  ["Farmacia", "Farmácia"],
+];
+
+function grupoLabel(nome) {
+  return ({ Plantao: "Plantão", Farmacia: "Farmácia" })[nome] || nome;
+}
+
+function Delta({ vs, className = "" }) {
+  if (vs == null) {
+    return (
+      <em className={`delta delta-na ${className}`} title="Sem o mesmo recorte anterior para comparar">
+        <Minus size={12} />
+        sem base
+      </em>
+    );
+  }
+  if (vs === 0) {
+    return (
+      <em className={`delta ${className}`}>
+        <Minus size={12} />
+        igual
+      </em>
+    );
+  }
+  const caiu = vs < 0;
+  const Icon = caiu ? CaretDown : CaretUp;
+  return (
+    <em className={`delta ${caiu ? "delta-down" : "delta-up"} ${className}`} title={caiu ? "Caiu contra o período anterior" : "Subiu contra o período anterior"}>
+      <Icon size={12} weight="fill" />
+      {caiu ? "caiu" : "subiu"} {Math.abs(vs)}%
+    </em>
+  );
+}
 
 const NAV = [
   { id: "vendas", label: "Vendas", icon: ChartBar },
@@ -65,7 +110,7 @@ function Vendas({ u, year, porMes }) {
      mensal em vez de mostrar "abra um mes" e nao mostrar nada. */
   const mesesComoDias = (u.monthlyFat || []).map((fat, i) => ({ d: i + 1, fat: Math.round(fat || 0) }));
   const fatSeries = u.monthlyFat.map((n) => n || 0);
-  const groupsDonut = u.grupos.map((g) => ({ nome: g.nome, value: g.valor, hint: brl(g.valor) }));
+  const groupsDonut = u.grupos.map((g) => ({ nome: grupoLabel(g.nome), value: g.valor, hint: brl(g.valor) }));
   /* media vem null quando o recorte nao tem um ano de referencia (periodo
      livre, semana). Comparar contra null daria sempre falso e a tela
      diria "nenhum grupo abaixo da media", o que nao e verdade — e que
@@ -217,7 +262,7 @@ function Vendas({ u, year, porMes }) {
           <div className="bars">
             {u.grupos.map((g) => (
               <div key={g.nome} className={g.media != null && g.valor < g.media ? "row warn" : "row"}>
-                <span>{g.nome}</span>
+                <span>{grupoLabel(g.nome)}</span>
                 <div className="track">
                   <i style={{ width: `${Math.min(100, (g.valor / maxG) * 100)}%` }} />
                 </div>
@@ -244,7 +289,7 @@ function Vendas({ u, year, porMes }) {
             <ul className="alerts">
               {alerts.map((g) => (
                 <li key={g.nome}>
-                  {g.nome} abaixo da media ({brl(g.valor)} vs {brl(g.media)})
+                  {grupoLabel(g.nome)} abaixo da media ({brl(g.valor)} vs {brl(g.media)})
                 </li>
               ))}
             </ul>
@@ -304,7 +349,7 @@ function Ritmo({ u, hoje, onOpen }) {
   return (
     <div className="bento">
       <Kpi label="Consultas hoje" value={num(r.consultas)} hint={r.diaLabel || "Dia atual"} />
-      <Kpi label="Emergencias hoje" value={num(r.emergencia)} />
+      <Kpi label="Plantão hoje" value={num(r.plantao || 0)} hint="Consulta de plantão, fora da consulta comum" />
       <Kpi label="Internacoes hoje" value={num(r.internacao)} />
       <Kpi label="Exames hoje" value={num(r.examesQtd)} />
       {/* So estes dois tem registro por tras no recorte do dia: a lista de
@@ -342,7 +387,7 @@ function Ritmo({ u, hoje, onOpen }) {
                     itens: [...r.grupos]
                       .filter((g) => g.valor)
                       .sort((a, b) => b.valor - a.valor)
-                      .map((g) => ({ chave: g.nome, nome: g.nome, nota: "grupo", valor: brl(g.valor) })),
+                      .map((g) => ({ chave: g.nome, nome: grupoLabel(g.nome), nota: "grupo", valor: brl(g.valor) })),
                   },
                 })
             : undefined
@@ -690,41 +735,74 @@ function Recorrencia({ u, status, onOpen }) {
 }
 
 function Vacinas({ u, onOpen }) {
+  const [tipo, setTipo] = useState("");
   const top = u.vacinasTop || u.vacinas || [];
-  const total = top.reduce((a, v) => a + (v.n || v.aplicada || v.total || 0), 0);
+  const tipos = u.vacinasTipo || [];
+  const filtrado = tipo ? top.filter((v) => v.tipo === tipo || (!v.tipo && tipo === "Outras")) : top;
+  const total = filtrado.reduce((a, v) => a + (v.n || v.aplicada || v.total || 0), 0);
+  const totalGeral = top.reduce((a, v) => a + (v.n || v.aplicada || v.total || 0), 0);
+  const vsRotulo = u.vsPrev?.rotulo || "o período anterior do mesmo tamanho";
   return (
     <div className="bento">
       <Kpi
         label="Doses no recorte"
-        value={num(total)}
+        value={num(totalGeral)}
         hint="So o que saiu na venda (nao o estoque)"
         onOpen={() =>
           onOpen({
             type: "lista",
             payload: {
               titulo: "Doses por vacina",
-              resumo: `${num(total)} doses no recorte, somando ${top.length} tipos.`,
+              resumo: `${num(totalGeral)} doses no recorte, somando ${top.length} tipos.`,
               itens: [...top]
                 .sort((a, b) => (b.n || b.aplicada || 0) - (a.n || a.aplicada || 0))
                 .map((v) => ({
                   chave: v.nome,
                   nome: v.nome,
-                  nota: `${num(v.n || v.aplicada || 0)} doses`,
-                  valor: `${Math.round(((v.n || v.aplicada || 0) / (total || 1)) * 100)}%`,
+                  nota: `${num(v.n || v.aplicada || 0)} doses · ${v.tipo || ""}`,
+                  valor: `${Math.round(((v.n || v.aplicada || 0) / (totalGeral || 1)) * 100)}%`,
                   abrir: { type: "vacina", payload: v },
                 })),
             },
           })
         }
       />
-      <Kpi label="Tipos" value={num(top.length)} />
+      <Kpi label="Tipos" value={num(tipos.length || top.length)} hint={`vs ${vsRotulo}`} />
+      <section className="card span-12">
+        <header>
+          <h2>Por tipo · subiu ou caiu</h2>
+          <p>Comparado com {vsRotulo}. Clique no tipo para filtrar o ranking.</p>
+        </header>
+        {tipos.length ? (
+          <div className="vacina-tipos">
+            <button type="button" className={!tipo ? "on" : ""} onClick={() => setTipo("")}>
+              <span>Todos</span>
+              <b>{num(totalGeral)}</b>
+            </button>
+            {tipos.map((t) => (
+              <button
+                key={t.nome}
+                type="button"
+                className={tipo === t.nome ? "on" : ""}
+                onClick={() => setTipo(tipo === t.nome ? "" : t.nome)}
+              >
+                <span>{t.nome}</span>
+                <b>{num(t.n)}</b>
+                <Delta vs={t.vs} />
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="hint">Nenhuma vacina neste recorte. Troque o período ou tire o filtro de grupo.</p>
+        )}
+      </section>
       <section className="card span-5">
         <header>
           <h2>Vacinas mais usadas</h2>
-          <p>O BI antigo nao ranqueava por produto. Clique para filtrar.</p>
+          <p>{tipo ? `Só ${tipo}.` : "O BI antigo não ranqueava por produto."}</p>
         </header>
         <Donut
-          slices={top.slice(0, 6).map((v) => ({ nome: v.nome, value: v.n || v.total || 0, hint: num(v.n || v.total || 0) }))}
+          slices={filtrado.slice(0, 6).map((v) => ({ nome: v.nome, value: v.n || v.total || 0, hint: num(v.n || v.total || 0) }))}
           totalLabel="Doses"
           totalValue={num(total)}
         />
@@ -740,14 +818,21 @@ function Vacinas({ u, onOpen }) {
                 <th>#</th>
                 <th>Vacina</th>
                 <th>Doses</th>
+                <th>vs anterior</th>
               </tr>
             </thead>
             <tbody>
-              {top.map((v, i) => (
+              {filtrado.map((v, i) => (
                 <tr key={v.nome} className="click" onClick={() => onOpen({ type: "vacina", payload: v })}>
                   <td>{i + 1}</td>
-                  <td>{v.nome}</td>
+                  <td>
+                    {v.nome}
+                    {v.tipo ? <small className="vacina-tipo">{v.tipo}</small> : null}
+                  </td>
                   <td>{v.n || v.total}</td>
+                  <td>
+                    <Delta vs={v.vs} />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1160,6 +1245,7 @@ function Painel({ perfil, aoSair }) {
      clique ja mostrar algo em vez de dois campos vazios. */
   const [de, setDe] = useState(() => isoBR(new Date(hoje.getFullYear(), hoje.getMonth(), 1)));
   const [ate, setAte] = useState(() => isoBR(hoje));
+  const [grupo, setGrupo] = useState("");
   const [live, setLive] = useState(null);
   const [detail, setDetail] = useState(null);
   const [menu, setMenu] = useState(false);
@@ -1184,7 +1270,7 @@ function Painel({ perfil, aoSair }) {
   const demo = useMemo(() => getView(unit, year, month), [unit, year, month]);
   const recorte =
     periodo === "hoje" ? live?.hoje : periodo === "semana" ? live?.semana : live?.view;
-  const noIntervalo = periodo === "intervalo";
+  const noIntervalo = periodo === "intervalo" || periodo === "3m";
   const u = recorte ? { ...demo, ...recorte } : demo;
   const yearsOn = [...new Set([...(live?.years || []), ...(u.compareYears || []).filter((c) => c.qtd || c.fat).map((c) => c.ano), year])].filter(Boolean).sort((a, b) => a - b);
   const label =
@@ -1192,9 +1278,12 @@ function Painel({ perfil, aoSair }) {
       ? `Hoje · ${u.diaLabel || ""}`
       : periodo === "semana"
         ? `Semana · ${u.diaLabel || ""}${u.dias ? ` · ${u.dias} dia(s)` : ""}`
-        : noIntervalo
-          ? `${u.diaLabel || "escolha as datas"}${u.dias ? ` · ${u.dias} dia(s)` : ""}`
-          : periodLabel(year, month);
+        : periodo === "3m"
+          ? `3 meses · ${u.diaLabel || ""}${u.dias ? ` · ${u.dias} dia(s)` : ""}`
+          : noIntervalo
+            ? `${u.diaLabel || "escolha as datas"}${u.dias ? ` · ${u.dias} dia(s)` : ""}`
+            : periodLabel(year, month);
+  const labelComGrupo = grupo ? `${label} · ${grupoLabel(grupo)}` : label;
   const fonte = live?.ok
     ? `SimplesVet ${live.rows} vendas · ${new Date(live.at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}`
     : "Aguardando robô";
@@ -1240,7 +1329,7 @@ function Painel({ perfil, aoSair }) {
 
   useEffect(() => {
     let vivo = true;
-    const chave = noIntervalo ? `${unit}|${de}|${ate}` : `${unit}|${year}|${month}`;
+    const chave = noIntervalo ? `${unit}|${de}|${ate}|${grupo}` : `${unit}|${year}|${month}|${grupo}`;
     const guardado = cache.current.get(chave);
     if (guardado) setLive(guardado);
     /* Sem nada guardado, seguimos mostrando o recorte anterior marcado como
@@ -1249,8 +1338,8 @@ function Painel({ perfil, aoSair }) {
     setCarregando(!guardado);
 
     const q = noIntervalo
-      ? `${api}/api/snapshot?unit=${unit}&de=${de}&ate=${ate}`
-      : `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}`;
+      ? `${api}/api/snapshot?unit=${unit}&de=${de}&ate=${ate}${grupo ? `&grupo=${encodeURIComponent(grupo)}` : ""}`
+      : `${api}/api/snapshot?unit=${unit}&year=${year}&month=${month}${grupo ? `&grupo=${encodeURIComponent(grupo)}` : ""}`;
     apiFetch(q)
       .then((r) => r.json())
       .then((j) => (j.ok ? j : { ok: false }))
@@ -1279,7 +1368,7 @@ function Painel({ perfil, aoSair }) {
     return () => {
       vivo = false;
     };
-  }, [api, unit, year, month, tentativa, noIntervalo, de, ate]);
+  }, [api, unit, year, month, tentativa, noIntervalo, de, ate, grupo]);
 
   return (
     <div className={`app ${menu ? "menu-open" : ""}`}>
@@ -1333,6 +1422,7 @@ function Painel({ perfil, aoSair }) {
               ["hoje", "Hoje"],
               ["semana", "Semana"],
               ["mes", "Mês"],
+              ["3m", "3 meses"],
               ["ano", "Ano"],
               ["intervalo", "Período"],
             ].map(([id, rotulo]) => (
@@ -1348,6 +1438,10 @@ function Painel({ perfil, aoSair }) {
                     setMonth(hoje.getMonth());
                   }
                   if (id === "ano") setMonth("all");
+                  if (id === "3m") {
+                    setDe(recuarMeses(hoje, 3));
+                    setAte(isoBR(hoje));
+                  }
                 }}
               >
                 {rotulo}
@@ -1359,9 +1453,41 @@ function Painel({ perfil, aoSair }) {
               ficava sem como sair. */}
           <div className="intervalo" hidden={page === "admin" || !noIntervalo}>
             <CalendarBlank size={16} />
-            <input type="date" value={de} max={ate} onChange={(e) => setDe(e.target.value)} aria-label="Data inicial" />
+            <input
+              type="date"
+              value={de}
+              max={ate}
+              onChange={(e) => {
+                setDe(e.target.value);
+                if (periodo === "3m") setPeriodo("intervalo");
+              }}
+              aria-label="Data inicial"
+            />
             <span className="intervalo-ate">até</span>
-            <input type="date" value={ate} min={de} max={isoBR(hoje)} onChange={(e) => setAte(e.target.value)} aria-label="Data final" />
+            <input
+              type="date"
+              value={ate}
+              min={de}
+              max={isoBR(hoje)}
+              onChange={(e) => {
+                setAte(e.target.value);
+                if (periodo === "3m") setPeriodo("intervalo");
+              }}
+              aria-label="Data final"
+            />
+            <div className="intervalo-presets" role="group" aria-label="Atalhos de período">
+              {[
+                ["7d", () => { setDe(recuarDias(hoje, 6)); setAte(isoBR(hoje)); setPeriodo("intervalo"); }],
+                ["30d", () => { setDe(recuarDias(hoje, 29)); setAte(isoBR(hoje)); setPeriodo("intervalo"); }],
+                ["3m", () => { setDe(recuarMeses(hoje, 3)); setAte(isoBR(hoje)); setPeriodo("3m"); }],
+                ["6m", () => { setDe(recuarMeses(hoje, 6)); setAte(isoBR(hoje)); setPeriodo("intervalo"); }],
+                ["12m", () => { setDe(recuarMeses(hoje, 12)); setAte(isoBR(hoje)); setPeriodo("intervalo"); }],
+              ].map(([id, fn]) => (
+                <button key={id} type="button" className={periodo === "3m" && id === "3m" ? "on" : ""} onClick={fn}>
+                  {id}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="period" hidden={page === "admin" || noIntervalo || periodo === "hoje" || periodo === "semana"}>
             <CalendarBlank size={16} />
@@ -1410,6 +1536,21 @@ function Painel({ perfil, aoSair }) {
           </div>
         </header>
 
+        <div className="grupos-filtro" role="tablist" aria-label="Grupo" hidden={page === "admin"}>
+          {GRUPO_FILTROS.map(([id, rotulo]) => (
+            <button
+              key={id || "todos"}
+              type="button"
+              role="tab"
+              aria-selected={grupo === id}
+              className={grupo === id ? "on" : ""}
+              onClick={() => setGrupo(id)}
+            >
+              {rotulo}
+            </button>
+          ))}
+        </div>
+
         <div className="crumb">
           <h1>{page === "admin" ? (perfil.admin ? "Admin" : "Minha conta") : NAV.find((n) => n.id === page)?.label}</h1>
           <div className="crumb-meta">
@@ -1423,7 +1564,7 @@ function Painel({ perfil, aoSair }) {
             ) : (
               <>
                 <span>
-                  {u.casa} · {label}
+                  {u.casa} · {labelComGrupo}
                 </span>
                 <Badge variant={live?.ok ? "default" : "outline"} className={live?.ok ? "pill-live border-0" : "pill-wait"}>
                   {fonte}
@@ -1441,7 +1582,7 @@ function Painel({ perfil, aoSair }) {
         {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} year={year} />}
-        {page === "tv" && <Tv u={u} label={label} fotos={live?.fotos} live={live} />}
+        {page === "tv" && <Tv u={u} label={labelComGrupo} fotos={live?.fotos} live={live} />}
         {page === "admin" ? <Admin perfil={perfil} /> : null}
       </div>
       <nav className="dock" aria-label="Atalhos">
