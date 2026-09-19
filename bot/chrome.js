@@ -57,3 +57,21 @@ export function opcoesChrome(extra = {}) {
     ...extra,
   };
 }
+
+/* O SimplesVet as vezes nao entrega o HTML em 60s (padrao do Playwright).
+   Tres tentativas com 2 min cada: a pagina de login e o primeiro passo
+   de tudo, e um timeout ali abortava o ciclo inteiro com dado velho. */
+export async function gotoResiliente(page, url, tentativas = 3) {
+  let ultimo;
+  for (let i = 0; i < tentativas; i++) {
+    try {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120000 });
+      return;
+    } catch (err) {
+      ultimo = err;
+      console.warn("goto", url, `tentativa ${i + 1}/${tentativas}`, String(err?.message || err).slice(0, 180));
+      await page.waitForTimeout(2000 * (i + 1)).catch(() => {});
+    }
+  }
+  throw ultimo;
+}

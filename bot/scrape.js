@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { findChrome } from "./chrome.js";
+import { findChrome, gotoResiliente } from "./chrome.js";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
 
@@ -139,7 +139,7 @@ function moneyBR(s) {
 }
 
 async function logout(page) {
-  await page.goto("https://app.simples.vet/login/logout.php", { waitUntil: "domcontentloaded" }).catch(() => {});
+  await gotoResiliente(page, "https://app.simples.vet/login/logout.php").catch(() => {});
   await page.waitForTimeout(800);
 }
 
@@ -153,11 +153,11 @@ async function submitLoginForm(page) {
 }
 
 async function login(page, ambId = "") {
-  await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+  await gotoResiliente(page, LOGIN_URL);
   if (await page.locator("text=Painel de controle").count()) {
     if (!ambId) return;
     await logout(page);
-    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+    await gotoResiliente(page, LOGIN_URL);
   }
   await submitLoginForm(page);
   const cards = page.locator("#ambientes .celx");
@@ -175,10 +175,10 @@ async function login(page, ambId = "") {
 }
 
 async function listPerfisLogin(page) {
-  await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+  await gotoResiliente(page, LOGIN_URL);
   if (await page.locator("text=Painel de controle").count()) {
     await logout(page);
-    await page.goto(LOGIN_URL, { waitUntil: "domcontentloaded" });
+    await gotoResiliente(page, LOGIN_URL);
   }
   await submitLoginForm(page);
   await page.locator("#ambientes .celx").first().waitFor({ timeout: 15000 }).catch(() => {});
@@ -476,7 +476,8 @@ export async function scrape({ from, to } = {}) {
     timezoneId: TZ,
   });
   const page = await context.newPage();
-  page.setDefaultTimeout(60000);
+  page.setDefaultTimeout(90000);
+  page.setDefaultNavigationTimeout(120000);
 
   try {
     const perfis = await listPerfisLogin(page);
@@ -605,14 +606,22 @@ export async function scrape({ from, to } = {}) {
       JSON.stringify({ consolidado: caixaTodos, filial: caixaFilial }, null, 2)
     );
     const anos = [...new Set(objects.map((r) => yearOfRow(r)).filter(Boolean))].sort();
+    const temVendaFilial = objects.some((r) => r._sede === "filial");
+    const temCaixaFilial = Boolean(caixaByUnit.filial && caixaByUnit.filial.receitaTotal > 0);
     const espelho = {
+      at: agoraBrasiliaIso(),
+      rows: objects.length,
       perfis: sedes.map((s) => s.unit + ":" + s.nome),
       anos,
       historico: hist,
-      filialOk: Boolean(caixaByUnit.filial && caixaByUnit.filial.receitaTotal > 0),
+      /* Venda da filial ja prova que o perfil 2 entrou. Exigir so o
+         cartao de recebimento fazia o aviso ficar falso com a Filial
+         cheia de venda e o cartao falhando um ciclo. */
+      filialOk: temVendaFilial || temCaixaFilial || sedes.some((s) => s.unit === "filial"),
     };
     await writeFile(join(DATA_DIR, "espelho.json"), JSON.stringify(espelho, null, 2));
     return {
+      at: espelho.at,
       rows: objects.length,
       from: histFrom,
       to: histTo,

@@ -10,23 +10,29 @@
    do painel, que conta o que entrou. Misturar os dois regimes na mesma
    tela daria numeros que nao conversam. */
 import { chromium } from "playwright";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { opcoesChrome } from "./chrome.js";
+import { gotoResiliente, opcoesChrome } from "./chrome.js";
 
-const env = Object.fromEntries(
-  readFileSync(new URL("../.env", import.meta.url), "utf8")
-    .split("\n")
-    .filter((l) => l.includes("=") && !l.trim().startsWith("#"))
-    .map((l) => {
-      const i = l.indexOf("=");
-      return [l.slice(0, i).trim(), l.slice(i + 1).trim()];
-    })
-);
+/* No container as senhas vem das variaveis do EasyPanel, nao de um
+   arquivo .env. Exigir o arquivo derrubava o DRE em producao com ENOENT
+   mesmo com SIMPLES_VET_EMAIL ja definido no servico. */
+const envPath = fileURLToPath(new URL("../.env", import.meta.url));
+if (existsSync(envPath)) {
+  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+    if (!line.includes("=") || line.trim().startsWith("#")) continue;
+    const i = line.indexOf("=");
+    const k = line.slice(0, i).trim();
+    const v = line.slice(i + 1).trim();
+    if (!process.env[k]) process.env[k] = v;
+  }
+}
 
-const LOGIN = env.SIMPLES_VET_LOGIN_URL || "https://app.simples.vet/login/login.php";
+const LOGIN = process.env.SIMPLES_VET_LOGIN_URL || "https://app.simples.vet/login/login.php";
+const EMAIL = process.env.SIMPLES_VET_EMAIL;
+const PASSWORD = process.env.SIMPLES_VET_PASSWORD;
 const DEMO = "https://app.simples.vet/financeiro/demonstrativo/demonstrativo.php";
 const ANO = Number(process.argv[2]) || new Date().getFullYear();
 
@@ -47,9 +53,10 @@ function moneyBR(s) {
 }
 
 async function entrar(page, ambId) {
-  await page.goto(LOGIN, { waitUntil: "domcontentloaded" });
-  await page.locator('input[type="email"], input[placeholder="Email"]').first().fill(env.SIMPLES_VET_EMAIL);
-  await page.locator('input[type="password"]').first().fill(env.SIMPLES_VET_PASSWORD);
+  if (!EMAIL || !PASSWORD) throw new Error("SIMPLES_VET_EMAIL/PASSWORD ausentes");
+  await gotoResiliente(page, LOGIN);
+  await page.locator('input[type="email"], input[placeholder="Email"]').first().fill(EMAIL);
+  await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.getByRole("button", { name: /Entrar no SimplesVet/i }).click();
   const cartoes = page.locator("#ambientes .celx");
   await page.waitForTimeout(1200);
@@ -68,7 +75,7 @@ async function entrar(page, ambId) {
 }
 
 async function lerDemonstrativo(page, ano) {
-  await page.goto(DEMO, { waitUntil: "domcontentloaded" });
+  await gotoResiliente(page, DEMO);
   await page.waitForSelector("#p__lan_var_inicio", { timeout: 30000 });
   /* Os filtros sao Select2 sobre jQuery: mudar o .value no DOM nao
      avisa o widget nem preenche o campo _text que vai junto no POST.
@@ -149,7 +156,7 @@ async function coletar(browser, ano, dataDir) {
   for (const amb of ambientes.length ? ambientes : [{ id: "", nome: "Animal Center" }]) {
     const unit = unitDoNome(amb.nome);
     if (amb.id && ambientes.length > 1) {
-      await page.goto("https://app.simples.vet/login/logout.php", { waitUntil: "domcontentloaded" });
+      await gotoResiliente(page, "https://app.simples.vet/login/logout.php");
       await entrar(page, amb.id);
     }
     const dados = await lerDemonstrativo(page, ano);

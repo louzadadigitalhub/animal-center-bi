@@ -62,31 +62,83 @@ app.use(express.json({ limit: "32kb" }));
 const bootedAt = new Date().toISOString();
 let lastError = null;
 let running = false;
+/* Espelho e um JSON pequeno (perfis, anos, filialOk). Health lia o
+   snapshot inteiro (~dezenas de MB) e travava 25s no meio do scrape. */
+let estado = { at: null, rows: 0, anos: [], filialOk: false, historico: {}, perfis: [] };
+
+async function lerEspelho() {
+  try {
+    const e = JSON.parse(await readFile(join(DATA_DIR, "espelho.json"), "utf8"));
+    estado = {
+      at: e.at || estado.at,
+      rows: Number(e.rows || estado.rows) || 0,
+      anos: e.anos || estado.anos,
+      filialOk: Boolean(
+        e.filialOk || (e.perfis || []).some((p) => String(p).startsWith("filial:"))
+      ),
+      historico: e.historico || estado.historico,
+      perfis: e.perfis || estado.perfis,
+    };
+  } catch {
+    /* ainda sem historico */
+  }
+}
+
+async function peekSnapshot() {
+  let f;
+  try {
+    const { open } = await import("node:fs/promises");
+    f = await open(join(DATA_DIR, "snapshot.json"));
+    const buf = Buffer.alloc(1500);
+    const { bytesRead } = await f.read(buf, 0, 1500, 0);
+    const t = buf.toString("utf8", 0, bytesRead);
+    return {
+      at: t.match(/"at":"([^"]+)"/)?.[1] || "",
+      rows: Number(t.match(/"rows":(\d+)/)?.[1] || 0),
+    };
+  } catch {
+    return { at: "", rows: 0 };
+  } finally {
+    await f?.close().catch(() => {});
+  }
+}
+
+async function metaSnapshot() {
+  const p = await peekSnapshot();
+  if (p.at && !estado.at) estado.at = p.at;
+  if (p.rows && !estado.rows) estado.rows = p.rows;
+}
+
+lerEspelho().then(() => metaSnapshot()).catch(() => {});
 
 let hojeCache = { at: "", snap: null };
 
 async function loadSnapshot() {
   try {
+    const peek = await peekSnapshot();
+    if (peek.at && hojeCache.at === peek.at && hojeCache.snap) return hojeCache.snap;
     const raw = await readFile(join(DATA_DIR, "snapshot.json"), "utf8");
     const snap = JSON.parse(raw);
     const filialVazia = !snap?.snapshot?.views?.filial;
-    if (snap?.snapshot?.hoje && !filialVazia) {
-      const temFilial = Object.values(snap.snapshot.views.filial || {}).some((ano) =>
+    const temFilial =
+      !filialVazia &&
+      Object.values(snap.snapshot.views.filial || {}).some((ano) =>
         Object.values(ano || {}).some((v) => (v?.qtd || 0) > 0)
       );
-      if (temFilial) return snap;
+    if (snap?.snapshot?.hoje && temFilial) {
+      hojeCache = { at: snap.at, snap };
+      return snap;
     }
-    if (hojeCache.at === snap.at && hojeCache.snap) return hojeCache.snap;
     try {
       const rows = JSON.parse(await readFile(join(DATA_DIR, "vendas.json"), "utf8"));
       const agg = aggregate(rows);
       snap.snapshot.views = agg.views;
       snap.snapshot.hoje = agg.hoje;
       snap.snapshot.years = agg.years || snap.snapshot.years;
-      hojeCache = { at: snap.at, snap };
     } catch {
       /* sem vendas.json ainda */
     }
+    hojeCache = { at: snap.at, snap };
     return snap;
   } catch {
     return null;
@@ -166,6 +218,16 @@ async function tick() {
     const { scrape } = await import("./scrape.js");
     const r = await scrape();
     lastError = null;
+    estado = {
+      at: r.at || estado.at,
+      rows: r.rows || estado.rows,
+      anos: r.anos || estado.anos,
+      filialOk: Boolean(r.filialOk || r.filial),
+      historico: estado.historico,
+      perfis: estado.perfis,
+    };
+    hojeCache = { at: "", snap: null };
+    await lerEspelho().catch(() => {});
     console.log(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape ok", r);
     /* Gente nova aparece aqui, no ciclo, e nao quando alguem abre a tela
        de login. Este sync relê e reprocessa o historico inteiro. */
@@ -174,9 +236,11 @@ async function tick() {
     lastError = String(err && err.stack ? err.stack : err);
     console.error(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape fail", lastError);
   } finally {
-    /* Fora do try do scrape: o demonstrativo nao depende das vendas, e
-       antes um scrape que falhava levava junto a coleta de custo. */
-    await coletarDre().catch(() => {});
+    /* Fora do try do scrape: o demonstrativo nao depende das vendas.
+       Se o login do SimplesVet caiu, o DRE usa a mesma porta e so
+       duplicaria o erro. */
+    const loginMorto = lastError && /login\.php|Timeout \d+ms exceeded|net::ERR|SIMPLES_VET_EMAIL/i.test(lastError);
+    if (!loginMorto) await coletarDre().catch(() => {});
     running = false;
   }
 }
@@ -206,24 +270,18 @@ app.get("/api/version", (_req, res) => {
   });
 });
 
-app.get("/api/health", async (_req, res) => {
-  const snap = await loadSnapshot();
-  let espelho = null;
-  try {
-    espelho = JSON.parse(await readFile(join(DATA_DIR, "espelho.json"), "utf8"));
-  } catch {
-    /* ainda sem historico */
-  }
+app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
     running,
     lastError,
-    at: snap?.at || null,
-    rows: snap?.rows || 0,
-    anos: snap?.snapshot?.years || espelho?.anos || [],
-    filialOk: Boolean(espelho?.filialOk || snap?.caixa?.filial?.receitaTotal),
+    at: estado.at,
+    rows: estado.rows,
+    anos: estado.anos,
+    filialOk: estado.filialOk,
     dre: dreStatus,
-    historico: espelho?.historico || {},
+    historico: estado.historico,
+    perfis: estado.perfis,
   });
 });
 
