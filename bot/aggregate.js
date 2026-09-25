@@ -23,17 +23,59 @@ function norm(s) {
     .trim();
 }
 
-function pick(row, keys) {
-  const entries = Object.entries(row);
-  for (const want of keys) {
+/* Qual coluna da planilha atende a um nome pedido. So depende dos nomes
+   das colunas, nao dos valores, e os nomes sao os mesmos em todas as
+   linhas — entao se resolve uma vez por combinacao e se guarda.
+
+   Antes, cada chamada de pick() normalizava de novo o nome de todas as
+   colunas (toLowerCase + NFD + regex). Sao 20 chamadas por linha e 29
+   colunas: na ordem de 100 milhoes de normalizacoes para 100 mil vendas,
+   so para descobrir de novo, a cada linha, qual coluna e qual. Na VPS de
+   producao isso passou de 5 minutos. A regra de casamento e a mesma de
+   antes; so deixou de ser recalculada. */
+const colunasCache = new Map();
+let ultimaLinha = null;
+let ultimaAssinatura = "";
+
+function colunasPara(row, keys) {
+  /* Pelo conteudo, nao pelo array: as chamadas passam a lista como
+     literal, e o JS cria um array novo a cada chamada — como chave, o
+     cache nunca acertaria e cresceria sem parar. */
+  const pedido = keys.join("\u0002");
+  let porAssinatura = colunasCache.get(pedido);
+  if (!porAssinatura) colunasCache.set(pedido, (porAssinatura = new Map()));
+  /* A assinatura e a lista de colunas da linha: planilhas diferentes (as
+     duas unidades, anos diferentes) podem ter colunas diferentes. */
+  /* As ~20 chamadas de pick() de uma linha vem em sequencia: a
+     assinatura da ultima linha vista poupa juntar os nomes 20 vezes. */
+  if (row !== ultimaLinha) {
+    ultimaLinha = row;
+    ultimaAssinatura = Object.keys(row).join("\u0001");
+  }
+  const assinatura = ultimaAssinatura;
+  let cols = porAssinatura.get(assinatura);
+  if (cols) return cols;
+  const nomes = Object.keys(row);
+  const normais = nomes.map((k) => [k, norm(k)]);
+  cols = keys.map((want) => {
     const w = norm(want);
-    const hit = entries.find(([k]) => {
-      const nk = norm(k);
+    const hit = normais.find(([, nk]) => {
       if (nk === w || nk.includes(w)) return true;
       if (w.includes(" ")) return false;
       return w.length >= 5 && nk.includes(w.slice(0, 5));
     });
-    if (hit && String(hit[1]).trim()) return String(hit[1]).trim();
+    return hit ? hit[0] : null;
+  });
+  porAssinatura.set(assinatura, cols);
+  return cols;
+}
+
+function pick(row, keys) {
+  const cols = colunasPara(row, keys);
+  for (const k of cols) {
+    if (k === null) continue;
+    const v = String(row[k]).trim();
+    if (v) return v;
   }
   return "";
 }
