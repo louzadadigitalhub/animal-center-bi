@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { findChrome, gotoResiliente, estaDentro, esperarPainel } from "./chrome.js";
+import { findChrome, gotoResiliente, estaDentro, escolherAmbiente, esperarAmbientesOuPainel } from "./chrome.js";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
 
@@ -160,18 +160,7 @@ async function login(page, ambId = "") {
     await gotoResiliente(page, LOGIN_URL);
   }
   await submitLoginForm(page);
-  const cards = page.locator("#ambientes .celx");
-  await page.waitForTimeout(500);
-  if (await cards.count()) {
-    if (ambId) {
-      const alvo = page.locator(`#ambientes .celx[data-id="${ambId}"]`);
-      if (await alvo.count()) await alvo.click();
-      else await cards.first().click();
-    } else {
-      await cards.first().click();
-    }
-  }
-  await esperarPainel(page);
+  await escolherAmbiente(page, ambId);
 }
 
 async function listPerfisLogin(page) {
@@ -181,7 +170,9 @@ async function listPerfisLogin(page) {
     await gotoResiliente(page, LOGIN_URL);
   }
   await submitLoginForm(page);
-  await page.locator("#ambientes .celx").first().waitFor({ timeout: 15000 }).catch(() => {});
+  /* Era 15s. Sem a lista, o scrape cai no padrao "so matriz" e a filial
+     some da coleta — na VPS de producao 15s nao bastam. */
+  await esperarAmbientesOuPainel(page);
   return page.evaluate(() =>
     [...document.querySelectorAll("#ambientes .celx")].map((el) => ({
       id: el.getAttribute("data-id") || "",
@@ -193,10 +184,10 @@ async function listPerfisLogin(page) {
 const FILIAL_USER_ID = process.env.SIMPLES_VET_FILIAL_USER_ID || "306237";
 
 async function scrapeRecebimentos(page, from, to, userId = "") {
-  await page.goto("https://app.simples.vet/consulta/recebimento/recebimento.php", {
-    waitUntil: "domcontentloaded",
-  });
-  await page.waitForSelector("#p__vba_dat_baixa_text", { timeout: 30000 });
+  /* Prazos da VPS de producao, onde uma pagina do SimplesVet passa de um
+     minuto: com 30s a receita da filial vinha null com a coleta certa. */
+  await gotoResiliente(page, "https://app.simples.vet/consulta/recebimento/recebimento.php");
+  await page.waitForSelector("#p__vba_dat_baixa_text", { timeout: 120000 });
   await page.evaluate(
     ({ from, to, userId }) => {
       const hidden = document.getElementById("p__vba_dat_baixa");
@@ -215,7 +206,7 @@ async function scrapeRecebimentos(page, from, to, userId = "") {
     page.waitForLoadState("domcontentloaded"),
     page.locator("#p__btn_filtrar").click(),
   ]);
-  await page.waitForSelector(".dashboard-stat .number", { timeout: 30000 });
+  await page.waitForSelector(".dashboard-stat .number", { timeout: 120000 });
   await page.waitForTimeout(1200);
 
   const extracted = await page.evaluate(() => {
@@ -318,7 +309,15 @@ function applyRecebimentos(snapshot, caixa, from, unit) {
     }
   }
   snapshot.caixaOficial = snapshot.caixaOficial || {};
-  snapshot.caixaOficial[unit] = { ...pack, url: caixa.url, at: agoraBrasiliaIso(), period: caixa.period };
+  /* A serie diaria oficial vai junto: o grafico "Entrada" do painel e por
+     data da baixa, e o painel le so este resumo, nao as visoes inteiras. */
+  snapshot.caixaOficial[unit] = {
+    ...pack,
+    dailyFat: dailyFat.some((d) => d.fat) ? dailyFat : null,
+    url: caixa.url,
+    at: agoraBrasiliaIso(),
+    period: caixa.period,
+  };
   return snapshot;
 }
 
@@ -583,25 +582,32 @@ export async function scrape({ from, to } = {}) {
     } catch (err) {
       console.warn("historico pessoas falhou", err);
     }
+    /* Cabeca e caixa calculados uma vez: o snapshot e o resumo dele
+       precisam do mesmo "at". */
+    const cabeca = { ok: true, at: agoraBrasiliaIso(), from: histFrom, to: histTo, rows: objects.length };
+    const caixaResumo = {
+      consolidado: caixaTodos ? caixaPack(caixaTodos) : null,
+      filial: caixaFilial ? caixaPack(caixaFilial) : null,
+      matriz: snapshot.caixaOficial?.matriz || null,
+    };
+    await writeFile(join(DATA_DIR, "snapshot.json"), JSON.stringify({ ...cabeca, snapshot, caixa: caixaResumo }, null, 0));
+    /* Resumo pequeno do snapshot, para o painel. A thread de consultas so
+       precisa destes campos; o snapshot inteiro carrega as visoes de todos
+       os meses com a lista de clientes de cada um, e fazer o parse dele na
+       VPS de producao passou de 5 minutos em 25/09. Grava depois do
+       snapshot, com o mesmo "at": quem le confere os dois. */
     await writeFile(
-      join(DATA_DIR, "snapshot.json"),
-      JSON.stringify(
-        {
-          ok: true,
-          at: agoraBrasiliaIso(),
-          from: histFrom,
-          to: histTo,
-          rows: objects.length,
-          snapshot,
-          caixa: {
-            consolidado: caixaTodos ? caixaPack(caixaTodos) : null,
-            filial: caixaFilial ? caixaPack(caixaFilial) : null,
-            matriz: snapshot.caixaOficial?.matriz || null,
-          },
+      join(DATA_DIR, "snapshot-meta.json"),
+      JSON.stringify({
+        ...cabeca,
+        caixa: caixaResumo,
+        snapshot: {
+          headers: snapshot.headers,
+          years: snapshot.years,
+          clientesStatus: snapshot.clientesStatus,
+          caixaOficial: snapshot.caixaOficial,
         },
-        null,
-        0
-      )
+      })
     );
     await writeFile(join(DATA_DIR, "raw.csv"), `anos ${histFrom} ${histTo} linhas ${objects.length}\n`);
     await writeFile(

@@ -75,8 +75,42 @@ export function estaDentro(page) {
   return PAINEL.test(page.url());
 }
 
-export async function esperarPainel(page, timeout = 60000) {
-  await page.waitForURL(PAINEL, { timeout, waitUntil: "domcontentloaded" });
+/* Basta a URL virar /principal/ ("commit"), sem esperar a pagina do
+   painel carregar: quem chama vai para outra pagina logo em seguida, com
+   a propria espera. Na VPS de producao o painel do SimplesVet passou de
+   60s para carregar em 25/09, e esperar por ele deixou a receita de Sao
+   Cristovao em null com o login feito. */
+export async function esperarPainel(page, timeout = 120000) {
+  await page.waitForURL(PAINEL, { timeout, waitUntil: "commit" });
+}
+
+/* Depois de clicar em "Entrar", o portal mostra a tela "Onde deseja
+   efetuar login" com um cartao por ambiente — ou vai direto ao painel se
+   so houver um. Os coletores esperavam um tempo fixo (1,2s no DRE, 3s no
+   scrape) e procuravam os cartoes; quando o portal demorava mais, nao
+   achavam cartao nenhum, nao clicavam, e ficavam esperando um painel que
+   nunca ia abrir. Aqui espera o que vier primeiro.
+
+   Cada espera tem o proprio .catch: a que perde a corrida estoura mais
+   tarde, e uma rejeicao sem dono derruba o processo no Node 22. */
+export async function esperarAmbientesOuPainel(page, timeout = 120000) {
+  const cartoes = page.locator("#ambientes .celx");
+  await Promise.race([
+    cartoes.first().waitFor({ state: "visible", timeout }).catch(() => {}),
+    page.waitForURL(PAINEL, { timeout, waitUntil: "commit" }).catch(() => {}),
+  ]);
+  return cartoes;
+}
+
+/* Clica no cartao do ambiente pedido (ou no primeiro) se a tela de
+   ambientes estiver aberta, e espera cair no painel. */
+export async function escolherAmbiente(page, ambId = "", timeout = 120000) {
+  const cartoes = await esperarAmbientesOuPainel(page, timeout);
+  if (!estaDentro(page) && (await cartoes.count())) {
+    const alvo = ambId ? page.locator(`#ambientes .celx[data-id="${ambId}"]`) : cartoes.first();
+    await ((await alvo.count()) ? alvo : cartoes).first().click();
+  }
+  await esperarPainel(page, timeout);
 }
 
 /* O SimplesVet as vezes nao entrega o HTML em 60s (padrao do Playwright).

@@ -32,10 +32,12 @@ EXPOSE 8787
 
 # Em 24/09 o processo congelou sem morrer: o Docker so reinicia quem
 # sai, entao o painel ficou mais de um dia fora sem ninguem perceber.
-# Com o healthcheck, tres falhas seguidas (uns 3 minutos sem responder a
-# rota mais leve que existe) fazem o Swarm trocar o container.
+# Com o healthcheck, cinco falhas seguidas (uns 5 minutos sem responder a
+# rota mais leve que existe) fazem o Swarm trocar o container. Folgado de
+# proposito: nesta VPS ate abrir um node novo pode demorar, e um reinicio
+# a toa custa um ciclo inteiro do robo (30-40 min).
 # start-period cobre o boot, quando o primeiro ciclo do robo ja comeca.
-HEALTHCHECK --interval=60s --timeout=10s --start-period=180s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=30s --start-period=180s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/api/version').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "bot/server.js"]

@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { gotoResiliente, opcoesChrome, esperarPainel } from "./chrome.js";
+import { gotoResiliente, opcoesChrome, esperarAmbientesOuPainel, escolherAmbiente } from "./chrome.js";
 
 /* No container as senhas vem das variaveis do EasyPanel, nao de um
    arquivo .env. Exigir o arquivo derrubava o DRE em producao com ENOENT
@@ -58,19 +58,14 @@ async function entrar(page, ambId) {
   await page.locator('input[type="email"], input[placeholder="Email"]').first().fill(EMAIL);
   await page.locator('input[type="password"]').first().fill(PASSWORD);
   await page.getByRole("button", { name: /Entrar no SimplesVet/i }).click();
-  const cartoes = page.locator("#ambientes .celx");
-  await page.waitForTimeout(1200);
+  await esperarAmbientesOuPainel(page);
   const ambientes = await page.evaluate(() =>
     [...document.querySelectorAll("#ambientes .celx")].map((el) => ({
       id: el.getAttribute("data-id") || "",
       nome: (el.querySelector("h4")?.innerText || "").trim(),
     }))
   );
-  if (await cartoes.count()) {
-    const alvo = ambId ? page.locator(`#ambientes .celx[data-id="${ambId}"]`) : cartoes.first();
-    await ((await alvo.count()) ? alvo : cartoes).first().click();
-  }
-  await esperarPainel(page);
+  await escolherAmbiente(page, ambId);
   return ambientes;
 }
 

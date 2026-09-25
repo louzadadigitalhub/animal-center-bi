@@ -174,7 +174,14 @@ function montarVacinas(list, prevList) {
   return { vacinasTipo, vacinasTop };
 }
 
-export function aggregate(rows) {
+/* soConsultas: para a thread de consultas do painel. Le e indexa as
+   vendas, mas pula o que so o robo precisa para gravar o snapshot — as
+   156 visoes pre-calculadas (3 unidades x anos x 13 recortes), o "hoje",
+   a "semana" e o status de clientes. A tela pede tres recortes por vez e
+   eles saem sob demanda por recorte()/hojeDe()/semanaDe(). Na VPS de
+   producao, montar tudo isso numa thread passou de 5 minutos em 25/09 e
+   o container reiniciou logo depois. */
+export function aggregate(rows, { soConsultas = false } = {}) {
   const parsed = rows
     .map((row) => {
       const dt = parseDate(
@@ -566,7 +573,7 @@ export function aggregate(rows) {
 
   const years = [...new Set(parsed.map((r) => r.dt.y).filter(Boolean))].sort();
   const views = {};
-  for (const unit of ["matriz", "filial", "consolidado"]) {
+  if (!soConsultas) for (const unit of ["matriz", "filial", "consolidado"]) {
     views[unit] = {};
     for (const year of years) {
       views[unit][year] = { all: slice(unit, year, "all") };
@@ -575,7 +582,7 @@ export function aggregate(rows) {
       for (let m = 0; m < 12; m++) syncDre(views[unit][year][m]);
     }
   }
-  for (const year of years) {
+  if (!soConsultas) for (const year of years) {
     const keys = ["all", ...Array.from({ length: 12 }, (_, i) => i)];
     for (const k of keys) {
       const c = views.consolidado[year][k];
@@ -593,7 +600,7 @@ export function aggregate(rows) {
 
   const now = todayParts();
   const hoje = {};
-  for (const unit of ["matriz", "filial", "consolidado"]) {
+  if (!soConsultas) for (const unit of ["matriz", "filial", "consolidado"]) {
     const h = slice(unit, now.y, now.m - 1, now.d);
     h.diaLabel = `${String(now.d).padStart(2, "0")}/${String(now.m).padStart(2, "0")}/${now.y}`;
     hoje[unit] = h;
@@ -603,7 +610,7 @@ export function aggregate(rows) {
      7 dias" — quem olha o painel na quarta quer a semana que esta correndo,
      nao uma janela movel que comeca numa quinta. */
   const semana = {};
-  {
+  if (!soConsultas) {
     const base = new Date(Date.UTC(now.y, now.m - 1, now.d));
     const diaSemana = (base.getUTCDay() + 6) % 7; // 0 = segunda
     const ini = new Date(base);
@@ -634,7 +641,7 @@ export function aggregate(rows) {
   const MESES_INATIVO = 12;
   const MESES_PRE = 9;
   const clientesStatus = {};
-  {
+  if (!soConsultas) {
     const hojeMs = Date.UTC(now.y, now.m - 1, now.d);
     const MES_MS = 30.44 * 24 * 3600 * 1000;
     for (const unit of ["matriz", "filial", "consolidado"]) {

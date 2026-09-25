@@ -41,38 +41,58 @@ function umaVez(nome, chave, fazer) {
   return p;
 }
 
-let snapCache = { chave: "", snap: null };
+/* O resumo do snapshot (snapshot-meta.json), nao o snapshot inteiro.
 
-/* Mesmo criterio do antigo loadSnapshot do server: snapshot sem filial
-   (gravado antes de a filial existir no robo) e completado com o
-   aggregate das vendas. */
+   O snapshot carrega as visoes pre-calculadas de todos os meses de todos
+   os anos, cada uma com a lista de clientes — 88% do arquivo. Nada disso
+   e usado aqui: o recorte sai do aggregate sob demanda. Fazer o parse
+   dele na VPS de producao passou de 5 minutos em 25/09 e o container
+   reiniciou logo depois. O robo grava o resumo a cada ciclo.
+
+   Sem resumo ainda (o primeiro ciclo depois do deploy nao terminou), o
+   painel funciona com o que da para saber sem abrir o arquivo grande: a
+   data e o numero de linhas saem do comeco dele. Receita oficial e
+   status de clientes voltam quando o resumo chegar. */
+let metaCache = { chave: "", meta: null };
+
+async function espiarSnapshot() {
+  let f;
+  try {
+    const { open } = await import("node:fs/promises");
+    f = await open(join(DATA_DIR, "snapshot.json"));
+    const buf = Buffer.alloc(1500);
+    const { bytesRead } = await f.read(buf, 0, 1500, 0);
+    const t = buf.toString("utf8", 0, bytesRead);
+    return {
+      at: t.match(/"at":"([^"]+)"/)?.[1] || null,
+      from: t.match(/"from":"([^"]+)"/)?.[1] || null,
+      to: t.match(/"to":"([^"]+)"/)?.[1] || null,
+      rows: Number(t.match(/"rows":(\d+)/)?.[1] || 0),
+    };
+  } catch {
+    return null;
+  } finally {
+    await f?.close().catch(() => {});
+  }
+}
+
 async function snapshot() {
-  const arq = join(DATA_DIR, "snapshot.json");
-  let chave;
+  const arq = join(DATA_DIR, "snapshot-meta.json");
+  let chave = null;
   try {
     chave = await chaveDe(arq);
   } catch {
-    return null;
+    /* sem resumo ainda */
   }
-  if (snapCache.chave === chave) return snapCache.snap;
-  return umaVez("snapshot", chave, () => montarSnapshot(arq, chave));
-}
-
-async function montarSnapshot(arq, chave) {
-  const snap = JSON.parse(await readFile(arq, "utf8"));
-  const temFilial = Object.values(snap?.snapshot?.views?.filial || {}).some((ano) =>
-    Object.values(ano || {}).some((v) => (v?.qtd || 0) > 0)
-  );
-  if (!(snap?.snapshot?.hoje && temFilial)) {
-    const agg = await aggregado().catch(() => null);
-    if (agg) {
-      snap.snapshot.views = agg.views;
-      snap.snapshot.hoje = agg.hoje;
-      snap.snapshot.years = agg.years || snap.snapshot.years;
-    }
+  if (chave) {
+    if (metaCache.chave === chave) return metaCache.meta;
+    const meta = JSON.parse(await readFile(arq, "utf8"));
+    metaCache = { chave, meta };
+    return meta;
   }
-  snapCache = { chave, snap };
-  return snap;
+  const peek = await espiarSnapshot();
+  if (!peek?.at) return null;
+  return { ...peek, parcial: true, caixa: null, snapshot: {} };
 }
 
 let aggCache = { chave: "", agg: null };
@@ -90,7 +110,7 @@ async function aggregado() {
     /* Solta a copia antiga antes de montar a nova: segurar as duas ao
        mesmo tempo dobrava o pico de memoria a cada ciclo. */
     aggCache = { chave: "", agg: null };
-    const agg = aggregate(JSON.parse(await readFile(arq, "utf8")));
+    const agg = aggregate(JSON.parse(await readFile(arq, "utf8")), { soConsultas: true });
     aggCache = { chave, agg };
     return agg;
   });
@@ -111,7 +131,6 @@ function comRecebimentoOficial(view, snap, unit, year, month, grupo) {
   const of = snap?.snapshot?.caixaOficial?.[unit];
   const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(of?.period || "");
   if (!of?.receitaTotal || !m || Number(m[3]) !== year || Number(m[2]) - 1 !== month) return view;
-  const doSnap = snap.snapshot.views?.[unit]?.[year]?.[month];
   return {
     ...view,
     caixa: {
@@ -125,7 +144,7 @@ function comRecebimentoOficial(view, snap, unit, year, month, grupo) {
     fat: of.receitaTotal,
     recebido: of.receitaTotal,
     /* A serie do grafico "Entrada" e por data da baixa, a mesma do card. */
-    dailyFat: doSnap?.dailyFat?.some((d) => d.fat) ? doSnap.dailyFat : view.dailyFat,
+    dailyFat: of.dailyFat?.some((d) => d.fat) ? of.dailyFat : view.dailyFat,
     receitaFonte: { origem: "recebimentos", lidoEm: of.at || null },
   };
 }
@@ -134,9 +153,9 @@ function comRecebimentoOficial(view, snap, unit, year, month, grupo) {
    (permissao, DRE, fotos) — isso o servidor acrescenta. */
 async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
   const snap = await snapshot();
-  if (!snap?.snapshot?.views) return { semDados: true };
-  const grupoOk = GRUPOS.includes(grupo) ? grupo : "";
   const agg = await aggregado().catch(() => null);
+  if (!snap || !agg) return { semDados: true };
+  const grupoOk = GRUPOS.includes(grupo) ? grupo : "";
 
   let view;
   let erroIntervalo = null;
@@ -149,10 +168,8 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
       view = agg?.intervalo(unit, de, ate, grupoOk || undefined) || undefined;
       if (!view) erroIntervalo = "a data final e anterior a inicial";
     }
-  } else if (agg) {
-    view = comRecebimentoOficial(agg.recorte(unit, year, month, grupoOk), snap, unit, year, month, grupoOk);
   } else {
-    view = snap.snapshot.views[unit]?.[year]?.[month];
+    view = comRecebimentoOficial(agg.recorte(unit, year, month, grupoOk), snap, unit, year, month, grupoOk);
   }
 
   /* Correcao herdada: a serie diaria as vezes chegava em centavos. */
@@ -188,10 +205,10 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
     to: snap.to,
     rows: snap.rows,
     receitasOficiais,
-    headers: snap.snapshot.headers,
-    years: snap.snapshot.years || [],
-    hoje: (agg ? agg.hojeDe(unit, grupoOk) : snap.snapshot.hoje?.[unit]) || null,
-    semana: (agg ? agg.semanaDe(unit, grupoOk) : snap.snapshot.semana?.[unit]) || null,
+    headers: snap.snapshot.headers || agg.headers,
+    years: snap.snapshot.years || agg.years || [],
+    hoje: agg.hojeDe(unit, grupoOk) || null,
+    semana: agg.semanaDe(unit, grupoOk) || null,
     clientesStatus: snap.snapshot.clientesStatus?.[unit] || null,
     erroIntervalo,
     view: view || null,
@@ -200,13 +217,14 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
 
 async function ranking({ unit, periodo, ano, mes }) {
   const snap = await snapshot();
-  if (!snap?.snapshot?.views) return { semDados: true };
+  const agg = await aggregado().catch(() => null);
+  if (!snap || !agg) return { semDados: true };
   const view =
     periodo === "hoje"
-      ? snap.snapshot.hoje?.[unit]
+      ? agg.hojeDe(unit)
       : periodo === "semana"
-        ? snap.snapshot.semana?.[unit]
-        : snap.snapshot.views[unit]?.[ano]?.[periodo === "ano" ? "all" : mes];
+        ? agg.semanaDe(unit)
+        : agg.recorte(unit, ano, periodo === "ano" ? "all" : mes);
   return { at: snap.at, rows: snap.rows, view: view || null };
 }
 
