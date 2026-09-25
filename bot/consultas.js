@@ -97,6 +97,39 @@ async function snapshot() {
 
 let aggCache = { chave: "", agg: null };
 
+/* Cada recorte varre as 100 mil vendas. Na maquina de desenvolvimento
+   isso leva 40ms; na VPS de producao, 2,5 a 3,8s — e a abertura do
+   painel pede tres (mes, hoje, semana). Os pedidos se repetem muito
+   (mesma unidade, mesmo mes), entao o resultado fica guardado ate chegar
+   coleta nova. A chave leva a versao dos dados; "hoje" e "semana" levam
+   tambem a data, porque mudam a meia-noite. */
+const MAX_RESULTADOS = 40;
+const resultados = new Map();
+
+function lembrar(agg, partes, fazer) {
+  const chave = [agg.__chave, ...partes].join("|");
+  if (resultados.has(chave)) {
+    const v = resultados.get(chave);
+    resultados.delete(chave);
+    resultados.set(chave, v);
+    return v;
+  }
+  const v = fazer();
+  resultados.set(chave, v);
+  if (resultados.size > MAX_RESULTADOS) resultados.delete(resultados.keys().next().value);
+  return v;
+}
+
+function hojeBR() {
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  return { y: d.getFullYear(), m: d.getMonth(), dia: `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}` };
+}
+
+const recorteDe = (agg, unit, year, month, grupo = "") =>
+  lembrar(agg, ["r", unit, year, month, grupo], () => agg.recorte(unit, year, month, grupo));
+const hojeDe = (agg, unit, grupo = "") => lembrar(agg, ["h", unit, grupo, hojeBR().dia], () => agg.hojeDe(unit, grupo));
+const semanaDe = (agg, unit, grupo = "") => lembrar(agg, ["s", unit, grupo, hojeBR().dia], () => agg.semanaDe(unit, grupo));
+
 async function aggregado() {
   const arq = join(DATA_DIR, "vendas.json");
   let chave;
@@ -110,7 +143,9 @@ async function aggregado() {
     /* Solta a copia antiga antes de montar a nova: segurar as duas ao
        mesmo tempo dobrava o pico de memoria a cada ciclo. */
     aggCache = { chave: "", agg: null };
+    resultados.clear();
     const agg = aggregate(JSON.parse(await readFile(arq, "utf8")), { soConsultas: true });
+    agg.__chave = chave;
     aggCache = { chave, agg };
     return agg;
   });
@@ -165,11 +200,14 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
   if (pediuIntervalo) {
     if (!de || !ate) erroIntervalo = "datas invalidas";
     else {
-      view = agg?.intervalo(unit, de, ate, grupoOk || undefined) || undefined;
+      view =
+        lembrar(agg, ["i", unit, JSON.stringify(de), JSON.stringify(ate), grupoOk], () =>
+          agg.intervalo(unit, de, ate, grupoOk || undefined)
+        ) || undefined;
       if (!view) erroIntervalo = "a data final e anterior a inicial";
     }
   } else {
-    view = comRecebimentoOficial(agg.recorte(unit, year, month, grupoOk), snap, unit, year, month, grupoOk);
+    view = comRecebimentoOficial(recorteDe(agg, unit, year, month, grupoOk), snap, unit, year, month, grupoOk);
   }
 
   /* Correcao herdada: a serie diaria as vezes chegava em centavos. */
@@ -207,8 +245,8 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
     receitasOficiais,
     headers: snap.snapshot.headers || agg.headers,
     years: snap.snapshot.years || agg.years || [],
-    hoje: agg.hojeDe(unit, grupoOk) || null,
-    semana: agg.semanaDe(unit, grupoOk) || null,
+    hoje: hojeDe(agg, unit, grupoOk) || null,
+    semana: semanaDe(agg, unit, grupoOk) || null,
     clientesStatus: snap.snapshot.clientesStatus?.[unit] || null,
     erroIntervalo,
     view: view || null,
@@ -221,10 +259,10 @@ async function ranking({ unit, periodo, ano, mes }) {
   if (!snap || !agg) return { semDados: true };
   const view =
     periodo === "hoje"
-      ? agg.hojeDe(unit)
+      ? hojeDe(agg, unit)
       : periodo === "semana"
-        ? agg.semanaDe(unit)
-        : agg.recorte(unit, ano, periodo === "ano" ? "all" : mes);
+        ? semanaDe(agg, unit)
+        : recorteDe(agg, unit, ano, periodo === "ano" ? "all" : mes);
   return { at: snap.at, rows: snap.rows, view: view || null };
 }
 
@@ -243,7 +281,17 @@ const TAREFAS = {
      o painel nao ser quem paga o parse. */
   aquecer: async () => {
     await snapshot();
-    await aggregado();
+    const agg = await aggregado();
+    /* O que quase toda abertura do painel pede: o mes corrente, hoje e a
+       semana de cada unidade. */
+    if (agg) {
+      const h = hojeBR();
+      for (const u of ["matriz", "filial", "consolidado"]) {
+        recorteDe(agg, u, h.y, h.m);
+        hojeDe(agg, u);
+        semanaDe(agg, u);
+      }
+    }
     return { ok: true };
   },
 };
