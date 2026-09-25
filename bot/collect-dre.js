@@ -14,7 +14,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { gotoResiliente, opcoesChrome } from "./chrome.js";
+import { gotoResiliente, opcoesChrome, esperarPainel } from "./chrome.js";
 
 /* No container as senhas vem das variaveis do EasyPanel, nao de um
    arquivo .env. Exigir o arquivo derrubava o DRE em producao com ENOENT
@@ -70,7 +70,7 @@ async function entrar(page, ambId) {
     const alvo = ambId ? page.locator(`#ambientes .celx[data-id="${ambId}"]`) : cartoes.first();
     await ((await alvo.count()) ? alvo : cartoes).first().click();
   }
-  await page.waitForSelector("text=Painel de controle", { timeout: 45000 });
+  await esperarPainel(page);
   return ambientes;
 }
 
@@ -86,6 +86,12 @@ async function lerDemonstrativo(page, ano) {
     set("p__tipo", "V"); // regime de caixa, igual ao resto do painel
     set("p__lan_var_inicio", `${ano}/01`);
     set("p__lan_var_termino", `${ano}/12`);
+    /* Situacao "Pagos / Recebidos" (P), pela regra da clinica. Sem isso
+       o filtro fica em "Todas as situacoes" e mistura conta paga com
+       conta em aberto e agendada: setembro da matriz saia com lucro de
+       -51.575 e, so com o que foi pago, sai +26.969. Era tambem o que
+       enchia os meses futuros de aluguel e salario ainda nao pagos. */
+    set("p__lan_cha_status", "P");
   }, ano);
   await page.locator("#p__btn_filtrar").click();
 
@@ -118,13 +124,22 @@ async function lerDemonstrativo(page, ano) {
       const indent = Number((td.getAttribute("style") || "").match(/text-indent:\s*(\d+)px/)?.[1] || 0);
       linhas.push({
         nome: td.innerText.replace(/\s+/g, " ").trim(),
-        nivel: indent / 15,
+        indent,
         total: td.classList.contains("consolidador"),
         id: td.getAttribute("data-categoria") || "",
         valores: [...(trV[i]?.querySelectorAll("td") || [])].map((x) => x.innerText.trim()),
       });
     }
-    return { meses, linhas };
+    /* O recuo virava nivel dividindo por 15, que era o passo do portal.
+       Ele passou a usar 16 e os niveis viraram 2,13 e 3,2. O passo agora
+       sai da propria tabela: o menor recuo maior que zero. */
+    const passo = Math.min(...linhas.map((l) => l.indent).filter((n) => n > 0)) || 1;
+    for (const l of linhas) {
+      l.nivel = Math.round(l.indent / passo);
+      delete l.indent;
+    }
+    const situacao = document.getElementById("p__lan_cha_status")?.value || "";
+    return { meses, linhas, situacao };
   });
 }
 
@@ -151,7 +166,7 @@ async function coletar(browser, ano, dataDir) {
   const ambientes = await entrar(page, "");
   console.log("ambientes:", ambientes.map((a) => `${a.nome} (${a.id}) -> ${unitDoNome(a.nome)}`).join(" | "));
 
-  const saida = { at: new Date().toISOString(), ano: ano, regime: "caixa", unidades: {} };
+  const saida = { at: new Date().toISOString(), ano: ano, regime: "caixa", situacao: "pagos", unidades: {} };
 
   for (const amb of ambientes.length ? ambientes : [{ id: "", nome: "Animal Center" }]) {
     const unit = unitDoNome(amb.nome);
@@ -163,6 +178,12 @@ async function coletar(browser, ano, dataDir) {
     if (!dados) {
       console.log(unit, "->", amb.nome, "| demonstrativo vazio");
       continue;
+    }
+    /* Se o filtro de situacao nao pegou, a tabela veio com conta em
+       aberto misturada. Melhor falhar alto e manter o dre.json anterior
+       do que gravar em silencio um numero que a clinica nao reconhece. */
+    if (dados.situacao !== "P") {
+      throw new Error(`${unit}: filtro "Pagos / Recebidos" nao aplicou (situacao=${dados.situacao || "todas"})`);
     }
     /* meses vem como ["01/2026", ..., "Total"]; o Total nao vira mes. */
     const meses = dados.meses.filter((m) => /^\d{2}\/\d{4}$/.test(m));

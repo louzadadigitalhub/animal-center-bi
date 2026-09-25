@@ -4,6 +4,11 @@ export const YEARS = [2026];
 export const brl = (n) =>
   n.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
+/* Com centavos: receita e despesas que a clinica confere contra o portal
+   ("R$ 16.153,10"), onde arredondar para reais atrapalha a conferencia. */
+export const brlc = (n) =>
+  Number(n || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
 export function sanitizeDaily(days, receitaTotal = 0) {
   const cap = Math.max(Number(receitaTotal) || 0, 1);
   return (days || []).map((row) => {

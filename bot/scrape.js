@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { findChrome, gotoResiliente } from "./chrome.js";
+import { findChrome, gotoResiliente, estaDentro, esperarPainel } from "./chrome.js";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
 
@@ -154,7 +154,7 @@ async function submitLoginForm(page) {
 
 async function login(page, ambId = "") {
   await gotoResiliente(page, LOGIN_URL);
-  if (await page.locator("text=Painel de controle").count()) {
+  if (estaDentro(page)) {
     if (!ambId) return;
     await logout(page);
     await gotoResiliente(page, LOGIN_URL);
@@ -171,12 +171,12 @@ async function login(page, ambId = "") {
       await cards.first().click();
     }
   }
-  await page.waitForSelector("text=Painel de controle", { timeout: 45000 });
+  await esperarPainel(page);
 }
 
 async function listPerfisLogin(page) {
   await gotoResiliente(page, LOGIN_URL);
-  if (await page.locator("text=Painel de controle").count()) {
+  if (estaDentro(page)) {
     await logout(page);
     await gotoResiliente(page, LOGIN_URL);
   }
@@ -272,6 +272,9 @@ function caixaPack(caixa) {
     posteriores: Math.round(caixa.posteriores || 0),
     adiantamento: Math.round(caixa.adiantamento || 0),
     receitaTotal: Math.round(caixa.receitaTotal || 0),
+    /* Com centavos, para bater com o card "Receita total" de Vendas >
+       Recebimentos > Este mes do portal, que e a referencia da clinica. */
+    receitaTotalExata: Math.round((caixa.receitaTotal || 0) * 100) / 100,
     emAberto: Math.round(caixa.emAberto || 0),
   };
 }

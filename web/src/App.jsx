@@ -18,7 +18,7 @@ import { X } from "@phosphor-icons/react/X";
 import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
 import { DailyBars, Donut, Hourly, LineChart, Radar, MultiLine, SparkBars, Treemap, VolumeTicket } from "./charts";
-import { MONTHS, YEARS, brl, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR, recuarMeses, recuarDias } from "./data";
+import { MONTHS, YEARS, brl, brlc, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR, recuarMeses, recuarDias } from "./data";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
@@ -138,11 +138,23 @@ function Vendas({ u, year, porMes }) {
           <CardHeader>
             <CardDescription>Receita total</CardDescription>
             <CardTitle>
-              <Num value={cx.receitaTotal || u.fat} format={brl} />
+              {cx.receitaTotalExata != null ? (
+                <Num value={cx.receitaTotalExata} format={brlc} />
+              ) : (
+                <Num value={cx.receitaTotal || u.fat} format={brl} />
+              )}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="hint">Recebimentos do recorte. Nao e DRE.</p>
+            {/* A clinica confere este numero em Vendas > Recebimentos >
+                Este mes. Diz de onde veio para ninguem comparar banana
+                com laranja: fora do mes corrente ele e calculado das
+                vendas marcadas como recebidas, e pode nao bater. */}
+            <p className="hint">
+              {u.receitaFonte?.origem === "recebimentos"
+                ? "Recebimentos do SimplesVet, este mês — o mesmo card de Vendas › Recebimentos."
+                : "Calculada das vendas recebidas neste recorte. O número oficial de Recebimentos só existe para o mês corrente."}
+            </p>
             <div className="mini-kpis">
               <div>
                 <span>No dia da venda</span>
@@ -924,9 +936,54 @@ function Dre({ u, year }) {
     <div className="bento">
       <ExportarDre u={u} year={year} />
       {real.partes.map((parte) => (
+        <DreResumo key={`resumo-${parte.unit}`} parte={parte} largura={real.partes.length > 1 ? "span-6" : "span-12"} />
+      ))}
+      {real.partes.map((parte) => (
         <DreArvore key={parte.unit} parte={parte} regime={real.regime} varias={real.partes.length > 1} />
       ))}
     </div>
+  );
+}
+
+/* Receita e despesas pela regra que a clinica definiu em 25/09:
+   - receita total: Vendas > Recebimentos > Este mes;
+   - despesas: soma de quatro grupos do Demonstrativo (regime de caixa,
+     so pagos e recebidos).
+   Sem resultado calculado entre os dois: a clinica nao pediu esse numero,
+   e subtrair dois recortes de fontes diferentes seria inventar um. */
+function DreResumo({ parte, largura }) {
+  const casa = parte.unit === "filial" ? "São Cristóvão" : "Animal Center";
+  const d = parte.despesas;
+  return (
+    <section className={`card ${largura} dre-resumo`}>
+      <header>
+        <h2>{casa}</h2>
+        <p>{parte.periodo}</p>
+      </header>
+      <div className="dre-resumo-numeros">
+        <div>
+          <small>Receita total</small>
+          <strong>{parte.receita ? brlc(parte.receita.total) : "—"}</strong>
+          <span>{parte.receita ? "Vendas › Recebimentos › Este mês" : "o robô só lê o mês corrente"}</span>
+        </div>
+        <div>
+          <small>Despesas</small>
+          <strong>{d ? brlc(d.total) : "—"}</strong>
+          <span>Demonstrativo · caixa · pagos e recebidos</span>
+        </div>
+      </div>
+      {d ? (
+        <ul className="dre-grupos">
+          {d.grupos.map((g) => (
+            <li key={g.nome}>
+              <span>{g.nome}</span>
+              <b>{brlc(g.valor)}</b>
+              {g.lancado ? null : <em>sem conta paga no mês</em>}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
@@ -985,11 +1042,13 @@ function ExportarDre({ u, year }) {
   );
 }
 
+/* Desde 25/09 o demonstrativo vem so com "Pagos / Recebidos". O aviso
+   antigo dizia que entravam os lancamentos agendados, e isso deixou de
+   ser verdade. */
 const RECADO_ESTAGIO = {
   fechado: null,
-  "em curso": "Mês em curso: já entram os lançamentos agendados até o fim do mês, então o resultado ainda vai mudar.",
-  futuro:
-    "Mês que ainda não chegou. Aluguel, salário e parcelas já estão lançados; a receita, não. O saldo aqui não é previsão de prejuízo — é despesa comprometida sem a venda correspondente.",
+  "em curso": "Mês em curso: entram só as contas já pagas e os recebimentos já baixados, então o resultado ainda muda até o fim do mês.",
+  futuro: "Mês que ainda não chegou: aparece só o que já foi pago ou recebido adiantado.",
 };
 
 function DreArvore({ parte, regime, varias }) {
@@ -1000,8 +1059,8 @@ function DreArvore({ parte, regime, varias }) {
       <header>
         <h2>{varias ? `DRE · ${casa}` : "DRE"}</h2>
         <p>
-          Demonstrativo do SimplesVet, {parte.periodo}, regime de {regime}. As categorias são as que a
-          clínica lança no portal.
+          Demonstrativo do SimplesVet, {parte.periodo}, regime de {regime}, só pagos e recebidos. As
+          categorias são as que a clínica lança no portal.
         </p>
       </header>
       {recado ? <p className="dre-aviso">{recado}</p> : null}

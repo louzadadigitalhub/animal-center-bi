@@ -33,14 +33,14 @@ export const IDS = PAGINAS.map((p) => p.id);
 /* Campos do snapshot que cada aba precisa. O que nao estiver aqui nao sai
    do servidor para quem nao tem a aba. */
 const CAMPOS = {
-  vendas: ["fat", "fatVenda", "qtd", "caixa", "grupos", "dailyFat", "monthlyFat", "monthlyQtd", "monthlyPorAno", "monthlyFatPrev", "compareYears", "eletivas", "metaEletivas", "eletivasPct", "ticketCliente", "ticketVenda"],
+  vendas: ["fat", "fatVenda", "qtd", "caixa", "grupos", "dailyFat", "monthlyFat", "monthlyQtd", "monthlyPorAno", "monthlyFatPrev", "compareYears", "eletivas", "metaEletivas", "eletivasPct", "ticketCliente", "ticketVenda", "receitaFonte"],
   ritmo: ["hourly", "consultas", "emergencia", "internacao", "plantao", "examesQtd", "atendimentos", "vacinasAplicadas", "diaLabel", "fat", "caixa", "grupos"],
   equipe: ["equipe"],
   clientes: ["clientes", "mapPoints", "racas", "especies", "genero", "origem", "novos"],
   recorrencia: ["recorrentes", "novos", "monthlyQtd", "monthlyFat", "hourly"],
   vacinas: ["vacinas", "vacinasTop", "vacinasTipo", "vacinasAplicadas", "vsPrev"],
   pesquisa: ["nps"],
-  dre: ["dre", "dreReal", "fat", "fatVenda", "caixa"],
+  dre: ["dre", "dreReal", "fat", "fatVenda", "caixa", "receitaFonte"],
   tv: ["equipe"],
 };
 

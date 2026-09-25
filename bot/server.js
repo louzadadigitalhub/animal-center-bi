@@ -3,22 +3,21 @@ import { existsSync, readFileSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { fork } from "node:child_process";
+import { Worker } from "node:worker_threads";
 import {
   clearCookieHeader,
   clientIp,
   cookieHeader,
   loginPerson,
   trocarPin,
-  personDashboard,
   photoFile,
   photoMap,
   publicStaff,
   readCookie,
   readSession,
-  syncPeopleFromSales,
   listPeople,
 } from "./people.js";
-import { aggregate, GRUPOS } from "./aggregate.js";
 import { dreDoPortal, matrizAnual } from "./dre.js";
 import { IDS, PAGINAS, filtrarView, listarPerfis, removerPerfil, salvarPerfil, viewPublicaRanking } from "./acesso.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
@@ -111,91 +110,60 @@ async function metaSnapshot() {
 
 lerEspelho().then(() => metaSnapshot()).catch(() => {});
 
-let hojeCache = { at: "", snap: null };
+/* ---------- Consultas pesadas, fora do fio das paginas ----------
+   Snapshot, agregacao das 100 mil vendas e painel da vendedora moram
+   na thread de consultas.js. Aqui fica so o pedido e a espera. */
+let consultas = null;
+let seqConsulta = 0;
+const pendentes = new Map();
 
-async function loadSnapshot() {
-  try {
-    const peek = await peekSnapshot();
-    if (peek.at && hojeCache.at === peek.at && hojeCache.snap) return hojeCache.snap;
-    const raw = await readFile(join(DATA_DIR, "snapshot.json"), "utf8");
-    const snap = JSON.parse(raw);
-    const filialVazia = !snap?.snapshot?.views?.filial;
-    const temFilial =
-      !filialVazia &&
-      Object.values(snap.snapshot.views.filial || {}).some((ano) =>
-        Object.values(ano || {}).some((v) => (v?.qtd || 0) > 0)
-      );
-    if (snap?.snapshot?.hoje && temFilial) {
-      hojeCache = { at: snap.at, snap };
-      return snap;
+function iniciarConsultas() {
+  consultas = new Worker(join(__dirname, "consultas.js"));
+  consultas.on("message", ({ id, ok, r, erro }) => {
+    const p = pendentes.get(id);
+    if (!p) return;
+    pendentes.delete(id);
+    clearTimeout(p.t);
+    if (ok) p.res(r);
+    else p.rej(new Error(erro));
+  });
+  consultas.on("error", (err) => console.error(agoraBr(), "consultas fail", err?.message || err));
+  consultas.on("exit", (code) => {
+    for (const p of pendentes.values()) {
+      clearTimeout(p.t);
+      p.rej(new Error("a thread de consultas reiniciou"));
     }
-    try {
-      const rows = JSON.parse(await readFile(join(DATA_DIR, "vendas.json"), "utf8"));
-      const agg = aggregate(rows);
-      snap.snapshot.views = agg.views;
-      snap.snapshot.hoje = agg.hoje;
-      snap.snapshot.years = agg.years || snap.snapshot.years;
-    } catch {
-      /* sem vendas.json ainda */
-    }
-    hojeCache = { at: snap.at, snap };
-    return snap;
-  } catch {
-    return null;
-  }
+    pendentes.clear();
+    consultas = null;
+    if (code !== 0) console.error(agoraBr(), "consultas saiu com codigo", code, "— reabrindo");
+  });
+}
+
+function consultar(tipo, args = {}, limiteMs = 90000) {
+  if (!consultas) iniciarConsultas();
+  const id = ++seqConsulta;
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => {
+      pendentes.delete(id);
+      rej(new Error(`consulta ${tipo} passou de ${limiteMs / 1000}s`));
+    }, limiteMs);
+    pendentes.set(id, { res, rej, t });
+    consultas.postMessage({ id, tipo, args });
+  });
 }
 
 /* O demonstrativo muda no ritmo da contabilidade, nao no das vendas, e
-   ler as duas unidades custa dois logins. De 6 em 6 horas ja basta, e
-   sempre dentro do tick — o coletor faz logout para trocar de ambiente,
-   entao rodando solto ele derrubaria a sessao do scrape no meio. */
+   ler as duas unidades custa dois logins. De 6 em 6 horas ja basta.
+   Se falhar, tenta de novo em 20 minutos — antes tentava a cada ciclo de
+   2 minutos, abrindo mais um Chromium toda vez, e isso ajudou a esgotar
+   a memoria da VPS em 24/09. */
 const DRE_MS = Number(process.env.DRE_MS || 6 * 60 * 60 * 1000);
-let ultimoDre = 0;
-/* O estado da coleta sai no /api/status. Antes o unico sinal era um
+const DRE_RETRY_MS = Number(process.env.DRE_RETRY_MS || 20 * 60 * 1000);
+let proximoDre = 0;
+/* O estado da coleta sai no /api/health. Antes o unico sinal era um
    console.error no log do container: quando o DRE falhou em producao a
    tela so ficou sem custo, sem dizer por que. */
 let dreStatus = { at: null, ok: null, erro: null, unidades: [] };
-
-async function coletarDre() {
-  if (Date.now() - ultimoDre <= DRE_MS) return;
-  ultimoDre = Date.now();
-  const agoraBr = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  try {
-    const { collectDre } = await import("./collect-dre.js");
-    const r = await collectDre(agoraBr.getFullYear(), DATA_DIR);
-    dreStatus = { at: new Date().toISOString(), ok: true, erro: null, unidades: r.unidades };
-    console.log("dre ok", r);
-  } catch (err) {
-    const erro = String(err?.message || err);
-    dreStatus = { at: new Date().toISOString(), ok: false, erro, unidades: [] };
-    console.error("dre fail", erro);
-    /* Falhou: tenta de novo no proximo ciclo em vez de so daqui a seis
-       horas. Sem isso, um erro pego logo no boot deixava o painel sem
-       custo o resto do turno. */
-    ultimoDre = 0;
-  }
-}
-
-/* O aggregate custa caro (varre e reagrupa o historico inteiro), entao
-   fica em memoria chaveado por mtime+tamanho do vendas.json, igual ao
-   vendasParseadas. Sem isso, cada filtro de data reprocessaria tudo. */
-let aggCache = { chave: "", agg: null };
-
-async function aggregado() {
-  const arq = join(DATA_DIR, "vendas.json");
-  let chave;
-  try {
-    const st = await stat(arq);
-    chave = `${st.mtimeMs}:${st.size}`;
-  } catch {
-    return null;
-  }
-  if (aggCache.chave === chave) return aggCache.agg;
-  const rows = JSON.parse(await readFile(arq, "utf8"));
-  const agg = aggregate(rows);
-  aggCache = { chave, agg };
-  return agg;
-}
 
 /* "2026-09-01" -> {y,m,d}. Recusa o que nao for exatamente uma data. */
 function dataDaTela(txt) {
@@ -211,38 +179,95 @@ function dataDaTela(txt) {
   return { y, m: mes, d };
 }
 
-async function tick() {
+/* Um ciclo completo nunca passou de uns 8 minutos nos logs. Acima de 20
+   o robo esta preso — num goto que nao volta, num Chromium que nao fecha —
+   e o servidor mata o processo em vez de esperar para sempre. Foi
+   esperar para sempre o que aconteceu em 24/09. */
+const ROBO_LIMITE_MS = Number(process.env.ROBO_LIMITE_MS || 20 * 60 * 1000);
+let ultimoCicloOk = null;
+
+function tick() {
   if (running) return;
   running = true;
-  try {
-    const { scrape } = await import("./scrape.js");
-    const r = await scrape();
-    lastError = null;
-    estado = {
-      at: r.at || estado.at,
-      rows: r.rows || estado.rows,
-      anos: r.anos || estado.anos,
-      filialOk: Boolean(r.filialOk || r.filial),
-      historico: estado.historico,
-      perfis: estado.perfis,
-    };
-    hojeCache = { at: "", snap: null };
-    await lerEspelho().catch(() => {});
-    console.log(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape ok", r);
-    /* Gente nova aparece aqui, no ciclo, e nao quando alguem abre a tela
-       de login. Este sync relê e reprocessa o historico inteiro. */
-    await syncPeopleFromSales().catch((e) => console.error("sync gente fail", String(e?.message || e)));
-  } catch (err) {
-    lastError = String(err && err.stack ? err.stack : err);
-    console.error(new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" }), "scrape fail", lastError);
-  } finally {
-    /* Fora do try do scrape: o demonstrativo nao depende das vendas.
-       Se o login do SimplesVet caiu, o DRE usa a mesma porta e so
-       duplicaria o erro. */
-    const loginMorto = lastError && /login\.php|Timeout \d+ms exceeded|net::ERR|SIMPLES_VET_EMAIL/i.test(lastError);
-    if (!loginMorto) await coletarDre().catch(() => {});
+  const querDre = Date.now() >= proximoDre;
+  const inicio = Date.now();
+  let respondeuScrape = false;
+  let respondeuDre = false;
+
+  /* execArgv vazio: o filho nao herda flags de debug do pai. ROBO_HEAP_MB
+     limita a memoria do robo se a VPS voltar a apertar; sem ele vale o
+     padrao do Node. */
+  const execArgv = process.env.ROBO_HEAP_MB ? [`--max-old-space-size=${process.env.ROBO_HEAP_MB}`] : [];
+  const filho = fork(join(__dirname, "robo.js"), [], {
+    env: { ...process.env, ROBO_DRE: querDre ? "1" : "0" },
+    execArgv,
+    stdio: "inherit",
+  });
+
+  /* SIGTERM primeiro: o Playwright fecha o Chromium ao receber o sinal.
+     Se em 30s o processo nao saiu, SIGKILL. */
+  const vigia = setTimeout(() => {
+    console.error(agoraBr(), `robo passou de ${Math.round(ROBO_LIMITE_MS / 60000)} min — encerrando`);
+    filho.kill("SIGTERM");
+    setTimeout(() => filho.exitCode === null && filho.kill("SIGKILL"), 30000).unref();
+  }, ROBO_LIMITE_MS);
+
+  filho.on("message", async (m) => {
+    if (m?.tipo === "scrape") {
+      respondeuScrape = true;
+      if (m.ok) {
+        const r = m.r || {};
+        lastError = null;
+        ultimoCicloOk = new Date().toISOString();
+        estado = {
+          at: r.at || estado.at,
+          rows: r.rows || estado.rows,
+          anos: r.anos || estado.anos,
+          filialOk: Boolean(r.filialOk || r.filial),
+          historico: estado.historico,
+          perfis: estado.perfis,
+        };
+        await lerEspelho().catch(() => {});
+        /* A primeira pessoa a abrir o painel depois da coleta nao paga o
+           parse: a thread ja comeca a montar agora. */
+        consultar("aquecer", {}, 300000).catch((e) => console.error("aquecer fail", e.message));
+        console.log(agoraBr(), "scrape ok", r);
+      } else {
+        lastError = m.erro;
+        console.error(agoraBr(), "scrape fail", m.erro);
+      }
+    }
+    if (m?.tipo === "dre") {
+      respondeuDre = true;
+      dreStatus = { at: new Date().toISOString(), ok: m.ok, erro: m.erro || null, unidades: m.r?.unidades || [] };
+      proximoDre = Date.now() + (m.ok ? DRE_MS : DRE_RETRY_MS);
+      console[m.ok ? "log" : "error"]("dre", m.ok ? "ok" : "fail", m.ok ? m.r : m.erro);
+    }
+  });
+
+  filho.on("exit", (code, sinal) => {
+    clearTimeout(vigia);
     running = false;
-  }
+    const min = ((Date.now() - inicio) / 60000).toFixed(1);
+    if (!respondeuScrape) {
+      lastError = `robo saiu sem responder (codigo ${code}, sinal ${sinal || "nenhum"}) depois de ${min} min`;
+      console.error(agoraBr(), lastError);
+    }
+    /* Pediu DRE e o processo morreu antes de responder: nao fica
+       tentando a cada ciclo. */
+    if (querDre && !respondeuDre) proximoDre = Date.now() + DRE_RETRY_MS;
+  });
+
+  filho.on("error", (err) => {
+    clearTimeout(vigia);
+    running = false;
+    lastError = `nao deu para abrir o robo: ${err.message}`;
+    console.error(agoraBr(), lastError);
+  });
+}
+
+function agoraBr() {
+  return new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
 /* A string fixa nao dizia nada sobre o que estava no ar de fato. O nome do
@@ -271,9 +296,16 @@ app.get("/api/version", (_req, res) => {
 });
 
 app.get("/api/health", (_req, res) => {
+  /* "O robo esta de pe?" precisa de resposta daqui de fora. Em 24/09 o
+     processo congelou e a unica pista era a ausencia de linhas no log. */
+  const semColetarMin = ultimoCicloOk ? Math.round((Date.now() - Date.parse(ultimoCicloOk)) / 60000) : null;
+  const mem = process.memoryUsage();
   res.json({
     ok: true,
     running,
+    ultimoCicloOk,
+    semColetarMin,
+    memoriaMb: { rss: Math.round(mem.rss / 1048576), heap: Math.round(mem.heapUsed / 1048576) },
     lastError,
     at: estado.at,
     rows: estado.rows,
@@ -295,15 +327,9 @@ app.get("/api/espelho", exigeDiretoria(), async (_req, res) => {
 });
 
 app.get("/api/caixa", exigeDiretoria(), async (_req, res) => {
-  const snap = await loadSnapshot();
-  if (!snap) return res.status(503).json({ ok: false, error: "ainda sem dados" });
-  res.json({
-    ok: true,
-    at: snap.at,
-    from: snap.from,
-    to: snap.to,
-    caixa: snap.caixa || snap.snapshot?.caixaOficial || null,
-  });
+  const r = await consultar("caixa").catch((e) => ({ semDados: true, erro: e.message }));
+  if (r.semDados) return res.status(503).json({ ok: false, error: r.erro || "ainda sem dados" });
+  res.json({ ok: true, ...r });
 });
 
 app.get("/api/auth/staff", async (_req, res) => {
@@ -349,8 +375,12 @@ app.get("/api/me/dashboard", async (req, res) => {
   if (month !== "all" && (!Number.isFinite(month) || month < 0 || month > 11)) {
     return res.status(400).json({ ok: false, error: "mes invalido" });
   }
-  const view = await personDashboard(me.nome, year, month);
-  res.json({ ok: true, me, view });
+  try {
+    const view = await consultar("pessoa", { nome: me.nome, year, month });
+    res.json({ ok: true, me, view });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: "os numeros ainda estao sendo montados, tente de novo", detalhe: err.message });
+  }
 });
 
 /* Foto da equipe. Publica de proposito: o telao do corredor nao tem login e
@@ -383,19 +413,15 @@ app.get("/api/config", (_req, res) => {
 });
 
 app.get("/api/ranking", async (req, res) => {
-  const snap = await loadSnapshot();
-  if (!snap?.snapshot?.views) return res.status(503).json({ ok: false, error: "ainda sem dados" });
   const unit = String(req.query.unit || "matriz");
   const periodo = String(req.query.periodo || "mes");
   const br = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-  const view =
-    periodo === "hoje"
-      ? snap.snapshot.hoje?.[unit]
-      : periodo === "semana"
-        ? snap.snapshot.semana?.[unit]
-        : snap.snapshot.views[unit]?.[br.getFullYear()]?.[periodo === "ano" ? "all" : br.getMonth()];
+  const r = await consultar("ranking", { unit, periodo, ano: br.getFullYear(), mes: br.getMonth() }).catch(() => ({
+    semDados: true,
+  }));
+  if (r.semDados) return res.status(503).json({ ok: false, error: "ainda sem dados" });
   const fotos = await photoMap().catch(() => ({}));
-  res.json({ ok: true, at: snap.at, rows: snap.rows, fotos, ...(viewPublicaRanking(view) || {}) });
+  res.json({ ok: true, at: r.at, rows: r.rows, fotos, ...(viewPublicaRanking(r.view) || {}) });
 });
 
 /* Quem sou eu e o que posso ver. A tela usa para montar o menu; o servidor
@@ -478,70 +504,51 @@ app.post("/api/perfis/convidar", exigeDiretoria({ admin: true }), async (req, re
 });
 
 app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
-  const snap = await loadSnapshot();
-  if (!snap?.snapshot?.views) {
-    res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet", lastError });
-    return;
-  }
   const unit = String(req.query.unit || "matriz");
   const year = Number(req.query.year || 2026);
   const month = req.query.month === "all" ? "all" : Number(req.query.month ?? 8);
-  const grupoQ = String(req.query.grupo || "");
-  const grupoOk = GRUPOS.includes(grupoQ) ? grupoQ : "";
-
-  /* Recorte livre e filtro de grupo nao cabem no snapshot pre-calculado
-     (ele so guarda mes e ano, com todos os grupos juntos). Os dois saem
-     do aggregate em cache, que ja leu vendas.json. */
+  const grupo = String(req.query.grupo || "");
+  /* Datas validadas aqui, antes de pedir qualquer coisa a thread. */
   const de = dataDaTela(req.query.de);
   const ate = dataDaTela(req.query.ate);
-  let view;
-  let erroIntervalo = null;
-  const agg = await aggregado().catch(() => null);
-  if (req.query.de || req.query.ate) {
-    if (!de || !ate) erroIntervalo = "datas invalidas";
-    else {
-      view = agg?.intervalo(unit, de, ate, grupoOk || undefined) || undefined;
-      if (!view) erroIntervalo = "a data final e anterior a inicial";
-    }
-  } else if (agg) {
-    view = agg.recorte(unit, year, month, grupoOk);
-  } else {
-    view = snap.snapshot.views[unit]?.[year]?.[month];
+  const pediuIntervalo = Boolean(req.query.de || req.query.ate);
+
+  let r;
+  try {
+    r = await consultar("painel", {
+      unit,
+      year,
+      month,
+      grupo,
+      pediuIntervalo,
+      de,
+      ate,
+    });
+  } catch (err) {
+    return res.status(503).json({ ok: false, error: "os numeros ainda estao sendo montados", detalhe: err.message, lastError });
   }
-  const cap = Math.max(Number(view?.caixa?.receitaTotal || view?.fat) || 0, 1);
-  const dailyFat = (view?.dailyFat || []).map((row) => {
-    let fat = Number(row.fat) || 0;
-    while (cap > 1 && fat > cap && fat >= 100) fat /= 100;
-    if (fat > 10000000) fat = 0;
-    return { d: row.d, fat: Math.round(fat) };
-  });
+  if (r.semDados) {
+    return res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet", lastError });
+  }
+  const { view, receitasOficiais, ...resto } = r;
+  let dreReal = null;
+  if (!pediuIntervalo) {
+    dreReal = await dreDoPortal(DATA_DIR, unit, year, month).catch(() => null);
+    for (const parte of dreReal?.partes || []) parte.receita = receitasOficiais?.[parte.unit] || null;
+  }
   res.json({
     ok: true,
-    at: snap.at,
-    from: snap.from,
-    to: snap.to,
-    rows: snap.rows,
-    headers: snap.snapshot.headers,
-    years: snap.snapshot.years || [],
-    hoje: (agg ? agg.hojeDe(unit, grupoOk) : snap.snapshot.hoje?.[unit]) || null,
-    semana: (agg ? agg.semanaDe(unit, grupoOk) : snap.snapshot.semana?.[unit]) || null,
-    clientesStatus: snap.snapshot.clientesStatus?.[unit] || null,
+    ...resto,
     /* O recorte sai do servidor ja podado: a conta que nao tem a aba
-       Clientes nao recebe o array de clientes, nem o telefone deles. */
-    /* O DRE de verdade vem do demonstrativo do SimplesVet, nao do nosso
-       agregador: as linhas de custo nunca estiveram nas vendas. Entra
-       aqui e passa pelo filtrarView como todo o resto — conta sem a aba
-       DRE nao recebe custo nenhum. */
-    erroIntervalo,
-    /* O demonstrativo do SimplesVet so existe por mes fechado, entao num
-       recorte livre ele nao vai: a aba DRE avisa em vez de mostrar um
-       numero que nao corresponde ao intervalo pedido. */
+       Clientes nao recebe o array de clientes, nem o telefone deles.
+       O DRE de verdade vem do demonstrativo do SimplesVet e passa pelo
+       mesmo filtro — conta sem a aba DRE nao recebe custo nenhum. So
+       existe por mes fechado, entao num recorte livre nao vai. */
     view: view
       ? filtrarView(
           {
             ...view,
-            dailyFat,
-            dreReal: de ? null : await dreDoPortal(DATA_DIR, unit, year, month).catch(() => null),
+            dreReal,
           },
           req.perfil.paginas
         )

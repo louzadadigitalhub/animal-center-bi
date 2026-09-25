@@ -51,6 +51,59 @@ function estagioDoMes(year, month, agora) {
   return "em curso";
 }
 
+/* ---------- Despesas pela regra da clinica ----------
+
+   "Contas / despesas" = soma destes quatro grupos do Demonstrativo, em
+   regime de caixa e so o que foi pago. Definido pela clinica em 25/09.
+
+   Acha pelo nome e nao pela posicao: cada unidade pendura os grupos num
+   lugar diferente da arvore (na filial "Deducoes de venda" fica dentro
+   de "Receita liquida", na matriz nao), e o nivel ja mudou uma vez
+   quando o portal trocou o recuo de 15 para 16 pixels.
+
+   Grupo sem nenhum lancamento pago no mes nem aparece na tabela do
+   portal — a filial nao teve "Despesas com mercadorias" paga em
+   setembro. Entra como zero e marcado, para a tela nao sumir com ele. */
+export const GRUPOS_DESPESA = [
+  "Despesas com mercadorias",
+  "Despesas operacionais",
+  "Deduções de venda",
+  "Despesas não operacionais",
+];
+
+const semAcento = (t) =>
+  String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim();
+
+/* Indice de cada um dos quatro grupos na arvore, ou -1. Se um deles
+   estivesse pendurado dentro de outro, somar os dois contaria o mesmo
+   dinheiro duas vezes; nesse caso fica so o de fora. */
+function indicesDosGrupos(linhas) {
+  const alvo = GRUPOS_DESPESA.map(semAcento);
+  const achados = alvo.map((g) => linhas.findIndex((l) => semAcento(l.nome) === g));
+  const paiDe = (i) => {
+    for (let k = i - 1; k >= 0; k--) if (linhas[k].nivel < linhas[i].nivel) return k;
+    return -1;
+  };
+  const descendeDe = (i, j) => {
+    for (let k = paiDe(i); k >= 0; k = paiDe(k)) if (k === j) return true;
+    return false;
+  };
+  return achados.map((i) => (i >= 0 && achados.some((j) => j >= 0 && j !== i && descendeDe(i, j)) ? -1 : i));
+}
+
+const centavos = (n) => Math.round((n || 0) * 100) / 100;
+
+/* valorDe(linha) -> numero. Devolve os quatro grupos com o valor
+   positivo (e despesa, a tela nao precisa do sinal) e o total. */
+function despesasDe(linhas, valorDe) {
+  const idx = indicesDosGrupos(linhas);
+  const grupos = GRUPOS_DESPESA.map((nome, k) => {
+    const i = idx[k];
+    return { nome, valor: i >= 0 ? centavos(-valorDe(linhas[i])) : 0, lancado: i >= 0 };
+  });
+  return { grupos, total: centavos(grupos.reduce((a, g) => a + g.valor, 0)) };
+}
+
 /* month e o indice 0-11 que o painel usa, ou "all" para o ano inteiro. */
 function fatiar(bloco, year, month, agora) {
   if (!bloco?.meses?.length) return null;
@@ -63,6 +116,7 @@ function fatiar(bloco, year, month, agora) {
       ambiente: bloco.ambiente,
       periodo: `${MESES_CURTOS[month]}/${year}`,
       estagio: estagioDoMes(year, month, agora),
+      despesas: despesasDe(bloco.linhas, (l) => l.valores[idx] ?? 0),
       linhas: bloco.linhas.map((l) => ({
         nome: l.nome,
         nivel: l.nivel,
@@ -86,6 +140,7 @@ function fatiar(bloco, year, month, agora) {
     ambiente: bloco.ambiente,
     periodo: ultimo === 11 ? String(year) : `jan a ${MESES_CURTOS[ultimo]}/${year}`,
     estagio: ultimo === 11 ? "fechado" : "em curso",
+    despesas: despesasDe(bloco.linhas, (l) => cols.reduce((a, i) => a + (l.valores[i] || 0), 0)),
     linhas: bloco.linhas.map((l) => ({
       nome: l.nome,
       nivel: l.nivel,
@@ -112,10 +167,20 @@ export async function matrizAnual(dataDir, unit, year) {
     .map((u) => {
       const b = d.unidades[u];
       if (!b?.linhas?.length) return null;
+      const porMes = b.meses.map((_, i) => despesasDe(b.linhas, (l) => l.valores[i] ?? 0));
       return {
         unit: u,
         ambiente: b.ambiente,
         meses: b.meses,
+        despesas: {
+          grupos: GRUPOS_DESPESA.map((nome, k) => ({
+            nome,
+            valores: porMes.map((m) => m.grupos[k].valor),
+            acumulado: centavos(porMes.slice(0, ultimoRealizado + 1).reduce((a, m) => a + m.grupos[k].valor, 0)),
+          })),
+          totais: porMes.map((m) => m.total),
+          acumulado: centavos(porMes.slice(0, ultimoRealizado + 1).reduce((a, m) => a + m.total, 0)),
+        },
         linhas: b.linhas.map((l) => ({
           nome: l.nome,
           nivel: l.nivel,
@@ -129,7 +194,7 @@ export async function matrizAnual(dataDir, unit, year) {
     })
     .filter(Boolean);
   if (!partes.length) return null;
-  return { at: d.at, regime: d.regime, ano: Number(year), ultimoRealizado, partes };
+  return { at: d.at, regime: d.regime, situacao: d.situacao || "todas", ano: Number(year), ultimoRealizado, partes };
 }
 
 export async function dreDoPortal(dataDir, unit, year, month) {
@@ -147,5 +212,5 @@ export async function dreDoPortal(dataDir, unit, year, month) {
     })
     .filter(Boolean);
   if (!partes.length) return null;
-  return { at: d.at, regime: d.regime, partes };
+  return { at: d.at, regime: d.regime, situacao: d.situacao || "todas", partes };
 }

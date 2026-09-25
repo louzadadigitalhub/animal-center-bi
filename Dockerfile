@@ -13,7 +13,7 @@ RUN mkdir -p /root/.cache \
   && cd bot && npm ci --omit=dev \
   && npx playwright install chromium
 
-ENV BUILD_MARK=login-dre-filial-20260918a
+ENV BUILD_MARK=robo-separado-dre-pagos-20260925a
 COPY web/ web/
 RUN cd web && npm run build
 
@@ -29,5 +29,13 @@ ENV SCRAPE_MS=120000
 VOLUME ["/data"]
 
 EXPOSE 8787
+
+# Em 24/09 o processo congelou sem morrer: o Docker so reinicia quem
+# sai, entao o painel ficou mais de um dia fora sem ninguem perceber.
+# Com o healthcheck, tres falhas seguidas (uns 3 minutos sem responder a
+# rota mais leve que existe) fazem o Swarm trocar o container.
+# start-period cobre o boot, quando o primeiro ciclo do robo ja comeca.
+HEALTHCHECK --interval=60s --timeout=10s --start-period=180s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/api/version').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 CMD ["node", "bot/server.js"]

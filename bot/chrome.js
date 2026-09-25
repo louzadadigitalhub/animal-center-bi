@@ -58,6 +58,27 @@ export function opcoesChrome(extra = {}) {
   };
 }
 
+/* Ja esta dentro do SimplesVet?
+
+   Antes a prova era esperar o texto "Painel de controle" ficar visivel.
+   O portal passou a ter dois elementos com esse texto, o primeiro
+   escondido; o Playwright pega o primeiro e espera ele aparecer ate
+   estourar. Em producao isso derrubou 26 de 29 ciclos entre 23 e 24/09
+   com o login certo — o log mostrava "navigated to .../principal/
+   dashboard.php" logo antes do timeout.
+
+   A URL e a prova que nao depende de layout: depois de escolher o
+   ambiente o portal sempre cai em /principal/. */
+const PAINEL = /\/principal\//;
+
+export function estaDentro(page) {
+  return PAINEL.test(page.url());
+}
+
+export async function esperarPainel(page, timeout = 60000) {
+  await page.waitForURL(PAINEL, { timeout, waitUntil: "domcontentloaded" });
+}
+
 /* O SimplesVet as vezes nao entrega o HTML em 60s (padrao do Playwright).
    Tres tentativas com 2 min cada: a pagina de login e o primeiro passo
    de tudo, e um timeout ali abortava o ciclo inteiro com dado velho. */
