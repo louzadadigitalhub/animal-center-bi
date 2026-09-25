@@ -179,11 +179,14 @@ function dataDaTela(txt) {
   return { y, m: mes, d };
 }
 
-/* Um ciclo completo nunca passou de uns 8 minutos nos logs. Acima de 20
-   o robo esta preso — num goto que nao volta, num Chromium que nao fecha —
-   e o servidor mata o processo em vez de esperar para sempre. Foi
-   esperar para sempre o que aconteceu em 24/09. */
-const ROBO_LIMITE_MS = Number(process.env.ROBO_LIMITE_MS || 20 * 60 * 1000);
+/* Nesta VPS um ciclo bom leva de 12 a 40 minutos: o Chromium disputa CPU
+   e memoria com os outros servicos da maquina e cada pagina do SimplesVet
+   demora. Em 25/09, por exemplo, um ciclo comecou perto das 01:54 e so
+   terminou as 02:32. O primeiro limite, de 20 minutos, matava o robo no
+   meio de uma coleta que ia dar certo — o robo nunca completava. Uma hora
+   fica acima do pior ciclo visto e ainda impede o que aconteceu em 24/09:
+   esperar para sempre um processo preso. */
+const ROBO_LIMITE_MS = Number(process.env.ROBO_LIMITE_MS || 60 * 60 * 1000);
 let ultimoCicloOk = null;
 
 function tick() {
@@ -305,6 +308,7 @@ app.get("/api/health", (_req, res) => {
     running,
     ultimoCicloOk,
     semColetarMin,
+    roboLimiteMin: Math.round(ROBO_LIMITE_MS / 60000),
     memoriaMb: { rss: Math.round(mem.rss / 1048576), heap: Math.round(mem.heapUsed / 1048576) },
     lastError,
     at: estado.at,
