@@ -941,19 +941,212 @@ function Dre({ u, year }) {
       {real.partes.map((parte) => (
         <DreArvore key={parte.unit} parte={parte} regime={real.regime} varias={real.partes.length > 1} />
       ))}
+      {real.historico?.length ? <DreGraficos historico={real.historico} year={year} /> : null}
     </div>
   );
 }
 
-/* Receita e despesas pela regra que a clinica definiu em 25/09:
-   - receita total: Vendas > Recebimentos > Este mes;
-   - despesas: soma de quatro grupos do Demonstrativo (regime de caixa,
-     so pagos e recebidos).
-   Sem resultado calculado entre os dois: a clinica nao pediu esse numero,
-   e subtrair dois recortes de fontes diferentes seria inventar um. */
+const MESES_DRE = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+/* Historico no fim da aba. O que ja estava acima nao muda.
+   Resultado do periodo = soma das despesas − Receita total. */
+function DreGraficos({ historico, year }) {
+  const agora = hojeBR();
+  const teto = year < agora.getFullYear() ? 11 : year > agora.getFullYear() ? 0 : agora.getMonth();
+  const [de, setDe] = useState(0);
+  const [ate, setAte] = useState(teto);
+  const [aberto, setAberto] = useState("total");
+  const ini = Math.min(Number(de), Number(ate));
+  const fim = Math.max(Number(de), Number(ate));
+  const fatia = historico.filter((m) => m.m >= ini && m.m <= fim);
+  const categorias = historico[0]?.grupos?.map((g) => g.nome) || [];
+  const receita = fatia.reduce((a, m) => a + (m.receita || 0), 0);
+  const despesas = fatia.reduce((a, m) => a + (m.despesas || 0), 0);
+  const resultado = despesas - receita;
+  const maxBar = Math.max(1, ...fatia.flatMap((m) => [m.receita || 0, m.despesas || 0]));
+  const toggle = (id) => setAberto((atual) => (atual === id ? null : id));
+  const mesAberto = typeof aberto === "number" ? fatia.find((m) => m.m === aberto) : null;
+  const catAberta = typeof aberto === "string" && aberto !== "total" ? aberto : null;
+  const maxCat = catAberta
+    ? Math.max(1, ...fatia.map((m) => m.grupos?.find((g) => g.nome === catAberta)?.valor || 0))
+    : 1;
+
+  return (
+    <section className="card span-12 dre-graficos">
+      <header>
+        <h2>Movimento do ano</h2>
+        <p>
+          Cada barra é um mês de {year}. A clara é a Receita total (o que já entrou). A âmbar é a soma das
+          despesas. O resultado do recorte é essa soma menos a Receita total. Clique num mês, numa categoria ou
+          no total para abrir o detalhe.
+        </p>
+      </header>
+      <div className="dre-filtro">
+        <label>
+          De
+          <select value={ini} onChange={(e) => setDe(Number(e.target.value))} aria-label="Mês inicial dos gráficos">
+            {MESES_DRE.map((nome, i) => (
+              <option key={nome} value={i}>
+                {nome}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          até
+          <select value={fim} onChange={(e) => setAte(Number(e.target.value))} aria-label="Mês final dos gráficos">
+            {MESES_DRE.map((nome, i) => (
+              <option key={nome} value={i}>
+                {nome}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <button type="button" className={`dre-total ${aberto === "total" ? "on" : ""}`} onClick={() => toggle("total")}>
+        <span>Total do recorte</span>
+        <b>{brlc(resultado)}</b>
+        <small>
+          despesas {brlc(despesas)} − receita {brlc(receita)}
+        </small>
+      </button>
+
+      <div className="dre-legenda">
+        <i className="rec" /> Receita total
+        <i className="des" /> Despesas
+      </div>
+      <div className="dre-barras" role="list">
+        {fatia.map((m) => (
+          <button
+            key={m.m}
+            type="button"
+            role="listitem"
+            className={aberto === m.m ? "on" : ""}
+            onClick={() => toggle(m.m)}
+            aria-expanded={aberto === m.m}
+          >
+            <span className="dre-par">
+              <i className="rec" style={{ height: `${Math.max(2, ((m.receita || 0) / maxBar) * 100)}%` }} />
+              <i className="des" style={{ height: `${Math.max(2, ((m.despesas || 0) / maxBar) * 100)}%` }} />
+            </span>
+            <small>{MESES_DRE[m.m]}</small>
+          </button>
+        ))}
+      </div>
+
+      <div className="dre-cats" role="list">
+        {categorias.map((nome) => {
+          const valor = fatia.reduce((a, m) => a + (m.grupos?.find((g) => g.nome === nome)?.valor || 0), 0);
+          return (
+            <button
+              key={nome}
+              type="button"
+              role="listitem"
+              className={aberto === nome ? "on" : ""}
+              onClick={() => toggle(nome)}
+              aria-expanded={aberto === nome}
+            >
+              <span>{nome}</span>
+              <b>{brlc(valor)}</b>
+            </button>
+          );
+        })}
+      </div>
+
+      {aberto === "total" ? (
+        <div className="dre-abre">
+          <h3>Mês a mês</h3>
+          <div className="table-wrap">
+            <table className="dre">
+              <thead>
+                <tr>
+                  <th>Mês</th>
+                  <th>Receita total</th>
+                  <th>Despesas</th>
+                  <th>Resultado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fatia.map((m) => (
+                  <tr key={m.m}>
+                    <td>{MESES_DRE[m.m]}</td>
+                    <td>{brlc(m.receita || 0)}</td>
+                    <td>{brlc(m.despesas || 0)}</td>
+                    <td className={(m.resultado || 0) > 0 ? "down" : ""}>{brlc(m.resultado || 0)}</td>
+                  </tr>
+                ))}
+                <tr className="now">
+                  <td>Total</td>
+                  <td>{brlc(receita)}</td>
+                  <td>{brlc(despesas)}</td>
+                  <td className={resultado > 0 ? "down" : ""}>{brlc(resultado)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {mesAberto ? (
+        <div className="dre-abre">
+          <h3>{MESES_DRE[mesAberto.m]}/{year}</h3>
+          <ul className="dre-grupos">
+            <li>
+              <span>Receita total {mesAberto.oficial ? "(cartão do mês)" : "(baixas do mês)"}</span>
+              <b>{brlc(mesAberto.receita || 0)}</b>
+            </li>
+            {(mesAberto.grupos || []).map((g) => (
+              <li key={g.nome}>
+                <span>{g.nome}</span>
+                <b>{brlc(g.valor)}</b>
+                {g.lancado ? null : <em>sem conta paga no mês</em>}
+              </li>
+            ))}
+            <li>
+              <span>Resultado (despesas − receita)</span>
+              <b>{brlc(mesAberto.resultado || 0)}</b>
+            </li>
+          </ul>
+        </div>
+      ) : null}
+
+      {catAberta ? (
+        <div className="dre-abre">
+          <h3>{catAberta}</h3>
+          <p>Quanto essa categoria saiu em cada mês do recorte.</p>
+          <div className="dre-barras uma" role="list">
+            {fatia.map((m) => {
+              const valor = m.grupos?.find((g) => g.nome === catAberta)?.valor || 0;
+              return (
+                <div key={m.m} role="listitem">
+                  <span className="dre-par">
+                    <i className="des" style={{ height: `${Math.max(2, (valor / maxCat) * 100)}%` }} />
+                  </span>
+                  <small>{MESES_DRE[m.m]}</small>
+                  <em>{brlc(valor)}</em>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/* Receita total = o que ja entrou (cartao de recebimentos, ou as baixas
+   do mes quando o cartao daquele mes nao foi lido).
+   Despesas = soma dos quatro grupos do demonstrativo.
+   Resultado = essa soma menos a Receita total. */
 function DreResumo({ parte, largura }) {
   const casa = parte.unit === "filial" ? "São Cristóvão" : "Animal Center";
   const d = parte.despesas;
+  const origemReceita = parte.receita?.oficial === false
+    ? "Baixas do período (o cartão desse mês não foi lido)"
+    : parte.receita?.origem === "ano"
+      ? "Soma da Receita total dos meses já corridos"
+      : "Vendas › Recebimentos › Receita total";
   return (
     <section className={`card ${largura} dre-resumo`}>
       <header>
@@ -964,12 +1157,19 @@ function DreResumo({ parte, largura }) {
         <div>
           <small>Receita total</small>
           <strong>{parte.receita ? brlc(parte.receita.total) : "—"}</strong>
-          <span>{parte.receita ? "Vendas › Recebimentos › Este mês" : "o robô só lê o mês corrente"}</span>
+          <span>{parte.receita ? origemReceita : "ainda sem a Receita total deste recorte"}</span>
         </div>
         <div>
           <small>Despesas</small>
           <strong>{d ? brlc(d.total) : "—"}</strong>
-          <span>Demonstrativo · caixa · pagos e recebidos</span>
+          <span>Soma dos grupos do demonstrativo</span>
+        </div>
+        <div>
+          <small>Resultado</small>
+          <strong className={parte.resultado > 0 ? "neg" : ""}>
+            {parte.resultado == null ? "—" : brlc(parte.resultado)}
+          </strong>
+          <span>soma das despesas − Receita total</span>
         </div>
       </div>
       {d ? (

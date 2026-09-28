@@ -197,6 +197,36 @@ export async function matrizAnual(dataDir, unit, year) {
   return { at: d.at, regime: d.regime, situacao: d.situacao || "todas", ano: Number(year), ultimoRealizado, partes };
 }
 
+/* Doze meses de despesa, ja somados nos quatro grupos. A receita nao
+   mora aqui: o painel cola a Receita total (recebimentos) por cima.
+   Resultado = soma das despesas − essa receita. */
+export async function historicoDespesas(dataDir, unit, year) {
+  const d = await ler(dataDir);
+  if (!d || Number(d.ano) !== Number(year)) return null;
+  const unidades = unit === "consolidado" ? ["matriz", "filial"] : [unit];
+  const blocos = unidades.map((u) => d.unidades?.[u]).filter((b) => b?.meses?.length);
+  if (!blocos.length) return null;
+  const meses = [];
+  for (let m = 0; m < 12; m++) {
+    const grupos = GRUPOS_DESPESA.map((nome) => ({ nome, valor: 0, lancado: false }));
+    for (const b of blocos) {
+      const idx = b.meses.indexOf(`${String(m + 1).padStart(2, "0")}/${year}`);
+      if (idx < 0) continue;
+      const des = despesasDe(b.linhas, (l) => l.valores[idx] ?? 0);
+      des.grupos.forEach((g, k) => {
+        grupos[k].valor = centavos(grupos[k].valor + g.valor);
+        grupos[k].lancado = grupos[k].lancado || g.lancado;
+      });
+    }
+    meses.push({
+      m,
+      grupos,
+      despesas: centavos(grupos.reduce((a, g) => a + g.valor, 0)),
+    });
+  }
+  return meses;
+}
+
 export async function dreDoPortal(dataDir, unit, year, month) {
   const d = await ler(dataDir);
   if (!d || Number(d.ano) !== Number(year)) return null;

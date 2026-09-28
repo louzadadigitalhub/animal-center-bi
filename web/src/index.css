@@ -575,6 +575,212 @@ input {
   color: var(--text-3);
 }
 
+.dre-resumo-numeros strong.neg {
+  color: var(--neg);
+}
+
+.dre-graficos {
+  scroll-margin-top: var(--s6);
+}
+
+.dre-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+}
+
+.dre-filtro label {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.dre-filtro select {
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 6px 10px;
+  min-height: 36px;
+}
+
+.dre-total {
+  display: grid;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  margin-bottom: var(--s4);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dre-total.on {
+  border-color: var(--line-2);
+}
+
+.dre-total span {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.dre-total b {
+  font-family: var(--mono);
+  font-size: 26px;
+  font-weight: 500;
+}
+
+.dre-total small {
+  color: var(--text-3);
+}
+
+.dre-legenda {
+  display: flex;
+  gap: var(--s4);
+  font-size: 12px;
+  color: var(--text-2);
+  margin-bottom: var(--s2);
+}
+
+.dre-legenda i,
+.dre-par i {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 6px;
+}
+
+.dre-legenda i.rec,
+.dre-par i.rec {
+  background: var(--cyan);
+}
+
+.dre-legenda i.des,
+.dre-par i.des {
+  background: var(--warn);
+}
+
+.dre-barras {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: var(--s4);
+}
+
+.dre-barras button,
+.dre-barras.uma > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+  padding: 4px 0;
+  border-radius: var(--r-sm);
+}
+
+.dre-barras button.on {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.dre-par {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  height: 140px;
+  width: 100%;
+}
+
+.dre-par i {
+  width: 8px;
+  margin: 0;
+  border-radius: 3px 3px 0 0;
+  align-self: flex-end;
+}
+
+.dre-barras small,
+.dre-barras em {
+  font-size: 10px;
+  font-style: normal;
+  color: var(--text-3);
+}
+
+.dre-cats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+}
+
+.dre-cats button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  text-align: left;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-1);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.dre-cats button.on {
+  border-color: var(--line-2);
+  background: var(--surface-2);
+}
+
+.dre-cats button span {
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.dre-cats button b {
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.dre-abre {
+  margin-top: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+}
+
+.dre-abre h3 {
+  margin: 0 0 var(--s2);
+  font-size: 15px;
+}
+
+.dre-abre p {
+  margin: 0 0 var(--s3);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .dre-barras {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
 
 /* A arvore do demonstrativo e longa; as linhas de total precisam saltar
    para dar onde a vista descansar. */

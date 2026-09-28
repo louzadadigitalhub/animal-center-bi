@@ -18,7 +18,7 @@ import {
   readSession,
   listPeople,
 } from "./people.js";
-import { dreDoPortal, matrizAnual } from "./dre.js";
+import { dreDoPortal, historicoDespesas, matrizAnual } from "./dre.js";
 import { IDS, PAGINAS, filtrarView, listarPerfis, removerPerfil, salvarPerfil, viewPublicaRanking } from "./acesso.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
@@ -534,11 +534,43 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
   if (r.semDados) {
     return res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet", lastError });
   }
-  const { view, receitasOficiais, ...resto } = r;
+  const { view, receitasOficiais, receitasPorUnidade, ...resto } = r;
   let dreReal = null;
   if (!pediuIntervalo) {
     dreReal = await dreDoPortal(DATA_DIR, unit, year, month).catch(() => null);
-    for (const parte of dreReal?.partes || []) parte.receita = receitasOficiais?.[parte.unit] || null;
+    const hist = await historicoDespesas(DATA_DIR, unit, year).catch(() => null);
+    const receitaDoMes = (u, m) => receitasPorUnidade?.[u]?.[m] || { total: 0, oficial: false };
+    if (dreReal && hist) {
+      const unidades = unit === "consolidado" ? ["matriz", "filial"] : [unit];
+      dreReal.historico = hist.map((mes) => {
+        const receita = unidades.reduce((a, u) => a + (receitaDoMes(u, mes.m).total || 0), 0);
+        const oficial = unidades.every((u) => receitaDoMes(u, mes.m).oficial);
+        return {
+          ...mes,
+          receita: Math.round(receita * 100) / 100,
+          oficial,
+          resultado: Math.round((mes.despesas - receita) * 100) / 100,
+        };
+      });
+    }
+    for (const parte of dreReal?.partes || []) {
+      const serieUnidade = receitasPorUnidade?.[parte.unit] || [];
+      if (month === "all") {
+        const agora = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+        const ultimo = year < agora.getFullYear() ? 11 : year > agora.getFullYear() ? -1 : agora.getMonth();
+        const total = serieUnidade.slice(0, ultimo + 1).reduce((a, x) => a + (x?.total || 0), 0);
+        if (total) parte.receita = { total: Math.round(total * 100) / 100, origem: "ano" };
+      } else if (receitasOficiais?.[parte.unit]) {
+        parte.receita = receitasOficiais[parte.unit];
+      } else if (serieUnidade[month]) {
+        parte.receita = { total: serieUnidade[month].total, oficial: false };
+      } else {
+        parte.receita = null;
+      }
+      if (parte.receita && parte.despesas) {
+        parte.resultado = Math.round((parte.despesas.total - parte.receita.total) * 100) / 100;
+      }
+    }
   }
   res.json({
     ok: true,

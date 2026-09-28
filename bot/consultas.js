@@ -224,6 +224,22 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
     };
   }
 
+  /* Receita de cada unidade, mes a mes. No mes que o robo leu o cartao
+     "Receita total", vale o cartao. Nos outros, a soma das baixas — a
+     mesma regra do dashboard quando o cartao daquele mes nao foi lido. */
+  const receitasPorUnidade = {};
+  for (const u of ["matriz", "filial"]) {
+    receitasPorUnidade[u] = Array.from({ length: 12 }, (_, m) => {
+      const of = snap.snapshot?.caixaOficial?.[u];
+      const pm = /(\d{2})\/(\d{2})\/(\d{4})/.exec(of?.period || "");
+      if (of?.receitaTotal && pm && Number(pm[3]) === year && Number(pm[2]) - 1 === m) {
+        return { total: of.receitaTotalExata ?? of.receitaTotal, oficial: true };
+      }
+      const v = agg.views?.[u]?.[year]?.[m];
+      return { total: v?.caixa?.receitaTotal ?? v?.recebido ?? 0, oficial: false };
+    });
+  }
+
   /* Receita oficial de cada unidade no mes pedido, para a aba DRE pôr ao
      lado das despesas de cada uma — no consolidado ela mostra as duas. */
   const receitasOficiais = {};
@@ -243,6 +259,7 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
     to: snap.to,
     rows: snap.rows,
     receitasOficiais,
+    receitasPorUnidade,
     headers: snap.snapshot.headers || agg.headers,
     years: snap.snapshot.years || agg.years || [],
     hoje: hojeDe(agg, unit, grupoOk) || null,
