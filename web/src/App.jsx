@@ -19,6 +19,7 @@ import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
 import { DailyBars, Donut, Hourly, LineChart, Radar, MultiLine, SparkBars, Treemap, VolumeTicket } from "./charts";
 import { MONTHS, YEARS, brl, brlc, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR, recuarMeses, recuarDias } from "./data";
+import { somarUnidades } from "./dre-soma.js";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
@@ -935,6 +936,7 @@ function Dre({ u, year }) {
   return (
     <div className="bento">
       <ExportarDre u={u} year={year} />
+      {real.partes.length > 1 ? <DreGlobal partes={real.partes} /> : null}
       {real.partes.map((parte) => (
         <DreResumo key={`resumo-${parte.unit}`} parte={parte} largura={real.partes.length > 1 ? "span-6" : "span-12"} />
       ))}
@@ -1139,6 +1141,48 @@ function DreGraficos({ historico, year }) {
    do mes quando o cartao daquele mes nao foi lido).
    Despesas = soma dos quatro grupos do demonstrativo.
    Resultado = essa soma menos a Receita total. */
+/* As duas lojas lado a lado não diziam o total. O dono pediu a soma
+   da receita, a soma da despesa e a diferença entre essas duas somas. */
+function DreGlobal({ partes }) {
+  const s = somarUnidades(partes);
+  return (
+    <section className={`card span-12 dre-resumo`}>
+      <header>
+        <h2>As duas unidades</h2>
+        <p>{partes[0]?.periodo ? `${partes[0].periodo} · Animal Center + São Cristóvão` : "Animal Center + São Cristóvão"}</p>
+      </header>
+      <div className="dre-resumo-numeros">
+        <div>
+          <small>Receita total</small>
+          <strong>{s.receita == null ? "—" : brlc(s.receita)}</strong>
+          <span>Soma da receita das duas unidades</span>
+        </div>
+        <div>
+          <small>Despesas</small>
+          <strong>{s.despesas == null ? "—" : brlc(s.despesas)}</strong>
+          <span>Soma da despesa das duas unidades</span>
+        </div>
+        <div>
+          <small>Diferença</small>
+          <strong className={s.resultado > 0 ? "neg" : ""}>{s.resultado == null ? "—" : brlc(s.resultado)}</strong>
+          <span>despesas − receita, as duas juntas</span>
+        </div>
+      </div>
+      {s.grupos.length ? (
+        <ul className="dre-grupos">
+          {s.grupos.map((g) => (
+            <li key={g.nome}>
+              <span>{g.nome}</span>
+              <b>{brlc(g.valor)}</b>
+              {g.lancado ? null : <em>sem conta paga no mês</em>}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
+
 function DreResumo({ parte, largura }) {
   const casa = parte.unit === "filial" ? "São Cristóvão" : "Animal Center";
   const d = parte.despesas;
