@@ -855,11 +855,29 @@ export function aggregate(rows, { soConsultas = false } = {}) {
     return sem;
   }
 
+  /* Soma das vendas já baixadas, por unidade e mês, numa passada só.
+     As views completas não são montadas no modo leve (soConsultas): cada
+     uma carrega a lista de clientes. Sem este índice, a DRE lia gaveta
+     vazia e mostrava receita R$ 0 mesmo com o mês cheio de baixas. */
+  const baixasPorMes = { matriz: {}, filial: {} };
+  for (const r of parsed) {
+    if (!r.recebido || !r.dt?.y || !r.dt?.m) continue;
+    if (r.unit !== "matriz" && r.unit !== "filial") continue;
+    const linha = (baixasPorMes[r.unit][r.dt.y] ??= Array(12).fill(0));
+    linha[r.dt.m - 1] += r.valor;
+  }
+  for (const u of ["matriz", "filial"]) {
+    for (const y of Object.keys(baixasPorMes[u])) {
+      baixasPorMes[u][y] = baixasPorMes[u][y].map((n) => Math.round(n));
+    }
+  }
+
   return {
     headers,
     count: parsed.length,
     years,
     views,
+    baixasPorMes,
     hoje,
     semana,
     clientesStatus,

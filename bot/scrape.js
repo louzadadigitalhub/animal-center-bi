@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { findChrome, gotoResiliente, estaDentro, escolherAmbiente, esperarAmbientesOuPainel } from "./chrome.js";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
+import { filaDeMeses, periodoBate, periodoDoMes } from "./receita-mes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = join(__dirname, "..", ".env");
@@ -225,6 +226,7 @@ async function scrapeRecebimentos(page, from, to, userId = "") {
     };
     return {
       period: document.querySelector("#p__vba_dat_baixa")?.value || "",
+      periodText: document.querySelector("#p__vba_dat_baixa_text span")?.innerText || "",
       cards,
       porUsuario: tableByCaption("Usuário que realizou a baixa"),
       porDia: tableByCaption("Data de baixa"),
@@ -233,6 +235,7 @@ async function scrapeRecebimentos(page, from, to, userId = "") {
   });
 
   const n = (s) => moneyBR(s);
+  const brutoReceita = extracted.cards["Receita total"];
   const dailyMap = {};
   for (const row of extracted.porDia || []) {
     const date = row.find((c) => /^\d{1,2}\/\d{1,2}/.test(c)) || "";
@@ -246,12 +249,14 @@ async function scrapeRecebimentos(page, from, to, userId = "") {
     noDia: n(extracted.cards["Baixas no dia de venda"]),
     posteriores: n(extracted.cards["Baixas posteriores à venda"]),
     adiantamento: n(extracted.cards["Adiantamento de clientes"]),
-    receitaTotal: n(extracted.cards["Receita total"]),
+    /* Card ausente não é zero: zero de verdade vem escrito "0,00". */
+    receitaTotal: brutoReceita == null || String(brutoReceita).trim() === "" ? null : n(brutoReceita),
     emAberto: n(extracted.cards["Em aberto"]),
     daily,
     porUsuario: extracted.porUsuario,
     porForma: extracted.porForma,
     period: extracted.period,
+    periodText: extracted.periodText,
     url: page.url(),
     userId: userId || "todos",
   };
@@ -285,20 +290,32 @@ function dailyFromCaixa(caixa, year, month) {
   return dailyFat;
 }
 
-function applyRecebimentos(snapshot, caixa, from, unit) {
-  if (!caixa || !caixa.receitaTotal) return snapshot;
+function applyRecebimentos(snapshot, caixa, from, unit, aberto = true) {
+  const total = Number(caixa?.receitaTotalExata ?? caixa?.receitaTotal);
+  if (!caixa || !Number.isFinite(total)) return snapshot;
   const m = String(from).match(/(\d{2})\/(\d{2})\/(\d{4})/);
   if (!m) return snapshot;
   const month = Number(m[2]) - 1;
   const year = Number(m[3]);
-  const pack = caixaPack(caixa);
-  const dailyFat = dailyFromCaixa(caixa, year, month);
+  const pack = caixaPack({ ...caixa, receitaTotal: total });
+  const dailyFat = caixa.dailyFat?.length ? caixa.dailyFat : dailyFromCaixa(caixa, year, month);
+  const chave = `${year}-${String(month + 1).padStart(2, "0")}`;
+  const registro = {
+    ...pack,
+    from: caixa.from || from,
+    to: caixa.to || "",
+    chave,
+    dailyFat: dailyFat.some((d) => d.fat) ? dailyFat : null,
+    url: caixa.url,
+    at: caixa.at || agoraBrasiliaIso(),
+    period: caixa.period,
+  };
   const view = snapshot.views?.[unit]?.[year]?.[month];
   if (view) {
     view.caixa = pack;
     view.fat = pack.receitaTotal;
     view.recebido = pack.receitaTotal;
-    if (dailyFat.some((d) => d.fat)) view.dailyFat = dailyFat;
+    if (registro.dailyFat) view.dailyFat = registro.dailyFat;
     if (view.dre) {
       for (const row of view.dre) {
         if (row.linha === "Recebimentos" || row.linha === "Lucro bruto" || row.linha === "Resultado operacional") {
@@ -308,17 +325,32 @@ function applyRecebimentos(snapshot, caixa, from, unit) {
       }
     }
   }
-  snapshot.caixaOficial = snapshot.caixaOficial || {};
-  /* A serie diaria oficial vai junto: o grafico "Entrada" do painel e por
-     data da baixa, e o painel le so este resumo, nao as visoes inteiras. */
-  snapshot.caixaOficial[unit] = {
-    ...pack,
-    dailyFat: dailyFat.some((d) => d.fat) ? dailyFat : null,
-    url: caixa.url,
-    at: agoraBrasiliaIso(),
-    period: caixa.period,
-  };
+  snapshot.caixaOficialMeses = snapshot.caixaOficialMeses || {};
+  snapshot.caixaOficialMeses[unit] = snapshot.caixaOficialMeses[unit] || {};
+  snapshot.caixaOficialMeses[unit][chave] = registro;
+  /* O resumo de um mês só (caixaOficial) continua sendo o mês aberto.
+     Guardar setembro aqui apagaria outubro, que é o que o painel de
+     hoje ainda lê por este caminho. */
+  if (aberto) {
+    snapshot.caixaOficial = snapshot.caixaOficial || {};
+    snapshot.caixaOficial[unit] = registro;
+  }
   return snapshot;
+}
+
+const ARQ_RECEITAS_MESES = () => join(DATA_DIR, "receitas-meses.json");
+
+async function loadReceitasMeses() {
+  try {
+    const j = JSON.parse(await readFile(ARQ_RECEITAS_MESES(), "utf8"));
+    return j && typeof j === "object" ? j : {};
+  } catch {
+    return {};
+  }
+}
+
+async function saveReceitasMeses(guardados) {
+  await writeFile(ARQ_RECEITAS_MESES(), JSON.stringify(guardados));
 }
 
 function subCaixa(a, b) {
@@ -462,8 +494,6 @@ export async function scrape({ from, to } = {}) {
   const pNow = nowBrasilia();
   const histFrom = from || `01/01/${pNow.y - 3}`;
   const histTo = to || monthEndBR();
-  const caixaFrom = monthStartBR();
-  const caixaTo = monthEndBR();
   if (!EMAIL || !PASSWORD) throw new Error("SIMPLES_VET_EMAIL/PASSWORD ausentes");
 
   const executablePath = findChrome() || undefined;
@@ -563,16 +593,59 @@ export async function scrape({ from, to } = {}) {
     if (!objects.length) throw new Error("Export nao veio (csv vazio).");
     let snapshot = aggregate(objects);
     const caixaByUnit = {};
+    /* Cada mês é uma ida a Vendas › Recebimentos: dia 1 até o último
+       dia, filtrar, ler o card Receita total. O mês aberto é relido
+       sempre. Mês fechado, lido depois que ele acabou, fica guardado. */
+    const guardados = await loadReceitasMeses();
+    snapshot.caixaOficialMeses = guardados;
+    const mesAberto = periodoDoMes(pNow.y, pNow.m - 1);
+    /* 8 por unidade: o mês que está correndo, o que acabou de fechar
+       e mais seis para trás. Mais do que isso estoura o limite de 60 min
+       do ciclo antes de gravar o painel. O que faltou entra no seguinte. */
+    const limiteMeses = Number(process.env.RECEITA_MESES_POR_CICLO || 8);
+    await mkdir(DATA_DIR, { recursive: true });
     for (const sede of sedes) {
+      const fila = filaDeMeses(pNow, {
+        anoInicio: startY,
+        jaLidos: guardados[sede.unit] || {},
+        limite: limiteMeses,
+      });
+      console.log("recebimentos fila", sede.unit, fila.map((m) => m.chave).join(","));
       try {
         await logout(page);
         await login(page, sede.id);
-        const cx = await scrapeRecebimentos(page, caixaFrom, caixaTo, "");
-        caixaByUnit[sede.unit] = cx;
-        snapshot = applyRecebimentos(snapshot, cx, caixaFrom, sede.unit);
       } catch (err) {
-        console.warn("recebimentos", sede.unit, err);
+        console.warn("recebimentos login", sede.unit, err?.message || err);
+        continue;
       }
+      for (const mes of fila) {
+        try {
+          const cx = await scrapeRecebimentos(page, mes.from, mes.to, "");
+          const periodoLido = cx.period || cx.periodText;
+          if (!periodoBate(periodoLido, mes.from, mes.to)) {
+            console.warn("recebimentos periodo nao aplicou", sede.unit, mes.chave, periodoLido);
+            continue;
+          }
+          if (!Number.isFinite(Number(cx.receitaTotal))) {
+            console.warn("recebimentos sem card", sede.unit, mes.chave);
+            continue;
+          }
+          const lido = { ...cx, from: mes.from, to: mes.to, chave: mes.chave, at: agoraBrasiliaIso() };
+          guardados[sede.unit] = guardados[sede.unit] || {};
+          guardados[sede.unit][mes.chave] = lido;
+          snapshot = applyRecebimentos(snapshot, lido, mes.from, sede.unit, mes.aberto);
+          if (mes.aberto) caixaByUnit[sede.unit] = lido;
+          await saveReceitasMeses(guardados);
+          console.log("recebimentos", sede.unit, mes.chave, cx.receitaTotal);
+        } catch (err) {
+          console.warn("recebimentos", sede.unit, mes.chave, err?.message || err);
+        }
+      }
+    }
+    for (const unit of ["matriz", "filial"]) {
+      if (caixaByUnit[unit] || !guardados[unit]?.[mesAberto.chave]) continue;
+      caixaByUnit[unit] = guardados[unit][mesAberto.chave];
+      snapshot = applyRecebimentos(snapshot, caixaByUnit[unit], mesAberto.from, unit, true);
     }
     const caixaTodos = caixaByUnit.matriz && caixaByUnit.filial
       ? {
@@ -580,13 +653,15 @@ export async function scrape({ from, to } = {}) {
           noDia: (caixaByUnit.matriz.noDia || 0) + (caixaByUnit.filial.noDia || 0),
           posteriores: (caixaByUnit.matriz.posteriores || 0) + (caixaByUnit.filial.posteriores || 0),
           adiantamento: (caixaByUnit.matriz.adiantamento || 0) + (caixaByUnit.filial.adiantamento || 0),
-          receitaTotal: (caixaByUnit.matriz.receitaTotal || 0) + (caixaByUnit.filial.receitaTotal || 0),
+          receitaTotal:
+            Number(caixaByUnit.matriz.receitaTotalExata ?? caixaByUnit.matriz.receitaTotal ?? 0) +
+            Number(caixaByUnit.filial.receitaTotalExata ?? caixaByUnit.filial.receitaTotal ?? 0),
           emAberto: (caixaByUnit.matriz.emAberto || 0) + (caixaByUnit.filial.emAberto || 0),
         }
       : caixaByUnit.matriz || caixaByUnit.filial || null;
-    if (caixaTodos) snapshot = applyRecebimentos(snapshot, caixaTodos, caixaFrom, "consolidado");
+    if (caixaTodos) snapshot = applyRecebimentos(snapshot, caixaTodos, mesAberto.from, "consolidado");
     if (caixaByUnit.matriz && !caixaByUnit.filial) {
-      snapshot = applyRecebimentos(snapshot, caixaByUnit.matriz, caixaFrom, "matriz");
+      snapshot = applyRecebimentos(snapshot, caixaByUnit.matriz, mesAberto.from, "matriz");
     }
     const caixaFilial = caixaByUnit.filial || null;
     await mkdir(DATA_DIR, { recursive: true });
@@ -621,13 +696,29 @@ export async function scrape({ from, to } = {}) {
           years: snapshot.years,
           clientesStatus: snapshot.clientesStatus,
           caixaOficial: snapshot.caixaOficial,
+          caixaOficialMeses: snapshot.caixaOficialMeses,
         },
       })
     );
     await writeFile(join(DATA_DIR, "raw.csv"), `anos ${histFrom} ${histTo} linhas ${objects.length}\n`);
     await writeFile(
       join(DATA_DIR, "recebimentos.json"),
-      JSON.stringify({ consolidado: caixaTodos, filial: caixaFilial }, null, 2)
+      JSON.stringify(
+        {
+          consolidado: caixaTodos,
+          filial: caixaFilial,
+          meses: Object.fromEntries(
+            ["matriz", "filial"].map((u) => [
+              u,
+              Object.fromEntries(
+                Object.entries(guardados[u] || {}).map(([k, v]) => [k, v.receitaTotalExata ?? v.receitaTotal])
+              ),
+            ])
+          ),
+        },
+        null,
+        2
+      )
     );
     const anos = [...new Set(objects.map((r) => yearOfRow(r)).filter(Boolean))].sort();
     const temVendaFilial = objects.some((r) => r._sede === "filial");
@@ -642,6 +733,10 @@ export async function scrape({ from, to } = {}) {
          cartao de recebimento fazia o aviso ficar falso com a Filial
          cheia de venda e o cartao falhando um ciclo. */
       filialOk: temVendaFilial || temCaixaFilial || sedes.some((s) => s.unit === "filial"),
+      receitasMeses: {
+        matriz: Object.keys(guardados.matriz || {}).sort(),
+        filial: Object.keys(guardados.filial || {}).sort(),
+      },
     };
     await writeFile(join(DATA_DIR, "espelho.json"), JSON.stringify(espelho, null, 2));
     return {
@@ -654,6 +749,7 @@ export async function scrape({ from, to } = {}) {
       consolidado: caixaTodos ? caixaTodos.receitaTotal : null,
       anos,
       filialOk: espelho.filialOk,
+      receitasMeses: espelho.receitasMeses,
     };
   } finally {
     await browser.close();

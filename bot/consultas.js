@@ -17,6 +17,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { aggregate, GRUPOS } from "./aggregate.js";
 import { personDashboard } from "./people.js";
+import { oficialDoMes } from "./receita-mes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
@@ -151,21 +152,17 @@ async function aggregado() {
   });
 }
 
-/* Receita total pela regra da clinica: Vendas > Recebimentos > Este mes.
+/* Receita total pela regra da clinica: Vendas › Recebimentos, período
+   do dia 1 ao último dia daquele mês, card "Receita total".
 
-   O robo le esse numero do portal a cada ciclo e grava em caixaOficial.
-   Desde 15/09 a tela montava o mes a partir do aggregate, que calcula a
-   receita somando as vendas marcadas como recebidas — outro numero, e o
-   oficial ficava guardado sem uso. Em 25/09 o portal dava R$ 16.153,10
-   para Sao Cristovao; e o que tem que aparecer.
-
-   So vale para o mes que o robo leu (o corrente) e sem filtro de grupo:
-   o card do portal e da unidade inteira, nao de um grupo. */
+   Cada mês lido fica em caixaOficialMeses. Sem o card daquele mês, a
+   tela continua nas baixas e avisa que não é o número do portal.
+   O card é da unidade inteira, então filtro de grupo não usa ele. */
 function comRecebimentoOficial(view, snap, unit, year, month, grupo) {
   if (!view || grupo || month === "all") return view;
-  const of = snap?.snapshot?.caixaOficial?.[unit];
-  const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(of?.period || "");
-  if (!of?.receitaTotal || !m || Number(m[3]) !== year || Number(m[2]) - 1 !== month) return view;
+  const of = oficialDoMes(snap, unit, year, month);
+  if (!of) return view;
+  const total = of.receitaTotalExata ?? of.receitaTotal;
   return {
     ...view,
     caixa: {
@@ -173,14 +170,18 @@ function comRecebimentoOficial(view, snap, unit, year, month, grupo) {
       posteriores: of.posteriores,
       adiantamento: of.adiantamento,
       receitaTotal: of.receitaTotal,
-      receitaTotalExata: of.receitaTotalExata ?? of.receitaTotal,
+      receitaTotalExata: total,
       emAberto: of.emAberto,
     },
     fat: of.receitaTotal,
     recebido: of.receitaTotal,
     /* A serie do grafico "Entrada" e por data da baixa, a mesma do card. */
     dailyFat: of.dailyFat?.some((d) => d.fat) ? of.dailyFat : view.dailyFat,
-    receitaFonte: { origem: "recebimentos", lidoEm: of.at || null },
+    receitaFonte: {
+      origem: "recebimentos",
+      lidoEm: of.at || null,
+      periodo: of.from && of.to ? `${of.from} até ${of.to}` : null,
+    },
   };
 }
 
@@ -224,19 +225,18 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
     };
   }
 
-  /* Receita de cada unidade, mes a mes. No mes que o robo leu o cartao
-     "Receita total", vale o cartao. Nos outros, a soma das baixas — a
-     mesma regra do dashboard quando o cartao daquele mes nao foi lido. */
+  /* Receita de cada unidade, mês a mês. Com o card daquele mês (dia 1
+     ao último), vale o card. Sem ele, a soma das baixas — e oficial
+     fica false para a tela não chamar isso de Receita total. */
   const receitasPorUnidade = {};
   for (const u of ["matriz", "filial"]) {
     receitasPorUnidade[u] = Array.from({ length: 12 }, (_, m) => {
-      const of = snap.snapshot?.caixaOficial?.[u];
-      const pm = /(\d{2})\/(\d{2})\/(\d{4})/.exec(of?.period || "");
-      if (of?.receitaTotal && pm && Number(pm[3]) === year && Number(pm[2]) - 1 === m) {
-        return { total: of.receitaTotalExata ?? of.receitaTotal, oficial: true };
-      }
+      const of = oficialDoMes(snap, u, year, m);
+      if (of) return { total: of.receitaTotalExata ?? of.receitaTotal, oficial: true };
       const v = agg.views?.[u]?.[year]?.[m];
-      return { total: v?.caixa?.receitaTotal ?? v?.recebido ?? 0, oficial: false };
+      const daView = v?.caixa?.receitaTotal ?? v?.recebido;
+      const baixas = agg.baixasPorMes?.[u]?.[year]?.[m];
+      return { total: daView != null ? daView : (baixas ?? 0), oficial: false };
     });
   }
 
@@ -245,10 +245,9 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
   const receitasOficiais = {};
   if (!pediuIntervalo && month !== "all") {
     for (const u of ["matriz", "filial"]) {
-      const of = snap.snapshot?.caixaOficial?.[u];
-      const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(of?.period || "");
-      if (of?.receitaTotal && m && Number(m[3]) === year && Number(m[2]) - 1 === month) {
-        receitasOficiais[u] = { total: of.receitaTotalExata ?? of.receitaTotal, lidoEm: of.at || null };
+      const of = oficialDoMes(snap, u, year, month);
+      if (of) {
+        receitasOficiais[u] = { total: of.receitaTotalExata ?? of.receitaTotal, lidoEm: of.at || null, oficial: true };
       }
     }
   }

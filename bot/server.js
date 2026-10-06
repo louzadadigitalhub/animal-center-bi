@@ -77,6 +77,7 @@ async function lerEspelho() {
       ),
       historico: e.historico || estado.historico,
       perfis: e.perfis || estado.perfis,
+      receitasMeses: e.receitasMeses || estado.receitasMeses || null,
     };
   } catch {
     /* ainda sem historico */
@@ -229,6 +230,7 @@ function tick() {
           filialOk: Boolean(r.filialOk || r.filial),
           historico: estado.historico,
           perfis: estado.perfis,
+          receitasMeses: r.receitasMeses || estado.receitasMeses || null,
         };
         await lerEspelho().catch(() => {});
         /* A primeira pessoa a abrir o painel depois da coleta nao paga o
@@ -318,6 +320,7 @@ app.get("/api/health", (_req, res) => {
     dre: dreStatus,
     historico: estado.historico,
     perfis: estado.perfis,
+    receitasMeses: estado.receitasMeses || null,
   });
 });
 
@@ -558,12 +561,14 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
       if (month === "all") {
         const agora = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
         const ultimo = year < agora.getFullYear() ? 11 : year > agora.getFullYear() ? -1 : agora.getMonth();
-        const total = serieUnidade.slice(0, ultimo + 1).reduce((a, x) => a + (x?.total || 0), 0);
-        if (total) parte.receita = { total: Math.round(total * 100) / 100, origem: "ano" };
+        const pedacos = serieUnidade.slice(0, ultimo + 1);
+        const total = pedacos.reduce((a, x) => a + (x?.total || 0), 0);
+        const oficial = pedacos.length > 0 && pedacos.every((x) => x?.oficial);
+        if (total) parte.receita = { total: Math.round(total * 100) / 100, origem: "ano", oficial };
       } else if (receitasOficiais?.[parte.unit]) {
         parte.receita = receitasOficiais[parte.unit];
       } else if (serieUnidade[month]) {
-        parte.receita = { total: serieUnidade[month].total, oficial: false };
+        parte.receita = { total: serieUnidade[month].total, oficial: Boolean(serieUnidade[month].oficial) };
       } else {
         parte.receita = null;
       }

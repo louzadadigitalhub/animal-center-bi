@@ -147,14 +147,14 @@ function Vendas({ u, year, porMes }) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {/* A clinica confere este numero em Vendas > Recebimentos >
-                Este mes. Diz de onde veio para ninguem comparar banana
-                com laranja: fora do mes corrente ele e calculado das
-                vendas marcadas como recebidas, e pode nao bater. */}
+            {/* A clinica confere este numero em Vendas > Recebimentos,
+                do dia 1 ao ultimo dia do mes. Diz de onde veio para
+                ninguem comparar banana com laranja: mes sem o card lido
+                ainda e a soma das baixas, e pode nao bater. */}
             <p className="hint">
               {u.receitaFonte?.origem === "recebimentos"
-                ? "Recebimentos do SimplesVet, este mês — o mesmo card de Vendas › Recebimentos."
-                : "Calculada das vendas recebidas neste recorte. O número oficial de Recebimentos só existe para o mês corrente."}
+                ? `Vendas › Recebimentos${u.receitaFonte.periodo ? `, ${u.receitaFonte.periodo}` : ""} — card Receita total.`
+                : "Ainda sem o card deste mês. Este valor é a soma das baixas, até o robô filtrar do dia 1 ao último dia."}
             </p>
             <div className="mini-kpis">
               <div>

@@ -1,0 +1,66 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { filaDeMeses, leituraFechada, oficialDoMes, periodoDoMes, somarOficiais } from "./receita-mes.js";
+
+test("setembro vai do dia 1 ao 30 e agosto do dia 1 ao 31", () => {
+  const set = periodoDoMes(2026, 8);
+  assert.equal(set.from, "01/09/2026");
+  assert.equal(set.to, "30/09/2026");
+  assert.equal(set.chave, "2026-09");
+  const ago = periodoDoMes(2026, 7);
+  assert.equal(ago.from, "01/08/2026");
+  assert.equal(ago.to, "31/08/2026");
+  assert.equal(periodoDoMes(2024, 1).to, "29/02/2024");
+});
+
+test("mês fechado lido depois do último dia não entra de novo na fila", () => {
+  const set = periodoDoMes(2026, 8);
+  assert.equal(leituraFechada({ ...set, receitaTotalExata: 419676.01, at: "2026-09-30T23:00:00-03:00" }, set), false);
+  assert.equal(leituraFechada({ ...set, receitaTotalExata: 419676.01, at: "2026-10-02T14:00:00-03:00" }, set), true);
+  const ago = periodoDoMes(2026, 7);
+  const fila = filaDeMeses(
+    { y: 2026, m: 10 },
+    {
+      anoInicio: 2026,
+      limite: 4,
+      jaLidos: {
+        "2026-09": { ...set, receitaTotalExata: 419676.01, at: "2026-10-02T14:00:00-03:00" },
+        "2026-08": { ...ago, receitaTotalExata: 1, at: "2026-10-02T14:00:00-03:00" },
+      },
+    }
+  );
+  /* Outubro sempre. Setembro também, porque acabou de fechar.
+     Agosto já foi lido depois do dia 31, então pula. */
+  assert.deepEqual(fila.map((m) => m.chave), ["2026-10", "2026-09", "2026-07", "2026-06"]);
+  assert.equal(fila[0].from, "01/10/2026");
+  assert.equal(fila[0].to, "31/10/2026");
+  assert.equal(fila[0].aberto, true);
+});
+
+test("outubro não apaga a receita de setembro", () => {
+  const snap = {
+    snapshot: {
+      caixaOficial: {
+        matriz: { period: "01/10/2026-31/10/2026", receitaTotalExata: 100 },
+      },
+      caixaOficialMeses: {
+        matriz: {
+          "2026-09": { chave: "2026-09", from: "01/09/2026", to: "30/09/2026", receitaTotalExata: 419676.01 },
+          "2026-10": { chave: "2026-10", from: "01/10/2026", to: "31/10/2026", receitaTotalExata: 100 },
+        },
+        filial: {
+          "2026-09": { chave: "2026-09", from: "01/09/2026", to: "30/09/2026", receitaTotalExata: 22745.85 },
+        },
+      },
+    },
+  };
+  assert.equal(oficialDoMes(snap, "matriz", 2026, 8).receitaTotalExata, 419676.01);
+  assert.equal(oficialDoMes(snap, "matriz", 2026, 9).receitaTotalExata, 100);
+  assert.equal(oficialDoMes(snap, "matriz", 2026, 7), null);
+  assert.equal(oficialDoMes(snap, "filial", 2026, 8).receitaTotalExata, 22745.85);
+  const duas = somarOficiais(
+    snap.snapshot.caixaOficialMeses.matriz["2026-09"],
+    snap.snapshot.caixaOficialMeses.filial["2026-09"]
+  );
+  assert.equal(duas.receitaTotalExata, 442421.86);
+});
