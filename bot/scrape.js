@@ -652,6 +652,9 @@ export async function scrape({ from, to } = {}) {
     for (const sede of sedes) {
       const fila = filaDeMeses(pNow, {
         anoInicio: startY,
+        /* São Cristóvão abriu em mar/2025. Mês sem card esperava 4 min até
+           desistir, e voltava para a fila em todo ciclo. */
+        desde: Object.keys(baixasMes[sede.unit] || {}).sort()[0] || "",
         jaLidos: guardados[sede.unit] || {},
         limite: limiteMeses,
       });
