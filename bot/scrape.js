@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { findChrome, gotoResiliente, estaDentro, escolherAmbiente, esperarAmbientesOuPainel } from "./chrome.js";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
-import { filaDeMeses, periodoBate, periodoDoMes } from "./receita-mes.js";
+import { baixasPorMesDeBaixa, cardConfere, filaDeMeses, periodoBate, periodoDoMes } from "./receita-mes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = join(__dirname, "..", ".env");
@@ -189,6 +189,38 @@ async function scrapeRecebimentos(page, from, to, userId = "") {
      minuto: com 30s a receita da filial vinha null com a coleta certa. */
   await gotoResiliente(page, "https://app.simples.vet/consulta/recebimento/recebimento.php");
   await page.waitForSelector("#p__vba_dat_baixa_text", { timeout: 120000 });
+  /* O filtro é AJAX e a página abre no dia de hoje. Os cards de hoje
+     ficam na tela até a resposta chegar, e ler 1,2 s depois do clique
+     gravou o dia 06/10 da matriz (R$ 3.239,50) em todos os meses. Guarda
+     o card de antes e espera ele mudar e parar de mudar. */
+  const lerReceita = () =>
+    page
+      .evaluate(() => {
+        for (const el of document.querySelectorAll(".dashboard-stat")) {
+          const desc = el.querySelector(".desc");
+          const label = (desc?.getAttribute("data-desc") || desc?.innerText || "").trim();
+          if (label === "Receita total") return (el.querySelector(".number")?.innerText || "").trim();
+        }
+        return null;
+      })
+      .catch(() => null);
+  const esperarCard = async (diferenteDe, prazo) => {
+    let visto = await lerReceita();
+    let desde = Date.now();
+    const fim = Date.now() + prazo;
+    while (Date.now() < fim) {
+      await page.waitForTimeout(500);
+      const agora = await lerReceita();
+      if (agora !== visto) {
+        visto = agora;
+        desde = Date.now();
+      } else if (agora && agora !== diferenteDe && Date.now() - desde >= 2000) {
+        return agora;
+      }
+    }
+    return null;
+  };
+  const antes = await esperarCard(undefined, 30000);
   await page.evaluate(
     ({ from, to, userId }) => {
       const hidden = document.getElementById("p__vba_dat_baixa");
@@ -207,8 +239,10 @@ async function scrapeRecebimentos(page, from, to, userId = "") {
     page.waitForLoadState("domcontentloaded"),
     page.locator("#p__btn_filtrar").click(),
   ]);
+  /* Sem mudar em 2 min (o mês igual a hoje, no dia 1), segue: quem chama
+     confere o card com as baixas antes de gravar. */
+  await esperarCard(antes, 120000);
   await page.waitForSelector(".dashboard-stat .number", { timeout: 120000 });
-  await page.waitForTimeout(1200);
 
   const extracted = await page.evaluate(() => {
     const cards = {};
@@ -597,6 +631,17 @@ export async function scrape({ from, to } = {}) {
        dia, filtrar, ler o card Receita total. O mês aberto é relido
        sempre. Mês fechado, lido depois que ele acabou, fica guardado. */
     const guardados = await loadReceitasMeses();
+    /* Leitura gravada que não confere com as baixas daquele mês sai da
+       gaveta e volta para a fila — as de 06/10 que pegaram o dia de hoje. */
+    const baixasMes = baixasPorMesDeBaixa(objects);
+    for (const [u, meses] of Object.entries(guardados)) {
+      for (const [k, v] of Object.entries(meses || {})) {
+        const card = v?.receitaTotalExata ?? v?.receitaTotal;
+        if (cardConfere(card, baixasMes[u]?.[k])) continue;
+        console.warn("recebimentos descartado", u, k, card, Math.round(baixasMes[u]?.[k] || 0));
+        delete meses[k];
+      }
+    }
     snapshot.caixaOficialMeses = guardados;
     const mesAberto = periodoDoMes(pNow.y, pNow.m - 1);
     /* 8 por unidade: o mês que está correndo, o que acabou de fechar
@@ -628,6 +673,16 @@ export async function scrape({ from, to } = {}) {
           }
           if (!Number.isFinite(Number(cx.receitaTotal))) {
             console.warn("recebimentos sem card", sede.unit, mes.chave);
+            continue;
+          }
+          if (!cardConfere(cx.receitaTotal, baixasMes[sede.unit]?.[mes.chave])) {
+            console.warn(
+              "recebimentos nao confere com as baixas",
+              sede.unit,
+              mes.chave,
+              cx.receitaTotal,
+              Math.round(baixasMes[sede.unit]?.[mes.chave] || 0)
+            );
             continue;
           }
           const lido = { ...cx, from: mes.from, to: mes.to, chave: mes.chave, at: agoraBrasiliaIso() };

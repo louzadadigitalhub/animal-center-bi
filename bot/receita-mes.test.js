@@ -1,6 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { filaDeMeses, leituraFechada, oficialDoMes, periodoDoMes, somarOficiais } from "./receita-mes.js";
+import {
+  baixasPorMesDeBaixa,
+  cardConfere,
+  filaDeMeses,
+  leituraFechada,
+  oficialDoMes,
+  periodoDoMes,
+  somarOficiais,
+} from "./receita-mes.js";
 
 test("setembro vai do dia 1 ao 30 e agosto do dia 1 ao 31", () => {
   const set = periodoDoMes(2026, 8);
@@ -63,4 +71,24 @@ test("outubro não apaga a receita de setembro", () => {
     snap.snapshot.caixaOficialMeses.filial["2026-09"]
   );
   assert.equal(duas.receitaTotalExata, 442421.86);
+});
+
+test("card que pegou a tela de hoje não confere com as baixas do mês", () => {
+  const rows = [
+    { "Status da venda": "Baixada", "Data baixa": "15/09/2026 10:00", "Líquido": "400.000,00", _sede: "matriz" },
+    { "Status da venda": "Baixada", "Data baixa": "02/09/2026", "Líquido": "21.613,01" },
+    { "Status da venda": "Em aberto", "Data baixa": "", "Líquido": "999,00" },
+    { "Status da venda": "Baixada", "Data baixa": "10/09/2026", "Líquido": "22.745,85", _sede: "filial" },
+  ];
+  const b = baixasPorMesDeBaixa(rows);
+  assert.equal(Math.round(b.matriz["2026-09"] * 100) / 100, 421613.01);
+  assert.equal(b.filial["2026-09"], 22745.85);
+  assert.equal(cardConfere(421613.01, b.matriz["2026-09"]), true);
+  /* 06/10/2026: a página abre no dia de hoje e o filtro ainda não tinha
+     voltado. A matriz gravou R$ 3.239,50 em todos os meses. */
+  assert.equal(cardConfere(3239.5, b.matriz["2026-09"]), false);
+  assert.equal(cardConfere(22745.85 * 0.96, b.filial["2026-09"]), true);
+  assert.equal(cardConfere(0, 0), true);
+  assert.equal(cardConfere(3239.5, 0), false);
+  assert.equal(cardConfere(null, 1000), false);
 });

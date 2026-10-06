@@ -113,3 +113,31 @@ export function oficialDoMes(snap, unit, year, month0) {
   if (legadoBate(legado, year, month0)) return legado;
   return null;
 }
+
+const reais = (s) => Number(String(s ?? "").replace(/[^\d,.-]/g, "").replace(/\./g, "").replace(",", ".")) || 0;
+
+/* Soma do Líquido das vendas baixadas, pelo mês da Data baixa. É o que
+   o card Receita total conta: de set/2025 a out/2026 os dois ficaram
+   entre 0,96 e 1,01 um do outro. Serve para recusar uma leitura que
+   pegou a tela errada. */
+export function baixasPorMesDeBaixa(rows) {
+  const out = {};
+  for (const r of rows || []) {
+    if (!/baix/i.test(String(r["Status da venda"] || ""))) continue;
+    const m = /(\d{2})\/(\d{2})\/(\d{4})/.exec(String(r["Data baixa"] || ""));
+    if (!m) continue;
+    const u = r._sede || "matriz";
+    const k = `${m[3]}-${m[2]}`;
+    (out[u] ??= {})[k] = (out[u][k] || 0) + reais(r["Líquido"]);
+  }
+  return out;
+}
+
+/* Até 20% de distância das baixas, ou R$ 1.000 em mês quase parado. */
+export function cardConfere(card, baixas) {
+  if (card == null || card === "") return false;
+  const c = Number(card);
+  const b = Number(baixas) || 0;
+  if (!Number.isFinite(c)) return false;
+  return Math.abs(c - b) <= Math.max(1000, 0.2 * b);
+}
