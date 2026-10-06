@@ -26,19 +26,22 @@ export function leituraFechada(salvo, periodo) {
 /* O mês aberto entra sempre (o dinheiro de hoje ainda cai nele).
    O mês que acabou de fechar também: uma baixa lançada nos primeiros
    dias ainda pode cair nele. Os outros só entram se ainda não tiverem
-   card lido depois do último dia, do mais novo para o mais velho. */
-export function filaDeMeses(agora, { anoInicio, jaLidos = {}, limite = 14 } = {}) {
+   card lido depois do último dia, do mais novo para o mais velho.
+   desde ("aaaa-mm") é o primeiro mês da unidade: antes dele a página
+   não tem card nenhum para ler. */
+export function filaDeMeses(agora, { anoInicio, desde = "", jaLidos = {}, limite = 14 } = {}) {
   const ano0 = Number(anoInicio) || agora.y;
   const max = Math.max(1, Number(limite) || 14);
   const fila = [{ ...periodoDoMes(agora.y, agora.m - 1), aberto: true }];
   const anterior = agora.m === 1 ? periodoDoMes(agora.y - 1, 11) : periodoDoMes(agora.y, agora.m - 2);
-  if (anterior.year >= ano0 && fila.length < max) fila.push({ ...anterior, aberto: false });
+  if (anterior.year >= ano0 && anterior.chave >= desde && fila.length < max) fila.push({ ...anterior, aberto: false });
   const jaNaFila = new Set(fila.map((m) => m.chave));
   for (let y = agora.y; y >= ano0; y--) {
     const ate = y === agora.y ? agora.m - 1 : 12;
     for (let m = ate; m >= 1; m--) {
       if (fila.length >= max) return fila;
       const p = periodoDoMes(y, m - 1);
+      if (p.chave < desde) return fila;
       if (jaNaFila.has(p.chave) || leituraFechada(jaLidos[p.chave], p)) continue;
       jaNaFila.add(p.chave);
       fila.push({ ...p, aberto: false });

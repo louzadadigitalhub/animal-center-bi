@@ -92,3 +92,17 @@ test("card que pegou a tela de hoje não confere com as baixas do mês", () => {
   assert.equal(cardConfere(3239.5, 0), false);
   assert.equal(cardConfere(null, 1000), false);
 });
+
+test("fila não entra em mês antes da unidade existir", () => {
+  const jaLidos = {};
+  for (let m = 3; m <= 8; m++) {
+    const p = periodoDoMes(2026, m - 1);
+    jaLidos[p.chave] = { ...p, receitaTotalExata: 1, at: "2026-10-02T14:00:00-03:00" };
+  }
+  /* São Cristóvão abriu em mar/2025: jan e fev/2025 não têm card e cada
+     um esperava 4 min por ciclo até desistir. */
+  const fila = filaDeMeses({ y: 2026, m: 10 }, { anoInicio: 2023, desde: "2025-03", jaLidos, limite: 8 });
+  assert.deepEqual(fila.map((m) => m.chave), ["2026-10", "2026-09", "2026-02", "2026-01", "2025-12", "2025-11", "2025-10", "2025-09"]);
+  const fim = filaDeMeses({ y: 2025, m: 5 }, { anoInicio: 2023, desde: "2025-03", limite: 8 });
+  assert.deepEqual(fim.map((m) => m.chave), ["2025-05", "2025-04", "2025-03"]);
+});
