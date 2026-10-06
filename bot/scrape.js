@@ -442,7 +442,7 @@ async function exportVendasYear(page, y, histTo) {
   const t = y === nowY ? histTo : `31/12/${y}`;
   try {
     const chunk = await exportVendas(page, f, t);
-    if (chunk.length) return chunk;
+    if (chunk.length) return Object.assign(chunk, { completo: true });
   } catch (err) {
     console.warn("vendas ano inteiro falhou", y, err.message || err);
   }
@@ -454,7 +454,8 @@ async function exportVendasYear(page, y, histTo) {
     console.warn("vendas H2", y, e.message || e);
     return [];
   });
-  return [...a, ...b];
+  /* Metade vazia pode ser export que falhou: não dá para garantir o ano. */
+  return Object.assign([...a, ...b], { completo: a.length > 0 && b.length > 0 });
 }
 
 export async function scrape({ from, to } = {}) {
@@ -521,18 +522,32 @@ export async function scrape({ from, to } = {}) {
         }
         let chunk;
         if (y === pNow.y) {
-          chunk = await exportVendas(page, monthStartBR(), histTo).catch((e) => {
-            console.warn("vendas mes atual", sede.unit, e.message || e);
-            return [];
-          });
-          console.log("vendas mes atual", sede.unit, y, pNow.m, chunk.length);
+          /* O mês atual é rebaixado a cada ciclo. Mês do ano que já fechou
+             só conta depois de baixado inteiro com ele fechado: o último
+             ciclo do mês nunca pega as horas finais, e um volume novo nem
+             tem os meses de trás. Faltando algum, baixa o ano até hoje. */
+          const fechados = Array.from({ length: pNow.m - 1 }, (_, i) => `${key}-${String(i + 1).padStart(2, "0")}`);
+          const anoTodo = fechados.some((k) => !hist[k]);
+          if (anoTodo) {
+            chunk = await exportVendasYear(page, y, histTo);
+            console.log("vendas ano corrente", sede.unit, y, chunk.length, chunk.completo ? "completo" : "parcial");
+          } else {
+            chunk = await exportVendas(page, monthStartBR(), histTo).catch((e) => {
+              console.warn("vendas mes atual", sede.unit, e.message || e);
+              return [];
+            });
+            console.log("vendas mes atual", sede.unit, y, pNow.m, chunk.length);
+          }
           if (!chunk.length) continue;
+          /* Só troca os meses que vieram: export parcial não apaga o resto. */
+          const veio = new Set(chunk.map(monthOfRow));
           objects = objects.filter((r) => {
             if ((r._sede || "matriz") !== sede.unit) return true;
             if (yearOfRow(r) !== y) return true;
-            if (monthOfRow(r) !== pNow.m) return true;
-            return false;
+            const m = monthOfRow(r);
+            return m !== pNow.m && !veio.has(m);
           });
+          if (anoTodo && chunk.completo) for (const k of fechados) hist[k] = { at: agoraBrasiliaIso() };
         } else {
           chunk = await exportVendasYear(page, y, histTo);
           console.log("vendas historico", sede.unit, y, chunk.length);
