@@ -73,6 +73,41 @@ async function entrar(page, ambId) {
 async function lerDemonstrativo(page, ano, mesInicio = 1) {
   await gotoResiliente(page, DEMO);
   await page.waitForSelector("#p__lan_var_inicio", { timeout: 30000 });
+  /* A pagina abre no ano corrente com "Todas as situacoes" e o filtro e
+     AJAX. Esperar so o cabecalho com os meses do ano nao bastava: no ano
+     corrente a tabela de antes ja tem esses meses, e em 07/10/2026 a
+     matriz de 2026 saiu com conta agendada em novembro e dezembro. Guarda
+     a assinatura da tabela de antes e so le quando ela mudou e firmou. */
+  const assinatura = () =>
+    page
+      .evaluate(() => {
+        const t = document.querySelectorAll("table")[1];
+        if (!t) return null;
+        const corpo = t.querySelector("tbody")?.innerText || "";
+        return {
+          cab: [...t.querySelectorAll("thead th")].map((x) => x.innerText.trim()),
+          linhas: t.querySelectorAll("tbody tr").length,
+          sig: `${corpo.length}:${corpo.slice(0, 400)}|${corpo.slice(-400)}`,
+        };
+      })
+      .catch(() => null);
+  const firmar = async (pronto, prazo) => {
+    let visto = null;
+    let desde = Date.now();
+    const fim = Date.now() + prazo;
+    while (Date.now() < fim) {
+      await page.waitForTimeout(500);
+      const a = await assinatura();
+      if (a?.sig !== visto?.sig) {
+        visto = a;
+        desde = Date.now();
+      } else if (pronto(a) && Date.now() - desde >= 1500) {
+        return a;
+      }
+    }
+    return null;
+  };
+  const antes = await firmar((a) => Boolean(a?.linhas), 30000);
   /* Os filtros sao Select2 sobre jQuery: mudar o .value no DOM nao
      avisa o widget nem preenche o campo _text que vai junto no POST.
      Tem que passar pelo jQuery da propria pagina. */
@@ -91,20 +126,12 @@ async function lerDemonstrativo(page, ano, mesInicio = 1) {
   }, { ano, mesInicio });
   await page.locator("#p__btn_filtrar").click();
 
-  /* Espera a tabela realmente virar o ano pedido em vez de dormir um
-     tempo fixo — o filtro e AJAX e o tempo varia. */
-  await page
-    .waitForFunction(
-      ({ ano, meses }) => {
-        const t = document.querySelectorAll("table")[1];
-        if (!t) return false;
-        const cab = [...t.querySelectorAll("thead th")].map((x) => x.innerText.trim());
-        return cab.filter((c) => c.endsWith("/" + ano)).length >= meses;
-      },
-      { ano, meses: 13 - mesInicio },
-      { timeout: 40000 }
-    )
-    .catch(() => console.log("  (aviso: a tabela nao chegou a 12 meses)"));
+  const meses = 13 - mesInicio;
+  const depois = await firmar(
+    (a) => Boolean(a?.linhas) && a.sig !== antes?.sig && a.cab.filter((c) => c.endsWith("/" + ano)).length >= meses,
+    90000
+  );
+  if (!depois) throw new Error(`demonstrativo ${ano} nao respondeu ao filtro em 90 s`);
 
   return page.evaluate(() => {
     const tabelas = [...document.querySelectorAll("table")];
@@ -191,6 +218,11 @@ async function coletar(browser, ano, dataDir, arquivo, inicios) {
     /* Periodo que nao pegou volta com meses de outros anos (a filial de
        2023-2025 veio de 12/1969 a 10/2026). Falha alto: o arquivo
        anterior fica, e o ano e tentado de novo no proximo DRE. */
+    /* "Vendas em aberto" so existe sem o filtro Pagos / Recebidos. */
+    const aberto = dados.linhas.find((l) => /em aberto/i.test(l.nome));
+    if (aberto) {
+      throw new Error(`${unit}: filtro "Pagos / Recebidos" nao aplicou (veio "${aberto.nome}")`);
+    }
     if (!blocoValido({ meses }, ano)) {
       throw new Error(`${unit}: periodo do demonstrativo nao aplicou (${meses[0]} a ${meses[meses.length - 1]}, ${meses.length} meses)`);
     }
