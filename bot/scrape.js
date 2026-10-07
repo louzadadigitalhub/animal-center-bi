@@ -5,7 +5,15 @@ import { dirname, join } from "node:path";
 import { findChrome, gotoResiliente, estaDentro, escolherAmbiente, esperarAmbientesOuPainel } from "./chrome.js";
 import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
-import { baixasPorMesDeBaixa, cardConfere, filaDeMeses, periodoBate, periodoDoMes } from "./receita-mes.js";
+import {
+  anoGuardado,
+  baixasPorMesDeBaixa,
+  cardConfere,
+  filaDeMeses,
+  mesesFechadosFaltando,
+  periodoBate,
+  periodoDoMes,
+} from "./receita-mes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = join(__dirname, "..", ".env");
@@ -506,22 +514,27 @@ async function exportVendasYear(page, y, histTo) {
   const nowY = nowBrasilia().y;
   const f = `01/01/${y}`;
   const t = y === nowY ? histTo : `31/12/${y}`;
-  try {
-    const chunk = await exportVendas(page, f, t);
-    if (chunk.length) return Object.assign(chunk, { completo: true });
-  } catch (err) {
-    console.warn("vendas ano inteiro falhou", y, err.message || err);
-  }
-  const a = await exportVendas(page, f, `30/06/${y}`).catch((e) => {
-    console.warn("vendas H1", y, e.message || e);
-    return [];
-  });
-  const b = await exportVendas(page, `01/07/${y}`, t).catch((e) => {
-    console.warn("vendas H2", y, e.message || e);
-    return [];
-  });
-  /* Metade vazia pode ser export que falhou: não dá para garantir o ano. */
-  return Object.assign([...a, ...b], { completo: a.length > 0 && b.length > 0 });
+  /* "Export vazio" é o portal dizendo que não houve venda no período;
+     qualquer outro erro é falha. */
+  let semVenda = 0;
+  const pedir = (de, ate, rotulo) =>
+    exportVendas(page, de, ate)
+      .then((c) => {
+        if (!c.length) semVenda++;
+        return c;
+      })
+      .catch((e) => {
+        if (/^Export vazio/.test(String(e?.message || e))) semVenda++;
+        console.warn(rotulo, y, e.message || e);
+        return [];
+      });
+  const ano = await pedir(f, t, "vendas ano inteiro falhou");
+  if (ano.length) return Object.assign(ano, { completo: true });
+  const a = await pedir(f, `30/06/${y}`, "vendas H1");
+  const b = await pedir(`01/07/${y}`, t, "vendas H2");
+  /* Metade vazia pode ser export que falhou: não dá para garantir o ano.
+     As três vazias pelo portal, e não por erro, é ano sem venda. */
+  return Object.assign([...a, ...b], { completo: a.length > 0 && b.length > 0, vazio: semVenda === 3 });
 }
 
 export async function scrape({ from, to } = {}) {
@@ -574,27 +587,43 @@ export async function scrape({ from, to } = {}) {
     const startY = Number(String(histFrom).slice(-4)) || pNow.y - 3;
     const hist = await loadHist();
     const doisPerfis = sedes.some((s) => s.unit === "filial");
+    const primeiroAno = {};
+    for (const r of objects) {
+      const u = r._sede || "matriz";
+      const y = yearOfRow(r);
+      if (y && !(primeiroAno[u] <= y)) primeiroAno[u] = y;
+    }
     for (const sede of sedes) {
       await logout(page);
       await login(page, sede.id);
       for (let y = startY; y <= pNow.y; y++) {
         const key = `${sede.unit}:${y}`;
         const jaTem = countYearSede(objects, y, sede.unit);
-        if (y < pNow.y && hist[key] && jaTem > 0) {
+        if (y < pNow.y && anoGuardado(hist, key, y, jaTem, primeiroAno[sede.unit])) {
           console.log("historico ja salvo", key, jaTem);
           continue;
         }
         let chunk;
         if (y === pNow.y) {
           /* O mês atual é rebaixado a cada ciclo. Mês do ano que já fechou
-             só conta depois de baixado inteiro com ele fechado: o último
-             ciclo do mês nunca pega as horas finais, e um volume novo nem
-             tem os meses de trás. Faltando algum, baixa o ano até hoje. */
-          const fechados = Array.from({ length: pNow.m - 1 }, (_, i) => `${key}-${String(i + 1).padStart(2, "0")}`);
-          const anoTodo = fechados.some((k) => !hist[k]);
-          if (anoTodo) {
+             é baixado uma vez, inteiro, depois de fechar — o último ciclo
+             do mês nunca pega as horas finais — e fica guardado. Na virada
+             é só o mês que acabou; num volume novo, o ano até hoje. */
+          const faltando = mesesFechadosFaltando(hist, key, pNow.m);
+          const fechados = faltando.map((m) => `${key}-${String(m).padStart(2, "0")}`);
+          const anoTodo = faltando.length > 0;
+          if (faltando[0] === 1) {
             chunk = await exportVendasYear(page, y, histTo);
             console.log("vendas ano corrente", sede.unit, y, chunk.length, chunk.completo ? "completo" : "parcial");
+          } else if (anoTodo) {
+            const de = `01/${String(faltando[0]).padStart(2, "0")}/${y}`;
+            chunk = await exportVendas(page, de, histTo)
+              .then((c) => Object.assign(c, { completo: true }))
+              .catch((e) => {
+                console.warn("vendas meses fechados", sede.unit, de, e.message || e);
+                return [];
+              });
+            console.log("vendas meses fechados", sede.unit, de, chunk.length);
           } else {
             chunk = await exportVendas(page, monthStartBR(), histTo).catch((e) => {
               console.warn("vendas mes atual", sede.unit, e.message || e);
@@ -614,8 +643,11 @@ export async function scrape({ from, to } = {}) {
           if (anoTodo && chunk.completo) for (const k of fechados) hist[k] = { at: agoraBrasiliaIso() };
         } else {
           chunk = await exportVendasYear(page, y, histTo);
-          console.log("vendas historico", sede.unit, y, chunk.length);
-          if (!chunk.length) continue;
+          console.log("vendas historico", sede.unit, y, chunk.length, chunk.vazio ? "sem venda" : "");
+          if (!chunk.length) {
+            if (chunk.vazio) hist[key] = { at: agoraBrasiliaIso(), rows: 0 };
+            continue;
+          }
           objects = objects.filter((r) => !(yearOfRow(r) === y && (r._sede || "matriz") === sede.unit));
           hist[key] = { at: agoraBrasiliaIso(), rows: chunk.length };
         }
@@ -644,9 +676,10 @@ export async function scrape({ from, to } = {}) {
     }
     snapshot.caixaOficialMeses = guardados;
     const mesAberto = periodoDoMes(pNow.y, pNow.m - 1);
-    /* 8 por unidade: o mês que está correndo, o que acabou de fechar
-       e mais seis para trás. Mais do que isso estoura o limite de 60 min
-       do ciclo antes de gravar o painel. O que faltou entra no seguinte. */
+    /* Até 8 por unidade: o mês que está correndo e os fechados que ainda
+       não têm card lido depois de fechar. Mais do que isso estoura o
+       limite de 60 min do ciclo antes de gravar o painel. O que faltou
+       entra no seguinte; com tudo lido, o ciclo lê só o mês atual. */
     const limiteMeses = Number(process.env.RECEITA_MESES_POR_CICLO || 8);
     await mkdir(DATA_DIR, { recursive: true });
     for (const sede of sedes) {

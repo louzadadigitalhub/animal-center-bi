@@ -1,10 +1,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  anoGuardado,
   baixasPorMesDeBaixa,
   cardConfere,
   filaDeMeses,
   leituraFechada,
+  mesesFechadosFaltando,
   oficialDoMes,
   periodoDoMes,
   somarOficiais,
@@ -37,12 +39,20 @@ test("mês fechado lido depois do último dia não entra de novo na fila", () =>
       },
     }
   );
-  /* Outubro sempre. Setembro também, porque acabou de fechar.
-     Agosto já foi lido depois do dia 31, então pula. */
-  assert.deepEqual(fila.map((m) => m.chave), ["2026-10", "2026-09", "2026-07", "2026-06"]);
+  /* Só outubro, que está correndo. Setembro e agosto já foram lidos
+     depois de fechar: ficam gravados e não voltam (pedido do dono em
+     07/10/2026 — mês que passou não se lê de novo). */
+  assert.deepEqual(fila.map((m) => m.chave), ["2026-10", "2026-07", "2026-06", "2026-05"]);
   assert.equal(fila[0].from, "01/10/2026");
   assert.equal(fila[0].to, "31/10/2026");
   assert.equal(fila[0].aberto, true);
+  /* Setembro lido pela última vez no dia 30 ainda estava aberto: entra
+     uma vez, já fechado, e depois congela. */
+  const virada = filaDeMeses(
+    { y: 2026, m: 10 },
+    { anoInicio: 2026, limite: 2, jaLidos: { "2026-09": { ...set, receitaTotalExata: 1, at: "2026-09-30T23:00:00-03:00" } } }
+  );
+  assert.deepEqual(virada.map((m) => m.chave), ["2026-10", "2026-09"]);
 });
 
 test("outubro não apaga a receita de setembro", () => {
@@ -105,4 +115,24 @@ test("fila não entra em mês antes da unidade existir", () => {
   assert.deepEqual(fila.map((m) => m.chave), ["2026-10", "2026-09", "2026-02", "2026-01", "2025-12", "2025-11", "2025-10", "2025-09"]);
   const fim = filaDeMeses({ y: 2025, m: 5 }, { anoInicio: 2023, desde: "2025-03", limite: 8 });
   assert.deepEqual(fim.map((m) => m.chave), ["2025-05", "2025-04", "2025-03"]);
+});
+
+test("vendas: mês fechado baixa uma vez só, e ano vazio antes da unidade abrir não volta", () => {
+  /* Volume novo em outubro: faltam todos os meses fechados do ano. */
+  assert.deepEqual(mesesFechadosFaltando({}, "matriz:2026", 10), [1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  /* Virada para outubro: só setembro, uma vez. */
+  const hist = {};
+  for (let m = 1; m <= 8; m++) hist[`matriz:2026-${String(m).padStart(2, "0")}`] = { at: "x" };
+  assert.deepEqual(mesesFechadosFaltando(hist, "matriz:2026", 10), [9]);
+  hist["matriz:2026-09"] = { at: "x" };
+  assert.deepEqual(mesesFechadosFaltando(hist, "matriz:2026", 10), []);
+  assert.deepEqual(mesesFechadosFaltando({}, "matriz:2026", 1), []);
+
+  assert.equal(anoGuardado({ "matriz:2025": { rows: 30000 } }, "matriz:2025", 2025, 28001, 2023), true);
+  assert.equal(anoGuardado({}, "matriz:2025", 2025, 28001, 2023), false);
+  /* São Cristóvão abriu em 2025: 2023 vazio pelo portal fica guardado. */
+  assert.equal(anoGuardado({ "filial:2023": { rows: 0 } }, "filial:2023", 2023, 0, 2025), true);
+  /* Vazio num ano em que a unidade já existia é suspeito: tenta de novo. */
+  assert.equal(anoGuardado({ "matriz:2024": { rows: 0 } }, "matriz:2024", 2024, 0, 2023), false);
+  assert.equal(anoGuardado({ "filial:2023": { rows: 0 } }, "filial:2023", 2023, 0, undefined), false);
 });

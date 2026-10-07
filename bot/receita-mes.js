@@ -24,17 +24,17 @@ export function leituraFechada(salvo, periodo) {
 }
 
 /* O mês aberto entra sempre (o dinheiro de hoje ainda cai nele).
-   O mês que acabou de fechar também: uma baixa lançada nos primeiros
-   dias ainda pode cair nele. Os outros só entram se ainda não tiverem
-   card lido depois do último dia, do mais novo para o mais velho.
+   Mês fechado entra uma vez só, enquanto não tiver card lido depois do
+   último dia, do mais novo para o mais velho; lido assim, fica gravado
+   e não volta. Até 07/10/2026 o mês anterior era relido em todo ciclo
+   do mês seguinte inteiro — o dono pediu que mês passado não se leia
+   de novo.
    desde ("aaaa-mm") é o primeiro mês da unidade: antes dele a página
    não tem card nenhum para ler. */
 export function filaDeMeses(agora, { anoInicio, desde = "", jaLidos = {}, limite = 14 } = {}) {
   const ano0 = Number(anoInicio) || agora.y;
   const max = Math.max(1, Number(limite) || 14);
   const fila = [{ ...periodoDoMes(agora.y, agora.m - 1), aberto: true }];
-  const anterior = agora.m === 1 ? periodoDoMes(agora.y - 1, 11) : periodoDoMes(agora.y, agora.m - 2);
-  if (anterior.year >= ano0 && anterior.chave >= desde && fila.length < max) fila.push({ ...anterior, aberto: false });
   const jaNaFila = new Set(fila.map((m) => m.chave));
   for (let y = agora.y; y >= ano0; y--) {
     const ate = y === agora.y ? agora.m - 1 : 12;
@@ -143,4 +143,24 @@ export function cardConfere(card, baixas) {
   const b = Number(baixas) || 0;
   if (!Number.isFinite(c)) return false;
   return Math.abs(c - b) <= Math.max(1000, 0.2 * b);
+}
+
+/* Vendas do ano corrente: meses fechados que ainda não foram baixados
+   inteiros depois de fechar. Volume novo: todos. Virada do mês: só o
+   que acabou de fechar, uma vez. Depois, nenhum — o ciclo baixa só o
+   mês que está correndo. */
+export function mesesFechadosFaltando(hist, key, mesAtual) {
+  return Array.from({ length: Math.max(0, mesAtual - 1) }, (_, i) => i + 1).filter(
+    (m) => !hist[`${key}-${String(m).padStart(2, "0")}`]
+  );
+}
+
+/* Ano fechado já guardado não se baixa de novo. Ano que o portal disse
+   não ter venda (rows 0) só conta como guardado se for antes do primeiro
+   ano da unidade — São Cristóvão em 2023 e 2024 era baixado em todo ciclo.
+   Vazio num ano em que a unidade já vendia é suspeito e tenta de novo. */
+export function anoGuardado(hist, key, y, jaTem, primeiroAno) {
+  if (!hist[key]) return false;
+  if (jaTem > 0) return true;
+  return hist[key].rows === 0 && primeiroAno != null && y < primeiroAno;
 }
