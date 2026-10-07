@@ -107,32 +107,75 @@ async function lerDemonstrativo(page, ano, mesInicio = 1) {
     }
     return null;
   };
-  const antes = await firmar((a) => Boolean(a?.linhas), 30000);
-  /* Os filtros sao Select2 sobre jQuery: mudar o .value no DOM nao
-     avisa o widget nem preenche o campo _text que vai junto no POST.
-     Tem que passar pelo jQuery da propria pagina. */
-  await page.evaluate(({ ano, mesInicio }) => {
-    const $ = window.jQuery;
-    const set = (id, v) => $("#" + id).val(v).trigger("change");
-    set("p__tipo", "V"); // regime de caixa, igual ao resto do painel
-    set("p__lan_var_inicio", `${ano}/${String(mesInicio).padStart(2, "0")}`);
-    set("p__lan_var_termino", `${ano}/12`);
-    /* Situacao "Pagos / Recebidos" (P), pela regra da clinica. Sem isso
-       o filtro fica em "Todas as situacoes" e mistura conta paga com
-       conta em aberto e agendada: setembro da matriz saia com lucro de
-       -51.575 e, so com o que foi pago, sai +26.969. Era tambem o que
-       enchia os meses futuros de aluguel e salario ainda nao pagos. */
-    set("p__lan_cha_status", "P");
-  }, { ano, mesInicio });
-  await page.locator("#p__btn_filtrar").click();
+  /* Cada filtro alterado pode disparar uma atualizacao da tabela. Na
+     matriz de 2026 uma resposta antiga, sem "Pagos", chegava por ultimo e
+     sobrescrevia a certa mesmo com a tabela ja firme. So le com a rede
+     quieta: nenhum POST de filtro em voo ha 2 s. So POST: consulta de
+     fundo da pagina (GET) nao pode segurar a leitura. */
+  let pendentes = 0;
+  let vistas = 0;
+  let ultimaRede = Date.now();
+  const ehXhr = (r) => ["xhr", "fetch"].includes(r.resourceType()) && r.method() === "POST";
+  const comeca = (r) => {
+    if (!ehXhr(r)) return;
+    pendentes++;
+    vistas++;
+    ultimaRede = Date.now();
+  };
+  const acaba = (r) => {
+    if (!ehXhr(r)) return;
+    pendentes = Math.max(0, pendentes - 1);
+    ultimaRede = Date.now();
+  };
+  const redeQuieta = () => pendentes === 0 && Date.now() - ultimaRede >= 2000;
+  page.on("request", comeca);
+  page.on("requestfinished", acaba);
+  page.on("requestfailed", acaba);
+  try {
+    const antes = await firmar((a) => Boolean(a?.linhas) && redeQuieta(), 30000);
+    /* Os filtros sao Select2 sobre jQuery: mudar o .value no DOM nao
+       avisa o widget nem preenche o campo _text que vai junto no POST.
+       Tem que passar pelo jQuery da propria pagina. */
+    await page.evaluate(({ ano, mesInicio }) => {
+      const $ = window.jQuery;
+      const set = (id, v) => $("#" + id).val(v).trigger("change");
+      set("p__tipo", "V"); // regime de caixa, igual ao resto do painel
+      set("p__lan_var_inicio", `${ano}/${String(mesInicio).padStart(2, "0")}`);
+      set("p__lan_var_termino", `${ano}/12`);
+      /* Situacao "Pagos / Recebidos" (P), pela regra da clinica. Sem isso
+         o filtro fica em "Todas as situacoes" e mistura conta paga com
+         conta em aberto e agendada: setembro da matriz saia com lucro de
+         -51.575 e, so com o que foi pago, sai +26.969. Era tambem o que
+         enchia os meses futuros de aluguel e salario ainda nao pagos. */
+      set("p__lan_cha_status", "P");
+    }, { ano, mesInicio });
+    const meses = 13 - mesInicio;
+    /* Veio sem "Pagos" mesmo assim: clica de novo, uma requisicao so, ja
+       com todos os filtros no lugar. */
+    for (let tentativa = 1; ; tentativa++) {
+      await page.locator("#p__btn_filtrar").click();
+      const depois = await firmar(
+        (a) =>
+          redeQuieta() &&
+          Boolean(a?.linhas) &&
+          (tentativa > 1 || a.sig !== antes?.sig) &&
+          a.cab.filter((c) => c.endsWith("/" + ano)).length >= meses,
+        90000
+      );
+      if (!depois) throw new Error(`demonstrativo ${ano} nao respondeu ao filtro em 90 s`);
+      const dados = await lerTabela(page);
+      const semPagos = dados?.linhas?.some((l) => /em aberto/i.test(l.nome));
+      console.log("  demonstrativo", ano, "tentativa", tentativa, "| requisicoes", vistas, semPagos ? "| veio sem Pagos" : "");
+      if (!semPagos || tentativa >= 2) return dados;
+    }
+  } finally {
+    page.off("request", comeca);
+    page.off("requestfinished", acaba);
+    page.off("requestfailed", acaba);
+  }
+}
 
-  const meses = 13 - mesInicio;
-  const depois = await firmar(
-    (a) => Boolean(a?.linhas) && a.sig !== antes?.sig && a.cab.filter((c) => c.endsWith("/" + ano)).length >= meses,
-    90000
-  );
-  if (!depois) throw new Error(`demonstrativo ${ano} nao respondeu ao filtro em 90 s`);
-
+function lerTabela(page) {
   return page.evaluate(() => {
     const tabelas = [...document.querySelectorAll("table")];
     if (tabelas.length < 2) return null;
