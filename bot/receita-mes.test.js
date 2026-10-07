@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   anoGuardado,
+  anosDoRadar,
   baixasPorMesDeBaixa,
   cardConfere,
   filaDeMeses,
@@ -9,6 +10,7 @@ import {
   mesesFechadosFaltando,
   oficialDoMes,
   periodoDoMes,
+  radarBate,
   somarOficiais,
 } from "./receita-mes.js";
 
@@ -135,4 +137,30 @@ test("vendas: mês fechado baixa uma vez só, e ano vazio antes da unidade abrir
   /* Vazio num ano em que a unidade já existia é suspeito: tenta de novo. */
   assert.equal(anoGuardado({ "matriz:2024": { rows: 0 } }, "matriz:2024", 2024, 0, 2023), false);
   assert.equal(anoGuardado({ "filial:2023": { rows: 0 } }, "filial:2023", 2023, 0, undefined), false);
+});
+
+test("radar: um card por ano confere todos os meses guardados daquele ano", () => {
+  const lido = (y, m, v) => ({ ...periodoDoMes(y, m - 1), receitaTotalExata: v, at: "2026-10-06T13:40:00-03:00" });
+  const jaLidos = {};
+  for (let m = 3; m <= 12; m++) jaLidos[`2025-${String(m).padStart(2, "0")}`] = lido(2025, m, 1000.1);
+  for (let m = 1; m <= 9; m++) jaLidos[`2026-${String(m).padStart(2, "0")}`] = lido(2026, m, 2000.2);
+  const anos = anosDoRadar({ y: 2026, m: 10 }, { anoInicio: 2023, desde: "2025-03", jaLidos });
+  assert.deepEqual(anos.map((a) => [a.year, a.from, a.to, a.chaves.length, a.soma]), [
+    [2025, "01/03/2025", "31/12/2025", 10, 10001],
+    [2026, "01/01/2026", "30/09/2026", 9, 18001.8],
+  ]);
+  /* Mês sem leitura final: o ano fica de fora até completar. */
+  const falta = { ...jaLidos };
+  delete falta["2026-05"];
+  assert.deepEqual(anosDoRadar({ y: 2026, m: 10 }, { anoInicio: 2023, desde: "2025-03", jaLidos: falta }).map((a) => a.year), [2025]);
+  /* Mês que o radar mandou reler sai do radar e volta para a fila. */
+  const reler = { ...jaLidos, "2025-07": { ...jaLidos["2025-07"], reler: true } };
+  assert.deepEqual(anosDoRadar({ y: 2026, m: 10 }, { anoInicio: 2023, desde: "2025-03", jaLidos: reler }).map((a) => a.year), [2026]);
+  assert.deepEqual(
+    filaDeMeses({ y: 2026, m: 10 }, { anoInicio: 2025, desde: "2025-03", jaLidos: reler, limite: 8 }).map((m) => m.chave),
+    ["2026-10", "2025-07"]
+  );
+  assert.equal(radarBate(10001, 10001.04), true);
+  assert.equal(radarBate(10001, 10001.1), false);
+  assert.equal(radarBate(null, 0), false);
 });

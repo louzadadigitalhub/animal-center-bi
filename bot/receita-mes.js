@@ -14,7 +14,7 @@ export function periodoDoMes(year, month0) {
 /* O mês só está "pronto" se a leitura aconteceu depois do último dia.
    Ler setembro no dia 30 ainda pode mudar; ler em outubro, não. */
 export function leituraFechada(salvo, periodo) {
-  if (!salvo || !periodo) return false;
+  if (!salvo || !periodo || salvo.reler) return false;
   const total = Number(salvo.receitaTotalExata ?? salvo.receitaTotal);
   if (!Number.isFinite(total)) return false;
   if (salvo.from !== periodo.from || salvo.to !== periodo.to) return false;
@@ -163,4 +163,36 @@ export function anoGuardado(hist, key, y, jaTem, primeiroAno) {
   if (!hist[key]) return false;
   if (jaTem > 0) return true;
   return hist[key].rows === 0 && primeiroAno != null && y < primeiroAno;
+}
+
+/* Radar de mudança. O card soma as baixas pela data da baixa, então o
+   card de um ano inteiro é a soma dos cards de mês. Uma leitura por ano
+   confere os doze: bateu, nada mudou; não bateu, alguém lançou ou
+   corrigiu baixa com data antiga e os meses daquele ano voltam para a
+   fila (reler). Ano com mês ainda sem leitura final fica de fora. */
+export function anosDoRadar(agora, { anoInicio, desde = "", jaLidos = {} } = {}) {
+  const out = [];
+  for (let y = Number(anoInicio) || agora.y; y <= agora.y; y++) {
+    const meses = [];
+    for (let m = 1; m <= (y < agora.y ? 12 : agora.m - 1); m++) {
+      const p = periodoDoMes(y, m - 1);
+      if (p.chave >= desde) meses.push(p);
+    }
+    if (!meses.length || !meses.every((p) => leituraFechada(jaLidos[p.chave], p))) continue;
+    const soma = meses.reduce((a, p) => a + numeroDe(jaLidos[p.chave]), 0);
+    out.push({
+      year: y,
+      from: meses[0].from,
+      to: meses[meses.length - 1].to,
+      chaves: meses.map((p) => p.chave),
+      soma: Math.round(soma * 100) / 100,
+    });
+  }
+  return out;
+}
+
+export function radarBate(card, soma) {
+  if (card == null || card === "") return false;
+  const c = Number(card);
+  return Number.isFinite(c) && Math.abs(c - Number(soma)) < 0.05;
 }

@@ -7,12 +7,14 @@ import { fileURLToPath } from "node:url";
 import { aggregate } from "./aggregate.js";
 import {
   anoGuardado,
+  anosDoRadar,
   baixasPorMesDeBaixa,
   cardConfere,
   filaDeMeses,
   mesesFechadosFaltando,
   periodoBate,
   periodoDoMes,
+  radarBate,
 } from "./receita-mes.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -395,6 +397,25 @@ async function saveReceitasMeses(guardados) {
   await writeFile(ARQ_RECEITAS_MESES(), JSON.stringify(guardados));
 }
 
+const ARQ_RADAR = () => join(DATA_DIR, "radar.json");
+const ARQ_MUDANCAS = () => join(DATA_DIR, "mudancas.json");
+
+async function lerJson(arq, padrao) {
+  try {
+    return JSON.parse(await readFile(arq, "utf8"));
+  } catch {
+    return padrao;
+  }
+}
+
+/* O que o radar acha fica num caderno: quando, unidade, ano ou mês,
+   quanto era e quanto ficou. As últimas 200 bastam. */
+async function anotarMudanca(item) {
+  const lista = await lerJson(ARQ_MUDANCAS(), []);
+  lista.push({ em: agoraBrasiliaIso(), ...item });
+  await writeFile(ARQ_MUDANCAS(), JSON.stringify(lista.slice(-200), null, 2));
+}
+
 function subCaixa(a, b) {
   const keys = ["noDia", "posteriores", "adiantamento", "receitaTotal", "emAberto"];
   const out = {};
@@ -682,23 +703,57 @@ export async function scrape({ from, to } = {}) {
        entra no seguinte; com tudo lido, o ciclo lê só o mês atual. */
     const limiteMeses = Number(process.env.RECEITA_MESES_POR_CICLO || 8);
     await mkdir(DATA_DIR, { recursive: true });
+    /* Radar: uma vez por dia, de madrugada, com a clínica fechada. */
+    const radar = await lerJson(ARQ_RADAR(), {});
+    const hojeBR = `${pNow.y}-${String(pNow.m).padStart(2, "0")}-${String(pNow.d).padStart(2, "0")}`;
+    const radarHoje = radar.dia !== hojeBR && pNow.h >= 3;
+    let radarCompleto = radarHoje;
     for (const sede of sedes) {
-      const fila = filaDeMeses(pNow, {
-        anoInicio: startY,
-        /* São Cristóvão abriu em mar/2025. Mês sem card esperava 4 min até
-           desistir, e voltava para a fila em todo ciclo. */
-        desde: Object.keys(baixasMes[sede.unit] || {}).sort()[0] || "",
-        jaLidos: guardados[sede.unit] || {},
-        limite: limiteMeses,
-      });
-      console.log("recebimentos fila", sede.unit, fila.map((m) => m.chave).join(","));
+      /* São Cristóvão abriu em mar/2025. Mês sem card esperava 4 min até
+         desistir, e voltava para a fila em todo ciclo. */
+      const desde = Object.keys(baixasMes[sede.unit] || {}).sort()[0] || "";
       try {
         await logout(page);
         await login(page, sede.id);
       } catch (err) {
         console.warn("recebimentos login", sede.unit, err?.message || err);
+        radarCompleto = false;
         continue;
       }
+      if (radarHoje) {
+        for (const ano of anosDoRadar(pNow, { anoInicio: startY, desde, jaLidos: guardados[sede.unit] || {} })) {
+          try {
+            const cx = await scrapeRecebimentos(page, ano.from, ano.to, "");
+            const baixasAno = ano.chaves.reduce((a, k) => a + (baixasMes[sede.unit]?.[k] || 0), 0);
+            if (!periodoBate(cx.period || cx.periodText, ano.from, ano.to) || !cardConfere(cx.receitaTotal, baixasAno)) {
+              console.warn("radar leitura nao confere", sede.unit, ano.year, cx.receitaTotal, Math.round(baixasAno));
+              continue;
+            }
+            if (radarBate(cx.receitaTotal, ano.soma)) {
+              console.log("radar bate", sede.unit, ano.year, ano.soma);
+              continue;
+            }
+            console.warn("radar mudou", sede.unit, ano.year, "soma dos meses", ano.soma, "card do ano", cx.receitaTotal);
+            await anotarMudanca({ unidade: sede.unit, ano: ano.year, somaDosMeses: ano.soma, cardDoAno: cx.receitaTotal });
+            for (const k of ano.chaves) guardados[sede.unit][k].reler = true;
+            /* Baixa com data antiga muda também o status das vendas daquele
+               ano: elas são baixadas de novo no próximo ciclo. */
+            if (ano.year < pNow.y) delete hist[`${sede.unit}:${ano.year}`];
+            else for (const k of ano.chaves) delete hist[`${sede.unit}:${k}`];
+            await saveReceitasMeses(guardados);
+            await saveHist(hist);
+          } catch (err) {
+            console.warn("radar", sede.unit, ano.year, err?.message || err);
+          }
+        }
+      }
+      const fila = filaDeMeses(pNow, {
+        anoInicio: startY,
+        desde,
+        jaLidos: guardados[sede.unit] || {},
+        limite: limiteMeses,
+      });
+      console.log("recebimentos fila", sede.unit, fila.map((m) => m.chave).join(","));
       for (const mes of fila) {
         try {
           const cx = await scrapeRecebimentos(page, mes.from, mes.to, "");
@@ -723,6 +778,15 @@ export async function scrape({ from, to } = {}) {
           }
           const lido = { ...cx, from: mes.from, to: mes.to, chave: mes.chave, at: agoraBrasiliaIso() };
           guardados[sede.unit] = guardados[sede.unit] || {};
+          const antes = guardados[sede.unit][mes.chave];
+          if (antes?.reler) {
+            const de = Number(antes.receitaTotalExata ?? antes.receitaTotal);
+            const para = Number(cx.receitaTotal);
+            if (Math.abs(de - para) >= 0.01) {
+              console.warn("recebimentos mudou", sede.unit, mes.chave, de, para);
+              await anotarMudanca({ unidade: sede.unit, mes: mes.chave, antes: de, depois: para });
+            }
+          }
           guardados[sede.unit][mes.chave] = lido;
           snapshot = applyRecebimentos(snapshot, lido, mes.from, sede.unit, mes.aberto);
           if (mes.aberto) caixaByUnit[sede.unit] = lido;
@@ -733,6 +797,7 @@ export async function scrape({ from, to } = {}) {
         }
       }
     }
+    if (radarCompleto) await writeFile(ARQ_RADAR(), JSON.stringify({ dia: hojeBR, em: agoraBrasiliaIso() }));
     for (const unit of ["matriz", "filial"]) {
       if (caixaByUnit[unit] || !guardados[unit]?.[mesAberto.chave]) continue;
       caixaByUnit[unit] = guardados[unit][mesAberto.chave];
