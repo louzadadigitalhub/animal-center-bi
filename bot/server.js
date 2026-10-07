@@ -43,7 +43,12 @@ if (existsSync(envPath)) {
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
 const WEB_DIR = process.env.WEB_DIR || join(__dirname, "..", "web", "dist");
 const PORT = Number(process.env.PORT || 8787);
+/* Ciclo emenda no outro: terminou bem, o próximo começa em PAUSA_MS
+   (o dono pediu em 07/10/2026 — a espera de até 2 min somava ao atraso).
+   INTERVAL_MS fica para ciclo que falhou, para não martelar o portal num
+   erro em sequência, e como rede de segurança do setInterval. */
 const INTERVAL_MS = Number(process.env.SCRAPE_MS || 120000);
+const PAUSA_MS = Number(process.env.ROBO_PAUSA_MS || 5000);
 
 const app = express();
 app.disable("x-powered-by");
@@ -197,6 +202,7 @@ function tick() {
   const inicio = Date.now();
   let respondeuScrape = false;
   let respondeuDre = false;
+  let deuCerto = false;
 
   /* execArgv vazio: o filho nao herda flags de debug do pai. ROBO_HEAP_MB
      limita a memoria do robo se a VPS voltar a apertar; sem ele vale o
@@ -221,6 +227,7 @@ function tick() {
       respondeuScrape = true;
       if (m.ok) {
         const r = m.r || {};
+        deuCerto = true;
         lastError = null;
         ultimoCicloOk = new Date().toISOString();
         estado = {
@@ -261,6 +268,7 @@ function tick() {
     /* Pediu DRE e o processo morreu antes de responder: nao fica
        tentando a cada ciclo. */
     if (querDre && !respondeuDre) proximoDre = Date.now() + DRE_RETRY_MS;
+    setTimeout(tick, deuCerto ? PAUSA_MS : INTERVAL_MS);
   });
 
   filho.on("error", (err) => {

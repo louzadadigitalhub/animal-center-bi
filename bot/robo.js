@@ -16,6 +16,10 @@
    o padrao do scrape, tres anos para tras. */
 import { scrape } from "./scrape.js";
 import { syncPeopleFromSales } from "./people.js";
+import { readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { arquivoDre, dreFechadoLido } from "./dre.js";
 
 const avisar = (msg) => {
   try {
@@ -50,8 +54,25 @@ if (process.env.ROBO_DRE === "1") {
     try {
       const { collectDre } = await import("./collect-dre.js");
       const agoraBr = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
-      const r = await collectDre(agoraBr.getFullYear(), process.env.DATA_DIR);
-      avisar({ tipo: "dre", ok: true, r });
+      const anoAtual = agoraBr.getFullYear();
+      const r = await collectDre(anoAtual, process.env.DATA_DIR);
+      /* Anos fechados, desde o começo do histórico de vendas (3 anos para
+         trás): cada um é lido uma vez depois de 31/12 e fica guardado em
+         dre-<ano>.json. Falha num deles não derruba o ano corrente. */
+      const dir = process.env.DATA_DIR || join(dirname(fileURLToPath(import.meta.url)), "..", "data");
+      const fechados = [];
+      for (let y = anoAtual - 3; y < anoAtual; y++) {
+        const arquivo = arquivoDre(y, anoAtual);
+        const guardado = await readFile(join(dir, arquivo), "utf8").then(JSON.parse).catch(() => null);
+        if (dreFechadoLido(guardado, y)) continue;
+        try {
+          await collectDre(y, dir, arquivo);
+          fechados.push(y);
+        } catch (err) {
+          console.warn("dre ano fechado", y, err?.message || err);
+        }
+      }
+      avisar({ tipo: "dre", ok: true, r: { ...r, fechados } });
     } catch (err) {
       avisar({ tipo: "dre", ok: false, erro: String(err?.message || err) });
     }

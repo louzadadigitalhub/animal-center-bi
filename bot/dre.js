@@ -15,10 +15,24 @@ import { join } from "node:path";
 
 const MESES_CURTOS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
-let cache = { chave: "", dados: null };
+/* O ano corrente fica em dre.json, relido a cada 6 h. Ano fechado fica
+   em dre-<ano>.json, lido uma vez só depois de 31/12 — como as vendas e
+   a receita, mês que passou não se lê de novo. */
+export function arquivoDre(ano, anoAtual) {
+  return Number(ano) >= Number(anoAtual) ? "dre.json" : `dre-${ano}.json`;
+}
 
-async function ler(dataDir) {
-  const arq = join(dataDir, "dre.json");
+export function dreFechadoLido(dados, ano) {
+  if (!dados || Number(dados.ano) !== Number(ano)) return false;
+  /* at é UTC: 03:00 de 1/1 é a meia-noite de Brasília. */
+  return String(dados.at || "") >= `${Number(ano) + 1}-01-01T03:00`;
+}
+
+/* Um cache por arquivo: com chave única, dois anos gravados no mesmo
+   instante e do mesmo tamanho se confundiriam. */
+const cache = new Map();
+
+async function lerArquivo(arq) {
   let chave;
   try {
     const s = await stat(arq);
@@ -26,14 +40,22 @@ async function ler(dataDir) {
   } catch {
     return null;
   }
-  if (cache.chave === chave) return cache.dados;
+  if (cache.get(arq)?.chave === chave) return cache.get(arq).dados;
   try {
     const dados = JSON.parse(await readFile(arq, "utf8"));
-    cache = { chave, dados };
+    cache.set(arq, { chave, dados });
     return dados;
   } catch {
     return null;
   }
+}
+
+async function ler(dataDir, year) {
+  for (const nome of ["dre.json", `dre-${year}.json`]) {
+    const d = await lerArquivo(join(dataDir, nome));
+    if (d && Number(d.ano) === Number(year)) return d;
+  }
+  return null;
 }
 
 /* O demonstrativo e olhado para frente: outubro, novembro e dezembro ja
@@ -156,7 +178,7 @@ function fatiar(bloco, year, month, agora) {
    despesa lancada e receita ainda nao vendida, e quem le a planilha
    precisa saber disso sem ter que deduzir. */
 export async function matrizAnual(dataDir, unit, year) {
-  const d = await ler(dataDir);
+  const d = await ler(dataDir, year);
   if (!d || Number(d.ano) !== Number(year)) return null;
   const agora = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
   const ultimoRealizado =
@@ -201,7 +223,7 @@ export async function matrizAnual(dataDir, unit, year) {
    mora aqui: o painel cola a Receita total (recebimentos) por cima.
    Resultado = soma das despesas − essa receita. */
 export async function historicoDespesas(dataDir, unit, year) {
-  const d = await ler(dataDir);
+  const d = await ler(dataDir, year);
   if (!d || Number(d.ano) !== Number(year)) return null;
   const unidades = unit === "consolidado" ? ["matriz", "filial"] : [unit];
   const blocos = unidades.map((u) => d.unidades?.[u]).filter((b) => b?.meses?.length);
@@ -228,7 +250,7 @@ export async function historicoDespesas(dataDir, unit, year) {
 }
 
 export async function dreDoPortal(dataDir, unit, year, month) {
-  const d = await ler(dataDir);
+  const d = await ler(dataDir, year);
   if (!d || Number(d.ano) !== Number(year)) return null;
   /* Horario de Brasilia, nao o do servidor: o painel inteiro usa esse
      fuso para decidir que dia e hoje. */

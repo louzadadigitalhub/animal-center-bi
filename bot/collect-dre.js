@@ -142,11 +142,11 @@ async function lerDemonstrativo(page, ano) {
    em paralelo nao daria certo: para ler a filial o coletor faz logout e
    entra no outro ambiente, e isso derrubaria a sessao do scrape no meio
    do caminho. */
-export async function collectDre(ano = new Date().getFullYear(), dataDir = DATA_PADRAO) {
+export async function collectDre(ano = new Date().getFullYear(), dataDir = DATA_PADRAO, arquivo = "dre.json") {
   await mkdir(dataDir, { recursive: true });
   const browser = await chromium.launch(opcoesChrome());
   try {
-    return await coletar(browser, ano, dataDir);
+    return await coletar(browser, ano, dataDir, arquivo);
   } finally {
     /* Sem o finally, um erro no meio deixaria o Chrome vivo no container
        e o proximo ciclo abriria outro por cima. */
@@ -154,7 +154,7 @@ export async function collectDre(ano = new Date().getFullYear(), dataDir = DATA_
   }
 }
 
-async function coletar(browser, ano, dataDir) {
+async function coletar(browser, ano, dataDir, arquivo) {
   const page = await browser.newPage({ locale: "pt-BR", viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(45000);
 
@@ -197,7 +197,7 @@ async function coletar(browser, ano, dataDir) {
     console.log(unit, "->", amb.nome, "|", dados.linhas.length, "linhas |", meses.length, "meses");
   }
 
-  const destino = join(dataDir, "dre.json");
+  const destino = join(dataDir, arquivo);
   await writeFile(destino, JSON.stringify(saida, null, 2));
   console.log("gravado em", destino);
   return { ano, unidades: Object.keys(saida.unidades) };
