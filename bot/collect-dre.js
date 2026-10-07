@@ -15,6 +15,7 @@ import { join } from "node:path";
 import { writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { gotoResiliente, opcoesChrome, esperarAmbientesOuPainel, escolherAmbiente } from "./chrome.js";
+import { blocoValido, inicioDaUnidade } from "./dre.js";
 
 /* No container as senhas vem das variaveis do EasyPanel, nao de um
    arquivo .env. Exigir o arquivo derrubava o DRE em producao com ENOENT
@@ -69,17 +70,17 @@ async function entrar(page, ambId) {
   return ambientes;
 }
 
-async function lerDemonstrativo(page, ano) {
+async function lerDemonstrativo(page, ano, mesInicio = 1) {
   await gotoResiliente(page, DEMO);
   await page.waitForSelector("#p__lan_var_inicio", { timeout: 30000 });
   /* Os filtros sao Select2 sobre jQuery: mudar o .value no DOM nao
      avisa o widget nem preenche o campo _text que vai junto no POST.
      Tem que passar pelo jQuery da propria pagina. */
-  await page.evaluate((ano) => {
+  await page.evaluate(({ ano, mesInicio }) => {
     const $ = window.jQuery;
     const set = (id, v) => $("#" + id).val(v).trigger("change");
     set("p__tipo", "V"); // regime de caixa, igual ao resto do painel
-    set("p__lan_var_inicio", `${ano}/01`);
+    set("p__lan_var_inicio", `${ano}/${String(mesInicio).padStart(2, "0")}`);
     set("p__lan_var_termino", `${ano}/12`);
     /* Situacao "Pagos / Recebidos" (P), pela regra da clinica. Sem isso
        o filtro fica em "Todas as situacoes" e mistura conta paga com
@@ -87,20 +88,20 @@ async function lerDemonstrativo(page, ano) {
        -51.575 e, so com o que foi pago, sai +26.969. Era tambem o que
        enchia os meses futuros de aluguel e salario ainda nao pagos. */
     set("p__lan_cha_status", "P");
-  }, ano);
+  }, { ano, mesInicio });
   await page.locator("#p__btn_filtrar").click();
 
   /* Espera a tabela realmente virar o ano pedido em vez de dormir um
      tempo fixo — o filtro e AJAX e o tempo varia. */
   await page
     .waitForFunction(
-      (ano) => {
+      ({ ano, meses }) => {
         const t = document.querySelectorAll("table")[1];
         if (!t) return false;
         const cab = [...t.querySelectorAll("thead th")].map((x) => x.innerText.trim());
-        return cab.filter((c) => c.endsWith("/" + ano)).length >= 12;
+        return cab.filter((c) => c.endsWith("/" + ano)).length >= meses;
       },
-      ano,
+      { ano, meses: 13 - mesInicio },
       { timeout: 40000 }
     )
     .catch(() => console.log("  (aviso: a tabela nao chegou a 12 meses)"));
@@ -142,11 +143,11 @@ async function lerDemonstrativo(page, ano) {
    em paralelo nao daria certo: para ler a filial o coletor faz logout e
    entra no outro ambiente, e isso derrubaria a sessao do scrape no meio
    do caminho. */
-export async function collectDre(ano = new Date().getFullYear(), dataDir = DATA_PADRAO, arquivo = "dre.json") {
+export async function collectDre(ano = new Date().getFullYear(), dataDir = DATA_PADRAO, arquivo = "dre.json", { inicios = {} } = {}) {
   await mkdir(dataDir, { recursive: true });
   const browser = await chromium.launch(opcoesChrome());
   try {
-    return await coletar(browser, ano, dataDir, arquivo);
+    return await coletar(browser, ano, dataDir, arquivo, inicios);
   } finally {
     /* Sem o finally, um erro no meio deixaria o Chrome vivo no container
        e o proximo ciclo abriria outro por cima. */
@@ -154,7 +155,7 @@ export async function collectDre(ano = new Date().getFullYear(), dataDir = DATA_
   }
 }
 
-async function coletar(browser, ano, dataDir, arquivo) {
+async function coletar(browser, ano, dataDir, arquivo, inicios) {
   const page = await browser.newPage({ locale: "pt-BR", viewport: { width: 1440, height: 1000 } });
   page.setDefaultTimeout(45000);
 
@@ -165,11 +166,16 @@ async function coletar(browser, ano, dataDir, arquivo) {
 
   for (const amb of ambientes.length ? ambientes : [{ id: "", nome: "Animal Center" }]) {
     const unit = unitDoNome(amb.nome);
+    const inicio = inicioDaUnidade(inicios, unit, ano);
+    if (inicio.pular) {
+      console.log(unit, "->", amb.nome, "| ainda nao existia em", ano);
+      continue;
+    }
     if (amb.id && ambientes.length > 1) {
       await gotoResiliente(page, "https://app.simples.vet/login/logout.php");
       await entrar(page, amb.id);
     }
-    const dados = await lerDemonstrativo(page, ano);
+    const dados = await lerDemonstrativo(page, ano, inicio.mes);
     if (!dados) {
       console.log(unit, "->", amb.nome, "| demonstrativo vazio");
       continue;
@@ -182,6 +188,12 @@ async function coletar(browser, ano, dataDir, arquivo) {
     }
     /* meses vem como ["01/2026", ..., "Total"]; o Total nao vira mes. */
     const meses = dados.meses.filter((m) => /^\d{2}\/\d{4}$/.test(m));
+    /* Periodo que nao pegou volta com meses de outros anos (a filial de
+       2023-2025 veio de 12/1969 a 10/2026). Falha alto: o arquivo
+       anterior fica, e o ano e tentado de novo no proximo DRE. */
+    if (!blocoValido({ meses }, ano)) {
+      throw new Error(`${unit}: periodo do demonstrativo nao aplicou (${meses[0]} a ${meses[meses.length - 1]}, ${meses.length} meses)`);
+    }
     saida.unidades[unit] = {
       ambiente: amb.nome,
       ambienteId: amb.id,

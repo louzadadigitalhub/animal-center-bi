@@ -24,8 +24,27 @@ export function arquivoDre(ano, anoAtual) {
 
 export function dreFechadoLido(dados, ano) {
   if (!dados || Number(dados.ano) !== Number(ano)) return false;
+  if (!Object.values(dados.unidades || {}).every((bl) => blocoValido(bl, ano))) return false;
   /* at é UTC: 03:00 de 1/1 é a meia-noite de Brasília. */
   return String(dados.at || "") >= `${Number(ano) + 1}-01-01T03:00`;
+}
+
+/* Todos os meses do bloco são do ano pedido. Em 07/10/2026 a filial de
+   2023-2025 veio de 12/1969 a 10/2026 (682 meses): o Demonstrativo não
+   aceita período que começa antes da unidade existir e cai no padrão. */
+export function blocoValido(bloco, ano) {
+  const m = bloco?.meses;
+  const doAno = new RegExp(`^\\d{2}/${Number(ano)}$`);
+  return Array.isArray(m) && m.length > 0 && m.length <= 12 && m.every((x) => doAno.test(x));
+}
+
+/* inicios: primeiro mês de cada unidade ("aaaa-mm"). Ano antes dele a
+   unidade não existia; no ano dele, o período começa naquele mês. */
+export function inicioDaUnidade(inicios, unit, ano) {
+  const m = /^(\d{4})-(\d{2})$/.exec(String(inicios?.[unit] || ""));
+  if (!m) return { pular: false, mes: 1 };
+  if (Number(ano) < Number(m[1])) return { pular: true, mes: 1 };
+  return { pular: false, mes: Number(ano) === Number(m[1]) ? Number(m[2]) : 1 };
 }
 
 /* Um cache por arquivo: com chave única, dois anos gravados no mesmo
@@ -50,10 +69,15 @@ async function lerArquivo(arq) {
   }
 }
 
+/* Bloco com meses de outro ano não aparece: melhor a unidade sem DRE
+   do que um número errado. */
 async function ler(dataDir, year) {
   for (const nome of ["dre.json", `dre-${year}.json`]) {
     const d = await lerArquivo(join(dataDir, nome));
-    if (d && Number(d.ano) === Number(year)) return d;
+    if (!d || Number(d.ano) !== Number(year)) continue;
+    const todas = Object.entries(d.unidades || {});
+    const boas = todas.filter(([, bl]) => blocoValido(bl, year));
+    return boas.length === todas.length ? d : { ...d, unidades: Object.fromEntries(boas) };
   }
   return null;
 }

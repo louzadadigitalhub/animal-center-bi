@@ -55,18 +55,27 @@ if (process.env.ROBO_DRE === "1") {
       const { collectDre } = await import("./collect-dre.js");
       const agoraBr = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
       const anoAtual = agoraBr.getFullYear();
-      const r = await collectDre(anoAtual, process.env.DATA_DIR);
+      const dir = process.env.DATA_DIR || join(dirname(fileURLToPath(import.meta.url)), "..", "data");
+      /* Primeiro mês de cada unidade, pelos cards de Recebimentos já lidos
+         (São Cristóvão: mar/2025). O Demonstrativo recusa período que
+         começa antes de a unidade existir. */
+      const receitas = await readFile(join(dir, "receitas-meses.json"), "utf8").then(JSON.parse).catch(() => ({}));
+      const inicios = Object.fromEntries(
+        Object.entries(receitas)
+          .map(([u, meses]) => [u, Object.keys(meses || {}).sort()[0]])
+          .filter(([, k]) => k)
+      );
+      const r = await collectDre(anoAtual, dir, "dre.json", { inicios });
       /* Anos fechados, desde o começo do histórico de vendas (3 anos para
          trás): cada um é lido uma vez depois de 31/12 e fica guardado em
          dre-<ano>.json. Falha num deles não derruba o ano corrente. */
-      const dir = process.env.DATA_DIR || join(dirname(fileURLToPath(import.meta.url)), "..", "data");
       const fechados = [];
       for (let y = anoAtual - 3; y < anoAtual; y++) {
         const arquivo = arquivoDre(y, anoAtual);
         const guardado = await readFile(join(dir, arquivo), "utf8").then(JSON.parse).catch(() => null);
         if (dreFechadoLido(guardado, y)) continue;
         try {
-          await collectDre(y, dir, arquivo);
+          await collectDre(y, dir, arquivo, { inicios });
           fechados.push(y);
         } catch (err) {
           console.warn("dre ano fechado", y, err?.message || err);
