@@ -19,7 +19,18 @@ import {
   listPeople,
 } from "./people.js";
 import { dreDoPortal, historicoDespesas, matrizAnual } from "./dre.js";
-import { IDS, PAGINAS, filtrarView, listarPerfis, removerPerfil, salvarPerfil, viewPublicaRanking } from "./acesso.js";
+import {
+  IDS,
+  PAGINAS,
+  definirAdmin,
+  filtrarView,
+  listarPerfis,
+  marcarSenhaProvisoria,
+  removerPerfil,
+  salvarPerfil,
+  viewPublicaRanking,
+} from "./acesso.js";
+import { criarConta, definirSenha, listarUsuarios } from "./contas.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
 process.on("uncaughtException", (err) => {
@@ -466,8 +477,73 @@ app.post("/api/equipe/pin", exigeDiretoria({ admin: true }), async (req, res) =>
   res.json({ ok: true, pin: r.pin, nome: r.nome });
 });
 
+/* A lista da tela junta os perfis (quem ve o que) com as contas do
+   Supabase: mostra o ultimo acesso e quem tem conta mas ainda nao tem
+   perfil. Se o Supabase nao responder, a lista sai so com os perfis. */
+async function perfisComContas() {
+  const perfis = await listarPerfis();
+  const contas = await listarUsuarios().catch(() => ({ ok: false }));
+  if (!contas.ok) return perfis;
+  const porEmail = new Map(contas.usuarios.map((u) => [u.email, u]));
+  const lista = perfis.map((p) => ({
+    ...p,
+    temConta: porEmail.has(p.email),
+    ultimoAcesso: porEmail.get(p.email)?.ultimoAcesso || null,
+  }));
+  for (const u of contas.usuarios) {
+    if (perfis.some((p) => p.email === u.email)) continue;
+    lista.push({ email: u.email, admin: false, paginas: [], temConta: true, semPerfil: true, ultimoAcesso: u.ultimoAcesso });
+  }
+  return lista;
+}
+
+const EMAIL_OK = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 app.get("/api/perfis", exigeDiretoria({ admin: true }), async (_req, res) => {
-  res.json({ ok: true, perfis: await listarPerfis(), paginas: PAGINAS });
+  res.json({ ok: true, perfis: await perfisComContas(), paginas: PAGINAS });
+});
+
+/* Criar conta com senha definida pela admin, sem depender de e-mail de
+   convite chegar. A senha vale como provisoria: a pessoa ve um aviso para
+   trocar ate trocar. A senha nao vai para o log. */
+app.post("/api/contas", exigeDiretoria({ admin: true }), async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!EMAIL_OK.test(email)) return res.status(400).json({ ok: false, error: "email invalido" });
+  const r = await criarConta(email, String(req.body?.senha || ""));
+  if (!r.ok) return res.status(r.status || 400).json({ ok: false, error: r.error });
+  await salvarPerfil(email, Array.isArray(req.body?.paginas) ? req.body.paginas : []);
+  await marcarSenhaProvisoria(email, true);
+  console.log("conta criada", email, "por", req.perfil.email);
+  res.json({ ok: true, perfis: await perfisComContas() });
+});
+
+app.post("/api/contas/senha", exigeDiretoria({ admin: true }), async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!EMAIL_OK.test(email)) return res.status(400).json({ ok: false, error: "email invalido" });
+  const r = await definirSenha(email, String(req.body?.senha || ""));
+  if (!r.ok) return res.status(r.status || 400).json({ ok: false, error: r.error });
+  /* A propria admin trocando a dela nao vira provisoria. */
+  if (email !== req.perfil.email) await marcarSenhaProvisoria(email, true);
+  console.log("senha trocada pela admin", email, "por", req.perfil.email);
+  res.json({ ok: true, perfis: await perfisComContas() });
+});
+
+app.post("/api/perfis/admin", exigeDiretoria({ admin: true }), async (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  if (!EMAIL_OK.test(email)) return res.status(400).json({ ok: false, error: "email invalido" });
+  const r = await definirAdmin(email, Boolean(req.body?.admin));
+  if (!r.ok) return res.status(400).json(r);
+  console.log(req.body?.admin ? "admin dada a" : "admin tirada de", email, "por", req.perfil.email);
+  res.json({ ok: true, perfis: await perfisComContas() });
+});
+
+/* A propria pessoa avisa que trocou a senha provisoria. Vale para qualquer
+   conta logada, mesmo sem aba liberada. */
+app.post("/api/perfil/senha-trocada", async (req, res) => {
+  const perfil = await quemE(req);
+  if (!perfil) return res.status(401).json({ ok: false, error: "entre para ver o painel" });
+  await marcarSenhaProvisoria(perfil.email, false);
+  res.json({ ok: true });
 });
 
 app.post("/api/perfis", exigeDiretoria({ admin: true }), async (req, res) => {

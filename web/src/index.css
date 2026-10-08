@@ -1029,6 +1029,103 @@ table.dre td.down::before {
   border-color: var(--line-2);
 }
 
+.conta-sair:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Nova conta e troca de senha: mesmo campo do convite. */
+.nova-conta {
+  display: grid;
+  gap: var(--s2);
+}
+
+.nova-conta input,
+.senha-linha input {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 10px var(--s3);
+  color: var(--text);
+  outline: none;
+}
+
+.nova-conta input:focus,
+.senha-linha input:focus {
+  border-color: var(--line-2);
+}
+
+.senha-linha {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.senha-linha input {
+  flex: 1 1 180px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: 0.04em;
+}
+
+.conta-acoes,
+.conta-marcas,
+.senha-mostrada-acoes {
+  display: flex;
+  gap: var(--s2);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.conta-marcas {
+  gap: var(--s1);
+}
+
+.conta-acesso {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+/* A senha aparece uma vez so: destaque para ninguem fechar sem copiar. */
+.senha-mostrada {
+  display: grid;
+  gap: var(--s2);
+  margin-top: var(--s3);
+  padding: var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-ctl);
+  background: var(--accent-wash);
+}
+
+.senha-mostrada p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.senha-mostrada code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  letter-spacing: 0.06em;
+  color: var(--text);
+  user-select: all;
+}
+
+.aviso-senha {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin: 0 0 var(--s4);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-ctl);
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--text);
+  font-size: 13px;
+}
+
 aside {
   display: flex;
   flex-direction: column;

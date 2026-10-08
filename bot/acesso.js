@@ -102,11 +102,11 @@ export async function perfilDe(email) {
     await gravar(doc);
     return { email: e, admin: true, paginas: "todas" };
   }
-  const admin = doc.admins.includes(e);
-  if (admin) return { email: e, admin: true, paginas: "todas" };
   const p = doc.perfis[e];
-  if (!p) return { email: e, admin: false, paginas: [] };
-  return { email: e, admin: false, paginas: p.paginas === "todas" ? "todas" : p.paginas || [] };
+  const senhaProvisoria = Boolean(p?.senhaProvisoria);
+  if (doc.admins.includes(e)) return { email: e, admin: true, paginas: "todas", senhaProvisoria };
+  if (!p) return { email: e, admin: false, paginas: [], senhaProvisoria };
+  return { email: e, admin: false, paginas: p.paginas === "todas" ? "todas" : p.paginas || [], senhaProvisoria };
 }
 
 export async function listarPerfis() {
@@ -116,6 +116,7 @@ export async function listarPerfis() {
     admin: doc.admins.includes(email),
     paginas: p.paginas === "todas" ? "todas" : p.paginas || [],
     criadoEm: p.criadoEm || null,
+    senhaProvisoria: Boolean(p.senhaProvisoria),
   }));
 }
 
@@ -135,6 +136,40 @@ export async function removerPerfil(email) {
   const doc = await ler();
   if (doc.admins.includes(e)) return { ok: false, error: "nao da para remover a conta admin" };
   delete doc.perfis[e];
+  await gravar(doc);
+  return { ok: true };
+}
+
+/* Tornar ou tirar admin. Sempre fica ao menos uma: sem admin ninguem
+   libera aba nem cria conta. Quem deixa de ser admin volta para as abas
+   que o perfil ja tinha. */
+export async function definirAdmin(email, ligar) {
+  const e = norm(email);
+  if (!e) return { ok: false, error: "email invalido" };
+  const doc = await ler();
+  if (ligar) {
+    if (!doc.admins.includes(e)) doc.admins.push(e);
+    doc.perfis[e] = { paginas: [], criadoEm: new Date().toISOString(), ...(doc.perfis[e] || {}) };
+  } else {
+    if (!doc.admins.includes(e)) return { ok: true };
+    if (doc.admins.length === 1) return { ok: false, error: "precisa ficar ao menos uma conta admin" };
+    doc.admins = doc.admins.filter((x) => x !== e);
+  }
+  await gravar(doc);
+  return { ok: true };
+}
+
+/* Senha que a admin definiu vale como provisoria ate a pessoa trocar por
+   uma so dela. */
+export async function marcarSenhaProvisoria(email, sim) {
+  const e = norm(email);
+  if (!e) return { ok: false, error: "email invalido" };
+  const doc = await ler();
+  if (!sim && !doc.perfis[e]) return { ok: true };
+  const p = { paginas: [], criadoEm: new Date().toISOString(), ...(doc.perfis[e] || {}) };
+  if (sim) p.senhaProvisoria = true;
+  else delete p.senhaProvisoria;
+  doc.perfis[e] = p;
   await gravar(doc);
   return { ok: true };
 }

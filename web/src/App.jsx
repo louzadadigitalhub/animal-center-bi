@@ -1524,7 +1524,7 @@ function Tv({ u, label, fotos, live }) {
   );
 }
 
-function Painel({ perfil, aoSair }) {
+function Painel({ perfil, aoSair, aoTrocarSenha }) {
   /* O menu so mostra o que a conta pode ver. Isto e conveniencia: o filtro
      que vale acontece no servidor, que poda o proprio snapshot. */
   const podeVer = (id) => perfil.paginas === "todas" || (perfil.paginas || []).includes(id);
@@ -1877,6 +1877,17 @@ function Painel({ perfil, aoSair }) {
           </div>
         </div>
 
+        {perfil.senhaProvisoria ? (
+          <div className="aviso-senha" role="status">
+            <span>Sua senha foi definida pela administração. Troque por uma só sua.</span>
+            {page === "admin" ? null : (
+              <button type="button" className="conta-sair" onClick={() => setPage("admin")}>
+                Trocar agora
+              </button>
+            )}
+          </div>
+        ) : null}
+
         {page === "vendas" && <Vendas u={u} year={year} porMes={periodo === "ano" || month === "all"} />}
         {page === "ritmo" && <Ritmo u={u} hoje={live?.hoje} onOpen={setDetail} />}
         {page === "equipe" && <Equipe u={u} onOpen={setDetail} />}
@@ -1886,7 +1897,9 @@ function Painel({ perfil, aoSair }) {
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} year={year} />}
         {page === "tv" && <Tv u={u} label={labelComGrupo} fotos={live?.fotos} live={live} />}
-        {page === "admin" ? <Admin perfil={perfil} /> : null}
+        {page === "admin" ? (
+          <Admin perfil={perfil} onSenhaTrocada={aoTrocarSenha} />
+        ) : null}
       </div>
       <nav className="dock" aria-label="Atalhos">
         {DOCK.map((item) => {
@@ -1915,7 +1928,7 @@ function Painel({ perfil, aoSair }) {
    precisa poder trocar sem depender de outra pessoa. A troca vai direto ao
    Supabase, entao a senha nova nunca passa pelo nosso servidor. */
 
-function TrocarSenha({ email, largura = "span-12" }) {
+function TrocarSenha({ email, largura = "span-12", onTrocou }) {
   const [nova, setNova] = useState("");
   const [repete, setRepete] = useState("");
   const [erro, setErro] = useState("");
@@ -1935,6 +1948,9 @@ function TrocarSenha({ email, largura = "span-12" }) {
     setNova("");
     setRepete("");
     setOk(true);
+    /* Senha que era provisoria deixa de ser: o aviso some. */
+    apiFetch("/api/perfil/senha-trocada", { method: "POST" }).catch(() => {});
+    onTrocou?.();
     sileo.success({ title: "Senha trocada", description: "Vale a partir de agora." });
   }
 
@@ -1967,11 +1983,11 @@ function TrocarSenha({ email, largura = "span-12" }) {
    encaixados faziam o de dentro virar um item de 1 coluna em 12, e
    "Convidar" e "Quem ve o que" ficavam num filete com o conteudo
    vazando pra fora do card. */
-function Admin({ perfil }) {
+function Admin({ perfil, onSenhaTrocada }) {
   return (
     <div className="bento">
-      <TrocarSenha email={perfil.email} largura={perfil.admin ? "span-5" : "span-12"} />
-      {perfil.admin ? <Contas /> : null}
+      <TrocarSenha email={perfil.email} largura={perfil.admin ? "span-5" : "span-12"} onTrocou={onSenhaTrocada} />
+      {perfil.admin ? <Contas eu={perfil.email} /> : null}
       {perfil.admin ? <PinsEquipe /> : null}
     </div>
   );
@@ -2110,12 +2126,67 @@ function PinsEquipe() {
 
 /* ---------- Contas e permissoes (so a admin) ---------- */
 
-function Contas() {
+/* Senha provisoria sorteada no navegador: 10 caracteres, sem os que se
+   confundem ao ditar (0/O, 1/l/I). */
+function gerarSenha() {
+  const letras = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const n = new Uint32Array(10);
+  crypto.getRandomValues(n);
+  return [...n].map((x) => letras[x % letras.length]).join("");
+}
+
+const quandoFoi = (iso) =>
+  iso
+    ? new Date(iso).toLocaleString("pt-BR", {
+        timeZone: "America/Sao_Paulo",
+        day: "2-digit",
+        month: "2-digit",
+        year: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "";
+
+/* A senha que a admin define aparece uma vez so, para copiar e repassar:
+   o Supabase guarda so o hash, entao depois nao ha como ver de novo. */
+function SenhaMostrada({ email, senha, onFechar }) {
+  const [copiou, setCopiou] = useState(false);
+  return (
+    <div className="senha-mostrada" role="status">
+      <p>
+        Repasse para <strong>{email}</strong>. Ela só aparece agora.
+      </p>
+      <code>{senha}</code>
+      <div className="senha-mostrada-acoes">
+        <button
+          type="button"
+          className="conta-sair"
+          onClick={() => navigator.clipboard?.writeText(`${email}\n${senha}`).then(() => setCopiou(true))}
+        >
+          {copiou ? "Copiado" : "Copiar e-mail e senha"}
+        </button>
+        <button type="button" className="conta-sair" onClick={onFechar}>
+          Fechar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* Contas: criar com senha provisoria (ou mandar convite), trocar a senha
+   de qualquer um, tornar ou tirar admin e liberar abas. A chave que cria
+   conta e troca senha fica no servidor; daqui sai so o pedido. */
+function Contas({ eu }) {
   const [perfis, setPerfis] = useState([]);
   const [paginas, setPaginas] = useState([]);
   const [email, setEmail] = useState("");
+  const [senha, setSenha] = useState("");
+  const [abas, setAbas] = useState([]);
   const [erro, setErro] = useState("");
   const [ocupado, setOcupado] = useState(false);
+  const [mostrada, setMostrada] = useState(null);
+  const [trocando, setTrocando] = useState("");
+  const [novaSenha, setNovaSenha] = useState("");
 
   const carregar = () =>
     apiFetch("/api/perfis")
@@ -2131,58 +2202,110 @@ function Contas() {
     carregar();
   }, []);
 
+  async function enviar(caminho, corpo, method = "POST") {
+    const r = await apiFetch(caminho, { method, body: JSON.stringify(corpo) }).then((x) => x.json());
+    if (!r.ok) throw new Error(r.error || "não deu");
+    if (r.perfis) setPerfis(r.perfis);
+    return r;
+  }
+
   async function alternar(conta, id) {
     if (conta.paginas === "todas") return;
     const tem = conta.paginas.includes(id);
     const novas = tem ? conta.paginas.filter((x) => x !== id) : [...conta.paginas, id];
-    setPerfis((ps) => ps.map((p) => (p.email === conta.email ? { ...p, paginas: novas } : p)));
-    const r = await apiFetch("/api/perfis", {
-      method: "POST",
-      body: JSON.stringify({ email: conta.email, paginas: novas }),
-    }).then((x) => x.json());
-    if (!r.ok) {
-      sileo.error({ title: "Nao salvou", description: r.error });
+    setPerfis((ps) => ps.map((p) => (p.email === conta.email ? { ...p, paginas: novas, semPerfil: false } : p)));
+    try {
+      await enviar("/api/perfis", { email: conta.email, paginas: novas });
+    } catch (e) {
+      sileo.error({ title: "Não salvou", description: e.message });
       carregar();
     }
   }
 
-  async function convidar(e) {
+  async function criar(e) {
     e.preventDefault();
     setErro("");
     setOcupado(true);
     try {
-      const r = await apiFetch("/api/perfis/convidar", {
-        method: "POST",
-        body: JSON.stringify({ email, paginas: [] }),
-      }).then((x) => x.json());
-      if (!r.ok) throw new Error(r.error);
-      setPerfis(r.perfis);
+      await enviar("/api/contas", { email, senha, paginas: abas });
+      setMostrada({ email, senha });
+      sileo.success({ title: "Conta criada", description: `${email} já pode entrar.` });
       setEmail("");
-      sileo.success({ title: "Convite enviado", description: `${email} recebe um e-mail para criar a senha.` });
+      setSenha("");
+      setAbas([]);
     } catch (e2) {
-      setErro(e2.message || "nao deu para convidar");
+      setErro(e2.message);
     } finally {
       setOcupado(false);
     }
   }
 
+  async function convidar() {
+    setErro("");
+    setOcupado(true);
+    try {
+      await enviar("/api/perfis/convidar", { email, paginas: abas });
+      sileo.success({ title: "Convite enviado", description: `${email} recebe um e-mail para criar a senha.` });
+      setEmail("");
+      setSenha("");
+      setAbas([]);
+    } catch (e2) {
+      setErro(e2.message || "não deu para convidar");
+    } finally {
+      setOcupado(false);
+    }
+  }
+
+  async function salvarSenha(conta) {
+    try {
+      await enviar("/api/contas/senha", { email: conta.email, senha: novaSenha });
+      setMostrada({ email: conta.email, senha: novaSenha });
+      setTrocando("");
+      setNovaSenha("");
+    } catch (e) {
+      sileo.error({ title: "Não trocou", description: e.message });
+    }
+  }
+
+  async function alternarAdmin(conta) {
+    const tirandoDeMim = conta.admin && conta.email === eu;
+    if (tirandoDeMim && !window.confirm("Você deixa de ser admin e perde esta tela. Continuar?")) return;
+    try {
+      await enviar("/api/perfis/admin", { email: conta.email, admin: !conta.admin });
+      if (tirandoDeMim) window.location.reload();
+    } catch (e) {
+      sileo.error({ title: "Não mudou", description: e.message });
+    }
+  }
+
   async function remover(conta) {
-    const r = await apiFetch("/api/perfis", {
-      method: "DELETE",
-      body: JSON.stringify({ email: conta.email }),
-    }).then((x) => x.json());
-    if (r.ok) setPerfis(r.perfis);
-    else sileo.error({ title: "Nao removeu", description: r.error });
+    try {
+      await enviar("/api/perfis", { email: conta.email }, "DELETE");
+    } catch (e) {
+      sileo.error({ title: "Não removeu", description: e.message });
+    }
+  }
+
+  /* Perfil sem login no Supabase: leva o e-mail e as abas dele para o
+     formulario de cima, com uma senha ja sorteada. */
+  function criarLogin(conta) {
+    setEmail(conta.email);
+    setSenha(gerarSenha());
+    setAbas(conta.paginas === "todas" ? [] : conta.paginas);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   return (
     <>
       <section className="card span-7">
         <header>
-          <h2>Convidar</h2>
-          <p>A pessoa recebe um e-mail do Supabase para criar a propria senha. Ela entra sem aba nenhuma ate voce liberar abaixo.</p>
+          <h2>Nova conta</h2>
+          <p>
+            Crie com uma senha provisória e escolha as abas. A pessoa já entra com ela, e o painel pede para trocar por
+            uma só dela. Se preferir, mande um convite por e-mail para ela criar a senha.
+          </p>
         </header>
-        <form className="convite" onSubmit={convidar}>
+        <form className="nova-conta" onSubmit={criar}>
           <input
             type="email"
             required
@@ -2190,16 +2313,47 @@ function Contas() {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
           />
-          <button type="submit" className="conta-sair" disabled={ocupado || !email}>
-            {ocupado ? "Enviando…" : "Convidar"}
-          </button>
+          <div className="senha-linha">
+            <input
+              type="text"
+              placeholder="senha provisória (8 ou mais)"
+              value={senha}
+              onChange={(e) => setSenha(e.target.value)}
+              autoComplete="off"
+              spellCheck={false}
+            />
+            <button type="button" className="conta-sair" onClick={() => setSenha(gerarSenha())}>
+              Gerar
+            </button>
+          </div>
+          <div className="conta-abas">
+            {paginas.map((pg) => (
+              <button
+                key={pg.id}
+                type="button"
+                className={`${abas.includes(pg.id) ? "on" : ""} ${pg.sensivel ? "sensivel" : ""}`}
+                onClick={() => setAbas((a) => (a.includes(pg.id) ? a.filter((x) => x !== pg.id) : [...a, pg.id]))}
+              >
+                {pg.nome}
+              </button>
+            ))}
+          </div>
+          <div className="conta-acoes">
+            <button type="submit" className="conta-sair" disabled={ocupado || !email || senha.length < 8}>
+              {ocupado ? "Criando…" : "Criar conta"}
+            </button>
+            <button type="button" className="conta-sair" disabled={ocupado || !email} onClick={convidar}>
+              Mandar convite por e-mail
+            </button>
+          </div>
         </form>
+        {mostrada ? <SenhaMostrada {...mostrada} onFechar={() => setMostrada(null)} /> : null}
         {erro ? <p className="portao-erro">{erro}</p> : null}
       </section>
 
       <section className="card span-12">
         <header>
-          <h2>Quem ve o que</h2>
+          <h2>Contas e permissões</h2>
           <p>Clique numa aba para liberar ou tirar. O ponto amarelo marca as que mostram dado pessoal de tutor.</p>
         </header>
         <div className="contas">
@@ -2207,14 +2361,16 @@ function Contas() {
             <div key={c.email} className="conta">
               <div className="conta-topo">
                 <strong>{c.email}</strong>
-                {c.admin ? (
-                  <span className="ui-badge ui-badge-solid">admin · ve tudo</span>
-                ) : (
-                  <button type="button" className="conta-sair" onClick={() => remover(c)}>
-                    Remover acesso
-                  </button>
-                )}
+                <div className="conta-marcas">
+                  {c.admin ? <span className="ui-badge ui-badge-solid">admin · vê tudo</span> : null}
+                  {c.senhaProvisoria ? <span className="ui-badge ui-badge-outline">senha provisória</span> : null}
+                  {c.semPerfil ? <span className="ui-badge ui-badge-outline">sem aba</span> : null}
+                  {c.temConta === false ? <span className="ui-badge ui-badge-outline">sem login</span> : null}
+                </div>
               </div>
+              {c.temConta === false ? null : (
+                <small className="conta-acesso">{c.ultimoAcesso ? `Último acesso ${quandoFoi(c.ultimoAcesso)}` : "Nunca entrou"}</small>
+              )}
               {c.admin ? null : (
                 <div className="conta-abas">
                   {paginas.map((pg) => (
@@ -2229,9 +2385,63 @@ function Contas() {
                   ))}
                 </div>
               )}
+              {trocando === c.email ? (
+                <div className="senha-linha">
+                  <input
+                    type="text"
+                    value={novaSenha}
+                    onChange={(e) => setNovaSenha(e.target.value)}
+                    placeholder="senha nova (8 ou mais)"
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <button type="button" className="conta-sair" onClick={() => setNovaSenha(gerarSenha())}>
+                    Gerar
+                  </button>
+                  <button type="button" className="conta-sair" disabled={novaSenha.length < 8} onClick={() => salvarSenha(c)}>
+                    Salvar
+                  </button>
+                  <button
+                    type="button"
+                    className="conta-sair"
+                    onClick={() => {
+                      setTrocando("");
+                      setNovaSenha("");
+                    }}
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              ) : null}
+              <div className="conta-acoes">
+                {c.temConta === false ? (
+                  <button type="button" className="conta-sair" onClick={() => criarLogin(c)}>
+                    Criar login
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="conta-sair"
+                    onClick={() => {
+                      setTrocando(c.email);
+                      setNovaSenha(gerarSenha());
+                    }}
+                  >
+                    Trocar senha
+                  </button>
+                )}
+                <button type="button" className="conta-sair" onClick={() => alternarAdmin(c)}>
+                  {c.admin ? "Tirar admin" : "Tornar admin"}
+                </button>
+                {c.admin || c.semPerfil ? null : (
+                  <button type="button" className="conta-sair" onClick={() => remover(c)}>
+                    Remover acesso
+                  </button>
+                )}
+              </div>
             </div>
           ))}
-          {!perfis.length ? <p className="hint">Ninguem alem de voce ainda.</p> : null}
+          {!perfis.length ? <p className="hint">Ninguém além de você ainda.</p> : null}
         </div>
       </section>
     </>
@@ -2394,5 +2604,5 @@ export default function App() {
     );
   }
 
-  return <Painel perfil={perfil} aoSair={sair} />;
+  return <Painel perfil={perfil} aoSair={sair} aoTrocarSenha={() => setPerfil((p) => (p ? { ...p, senhaProvisoria: false } : p))} />;
 }
