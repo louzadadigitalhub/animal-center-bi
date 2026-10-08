@@ -20,6 +20,7 @@ import { Moon } from "@phosphor-icons/react/Moon";
 import { DailyBars, Donut, Hourly, LineChart, Radar, MultiLine, SparkBars, Treemap, VolumeTicket } from "./charts";
 import { MONTHS, YEARS, brl, brlc, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR, recuarMeses, recuarDias } from "./data";
 import { somarUnidades } from "./dre-soma.js";
+import { acharNo, arvoreDre, juntarNos, temValor } from "./dre-arvore.js";
 import MapPanel from "./MapPanel.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
@@ -1143,8 +1144,93 @@ function DreGraficos({ historico, year }) {
    Resultado = essa soma menos a Receita total. */
 /* As duas lojas lado a lado não diziam o total. O dono pediu a soma
    da receita, a soma da despesa e a diferença entre essas duas somas. */
+/* Contas dentro de um grupo da DRE. A que tem algo embaixo abre com um
+   clique. O sinal sai invertido para a despesa aparecer positiva, como no
+   total do grupo. */
+function DreRamos({ nos, sinal = -1 }) {
+  const [abertos, setAbertos] = useState(() => new Set());
+  const visiveis = (nos || []).filter(temValor);
+  if (!visiveis.length) return <p className="dre-ramos-vazio">Nenhuma conta com valor neste período.</p>;
+  const alternar = (nome) =>
+    setAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(nome)) novo.delete(nome);
+      else novo.add(nome);
+      return novo;
+    });
+  return (
+    <ul className="dre-ramos">
+      {visiveis.map((n) => {
+        const abre = n.filhos.some(temValor);
+        const aberto = abertos.has(n.nome);
+        const conteudo = (
+          <>
+            <span>
+              <i className="dre-seta">{abre ? (aberto ? "▾" : "▸") : ""}</i>
+              {n.nome}
+            </span>
+            <b>{brlc(sinal * n.valor)}</b>
+          </>
+        );
+        return (
+          <li key={n.nome}>
+            {abre ? (
+              <button type="button" className="dre-ramo" aria-expanded={aberto} onClick={() => alternar(n.nome)}>
+                {conteudo}
+              </button>
+            ) : (
+              <div className="dre-ramo">{conteudo}</div>
+            )}
+            {aberto ? <DreRamos nos={n.filhos} sinal={sinal} /> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/* Os quatro grupos da regra da clínica. Clicar num deles abre as contas
+   de dentro com o valor de cada uma. */
+function DreGrupos({ grupos, filhosDe }) {
+  const [aberto, setAberto] = useState("");
+  return (
+    <ul className="dre-grupos">
+      {grupos.map((g) => {
+        const filhos = filhosDe(g.nome);
+        const abre = filhos.some(temValor);
+        return (
+          <li key={g.nome}>
+            {abre ? (
+              <button
+                type="button"
+                className="dre-grupo"
+                aria-expanded={aberto === g.nome}
+                onClick={() => setAberto((a) => (a === g.nome ? "" : g.nome))}
+              >
+                <span>
+                  <i className="dre-seta">{aberto === g.nome ? "▾" : "▸"}</i>
+                  {g.nome}
+                </span>
+                <b>{brlc(g.valor)}</b>
+              </button>
+            ) : (
+              <>
+                <span>{g.nome}</span>
+                <b>{brlc(g.valor)}</b>
+              </>
+            )}
+            {g.lancado ? null : <em>sem conta paga no mês</em>}
+            {aberto === g.nome ? <DreRamos nos={filhos} /> : null}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function DreGlobal({ partes }) {
   const s = somarUnidades(partes);
+  const arvores = useMemo(() => partes.map((p) => arvoreDre(p.linhas)), [partes]);
   return (
     <section className={`card span-12 dre-resumo`}>
       <header>
@@ -1169,15 +1255,10 @@ function DreGlobal({ partes }) {
         </div>
       </div>
       {s.grupos.length ? (
-        <ul className="dre-grupos">
-          {s.grupos.map((g) => (
-            <li key={g.nome}>
-              <span>{g.nome}</span>
-              <b>{brlc(g.valor)}</b>
-              {g.lancado ? null : <em>sem conta paga no mês</em>}
-            </li>
-          ))}
-        </ul>
+        <DreGrupos
+          grupos={s.grupos}
+          filhosDe={(nome) => juntarNos(arvores.map((a) => acharNo(a, nome)?.filhos || []))}
+        />
       ) : null}
     </section>
   );
@@ -1186,6 +1267,7 @@ function DreGlobal({ partes }) {
 function DreResumo({ parte, largura }) {
   const casa = parte.unit === "filial" ? "São Cristóvão" : "Animal Center";
   const d = parte.despesas;
+  const arvore = useMemo(() => arvoreDre(parte.linhas), [parte.linhas]);
   const origemReceita = parte.receita?.oficial === false
     ? "Baixas do período (o cartão desse mês não foi lido)"
     : parte.receita?.origem === "ano"
@@ -1216,17 +1298,7 @@ function DreResumo({ parte, largura }) {
           <span>soma das despesas − Receita total</span>
         </div>
       </div>
-      {d ? (
-        <ul className="dre-grupos">
-          {d.grupos.map((g) => (
-            <li key={g.nome}>
-              <span>{g.nome}</span>
-              <b>{brlc(g.valor)}</b>
-              {g.lancado ? null : <em>sem conta paga no mês</em>}
-            </li>
-          ))}
-        </ul>
-      ) : null}
+      {d ? <DreGrupos grupos={d.grupos} filhosDe={(nome) => acharNo(arvore, nome)?.filhos || []} /> : null}
     </section>
   );
 }
@@ -1298,15 +1370,68 @@ const RECADO_ESTAGIO = {
 function DreArvore({ parte, regime, varias }) {
   const casa = parte.unit === "filial" ? "São Cristóvão" : "Animal Center";
   const recado = RECADO_ESTAGIO[parte.estagio];
+  const arvore = useMemo(() => arvoreDre(parte.linhas), [parte.linhas]);
+  /* Abre só os dois primeiros níveis (lucro, resultado e os grupos); o
+     resto abre com um clique. O que estiver aberto continua aberto ao
+     trocar de mês. Conta zerada no período não entra. */
+  const inicial = () => {
+    const ids = new Set();
+    arvore.forEach((n, i) => {
+      ids.add(String(i));
+      n.filhos.forEach((_, j) => ids.add(`${i}.${j}`));
+    });
+    return ids;
+  };
+  const [abertos, setAbertos] = useState(inicial);
+  const [tudo, setTudo] = useState(false);
+  const alternar = (id) =>
+    setAbertos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  const abrirTudo = () => {
+    const ids = new Set();
+    const visitar = (nos, base) =>
+      nos.forEach((n, i) => {
+        const id = base ? `${base}.${i}` : String(i);
+        ids.add(id);
+        visitar(n.filhos, id);
+      });
+    visitar(arvore, "");
+    setAbertos(ids);
+    setTudo(true);
+  };
+  const recolher = () => {
+    setAbertos(inicial());
+    setTudo(false);
+  };
+
+  const linhas = [];
+  const visitar = (nos, base) =>
+    nos.forEach((n, i) => {
+      if (!temValor(n)) return;
+      const id = base ? `${base}.${i}` : String(i);
+      linhas.push({ n, id, abre: n.filhos.some(temValor) });
+      if (abertos.has(id)) visitar(n.filhos, id);
+    });
+  visitar(arvore, "");
+
   return (
     <section className="card span-12">
       <header>
         <h2>{varias ? `DRE · ${casa}` : "DRE"}</h2>
         <p>
           Demonstrativo do SimplesVet, {parte.periodo}, regime de {regime}, só pagos e recebidos. As
-          categorias são as que a clínica lança no portal.
+          categorias são as que a clínica lança no portal. Clique numa linha com ▸ para abrir o que tem dentro.
         </p>
       </header>
+      <div className="dre-arvore-acoes">
+        <button type="button" className="conta-sair" onClick={tudo ? recolher : abrirTudo}>
+          {tudo ? "Recolher" : "Abrir tudo"}
+        </button>
+      </div>
       {recado ? <p className="dre-aviso">{recado}</p> : null}
       <div className="table-wrap">
         <table className="dre">
@@ -1317,10 +1442,22 @@ function DreArvore({ parte, regime, varias }) {
             </tr>
           </thead>
           <tbody>
-            {parte.linhas.map((l, i) => (
-              <tr key={`${l.nome}-${i}`} className={l.total ? "now" : ""}>
-                <td style={{ paddingLeft: `calc(var(--s3) + ${l.nivel * 18}px)` }}>{l.nome}</td>
-                <td className={l.valor < 0 ? "down" : ""}>{brl(l.valor)}</td>
+            {linhas.map(({ n, id, abre }) => (
+              <tr key={id} className={n.total ? "now" : ""}>
+                <td style={{ paddingLeft: `calc(var(--s3) + ${n.nivel * 18}px)` }}>
+                  {abre ? (
+                    <button type="button" className="dre-no" aria-expanded={abertos.has(id)} onClick={() => alternar(id)}>
+                      <i className="dre-seta">{abertos.has(id) ? "▾" : "▸"}</i>
+                      {n.nome}
+                    </button>
+                  ) : (
+                    <span className="dre-folha">
+                      <i className="dre-seta" />
+                      {n.nome}
+                    </span>
+                  )}
+                </td>
+                <td className={n.valor < 0 ? "down" : ""}>{brlc(n.valor)}</td>
               </tr>
             ))}
           </tbody>

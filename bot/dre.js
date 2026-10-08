@@ -167,7 +167,7 @@ function fatiar(bloco, year, month, agora) {
         nome: l.nome,
         nivel: l.nivel,
         total: l.total,
-        valor: Math.round(l.valores[idx] ?? 0),
+        valor: centavos(l.valores[idx] ?? 0),
       })),
     };
   }
@@ -191,7 +191,7 @@ function fatiar(bloco, year, month, agora) {
       nome: l.nome,
       nivel: l.nivel,
       total: l.total,
-      valor: Math.round(cols.reduce((a, i) => a + (l.valores[i] || 0), 0)),
+      valor: centavos(cols.reduce((a, i) => a + (l.valores[i] || 0), 0)),
     })),
   };
 }

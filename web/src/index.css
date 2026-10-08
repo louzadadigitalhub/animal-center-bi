@@ -575,6 +575,91 @@ input {
   color: var(--text-3);
 }
 
+/* Grupo e conta da DRE que abrem: o botao ocupa a linha inteira. */
+.dre-grupos li > .dre-grupo,
+.dre-ramo {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s3);
+  align-items: baseline;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.dre-grupo,
+button.dre-ramo,
+button.dre-no {
+  cursor: pointer;
+}
+
+button.dre-grupo:hover span,
+button.dre-ramo:hover span,
+button.dre-no:hover {
+  color: var(--text);
+}
+
+.dre-grupo b,
+.dre-ramo b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--text);
+  text-align: right;
+}
+
+.dre-seta {
+  display: inline-block;
+  width: 1.1em;
+  font-style: normal;
+  color: var(--text-3);
+}
+
+.dre-ramos {
+  grid-column: 1 / -1;
+  list-style: none;
+  margin: var(--s1) 0 0;
+  padding: 0 0 0 var(--s4);
+  display: grid;
+  gap: 2px;
+  border-left: 1px solid var(--line);
+}
+
+.dre-ramos li {
+  display: grid;
+  gap: 2px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.dre-ramos-vazio {
+  grid-column: 1 / -1;
+  margin: var(--s1) 0 0;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+button.dre-no {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-align: left;
+}
+
+.dre-arvore-acoes {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--s2);
+}
+
 .dre-resumo-numeros strong.neg {
   color: var(--neg);
 }
