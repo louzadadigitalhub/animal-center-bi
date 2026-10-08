@@ -645,6 +645,11 @@ button.dre-no:hover {
   color: var(--text-3);
 }
 
+/* Linha sem conta dentro: alinha o nome com as que abrem. */
+.dre-folha {
+  display: inline;
+}
+
 button.dre-no {
   border: 0;
   background: none;
