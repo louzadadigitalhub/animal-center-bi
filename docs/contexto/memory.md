@@ -15,3 +15,18 @@
 **2026-10-16 — Repositório é público: dado de compras fica fora do git.** O GitHub `louzadadigitalhub/animal-center-bi` é público. Catálogo, preços e telefones de fornecedor são gerados numa pasta local e sobem direto para `/data/compras` no servidor; só o importador e a documentação entram no repositório.
 
 **2026-10-16 — Casamento de nomes entre as planilhas é estrito.** Na primeira rodada, "Fenobarbital ampola" casou com "Furosemida ampola" e "Luva P" com "Luva M". Agora o nome principal, o tamanho e a medida têm de bater, e os melhores pares são escolhidos no conjunto todo. Marca diferente (Propofol: Baxter na planilha de compras, União Química na de preços) e casamento fraco (30 itens) viram "conferir", que o agente mostra como pendência em vez de assumir.
+
+**2026-10-19 — Contas a pagar: aviso só no painel, para o Luís, pronto na quinta às 7h.** Decisão do dono: sem Telegram nem WhatsApp por enquanto.
+
+**2026-10-19 — Quatro caixas de e-mail, por senha de app.** Financeiro, Centro, São Cristóvão e Centro Pet. As senhas normais guardadas no `.env` local eram recusadas pelo Gmail; as senhas de app do documento da clínica entraram e foram gravadas só no ambiente do servidor.
+
+**2026-10-19 — SimplesVet por API, não por tela.** A tela Contas a pagar é uma aplicação nova que pede os dados a `api.simples.vet/app/v1/financeiro/lancamentos`; a sessão do login basta. Ler a API é mais estável do que raspar a tabela.
+
+**2026-10-19 — Pausa de manutenção do robô.** Explorar o portal com o mesmo login derrubaria a sessão do robô; o arquivo `/data/robo-pausado` pausa a coleta por até 30 minutos e expira sozinho.
+
+**2026-10-19 — Semana da quinta vai de quinta a quarta.** A regra da clínica diz "até a quinta seguinte"; a conta que vence na outra quinta entra na lista daquela quinta, para nada aparecer em duas semanas.
+
+**2026-10-19 — A mesma cobrança chega mais de uma vez.** No teste real, o mesmo boleto da TCR veio em dois e-mails e a Bagé mandou nota e boleto separados. Mesmo valor e vencimento até 2 dias viram um item só (fica a fonte mais confiável: nota, depois boleto, depois texto); sem isso, a cópia aparecia como "não lançada".
+
+**2026-10-19 — Recibo não é conta.** Texto de e-mail sem vencimento (Canva, Mercado Livre) é recibo de compra já paga e fica fora. Nota sem parcela (uma da Zoetis de R$ 56 mil, possível remessa ou consignação) e aviso com vencimento mas sem valor vão para "conferir", sem entrar no total. No teste da semana de 22/10 a lista principal caiu de 17 para 5 cobranças.
+

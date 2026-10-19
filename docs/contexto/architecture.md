@@ -57,3 +57,19 @@ No EasyPanel, serviço `animal-center-bi`: `ANTHROPIC_API_KEY` (a clínica cria 
 ## Segurança
 
 O agente só responde a números autorizados e só manda mensagem para quem falou com ele. Chaves ficam no servidor. O caderno não guarda dado de paciente nem de tutor. Log de deploy do EasyPanel mostra as variáveis em texto aberto: nunca imprimir sem mascarar.
+
+---
+
+# Agente de Contas a Pagar — arquitetura
+
+Roda no mesmo serviço do painel. A leitura pesada fica no processo do robô (`robo.js`), que já entra no SimplesVet; o servidor só serve a lista.
+
+`bot/pagar-sv.js` entra em cada unidade e pede à API `api.simples.vet/app/v1/financeiro/lancamentos?periodo=AAAA-MM-DD|AAAA-MM-DD&natureza=D&per_page=100` com a sessão do navegador (a autenticação é o cookie do login, sem chave). Grava `/data/agentes/pagar-sv.json`.
+
+`bot/emails-contas.js` abre as caixas `MAIL_1..4_*` por IMAP (imapflow), separa o que parece cobrança, baixa a mensagem (mailparser) e extrai valor, vencimento e fornecedor: da linha digitável do boleto em PDF (pdfjs-dist), do XML da NF-e (duplicatas `dup`, emitente) ou do texto. Lembra o que já leu para não reprocessar. Grava `/data/agentes/contas-email.json`.
+
+`bot/contas-quinta.js` (puro, testado) decodifica boleto, cruza e-mail com SimplesVet (valor em centavos e, depois, vencimento ou fornecedor) e monta a semana: da quinta de hoje (ou a próxima) até a quinta seguinte.
+
+O robô roda as duas leituras a cada 30 minutos entre 6h e 20h e garante uma rodada antes da quinta 7h. A rota `GET /api/contas` (aba "Contas a pagar", permissão `contas`) devolve a lista; o Luís recebe a aba pelo Admin.
+
+Manutenção: `/data/robo-pausado` com menos de 30 min faz o robô não entrar no SimplesVet, para explorar o portal com o mesmo login sem derrubar a sessão dele.

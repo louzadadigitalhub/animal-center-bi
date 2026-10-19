@@ -1,6 +1,6 @@
 import express from "express";
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { existsSync, readFileSync, rmSync, statSync } from "node:fs";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { fork } from "node:child_process";
@@ -31,6 +31,7 @@ import {
   viewPublicaRanking,
 } from "./acesso.js";
 import { criarConta, definirSenha, listarUsuarios } from "./contas.js";
+import { itensDasMensagens, montarSemana } from "./contas-quinta.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
 process.on("uncaughtException", (err) => {
@@ -182,6 +183,21 @@ let proximoDre = 0;
    tela so ficou sem custo, sem dizer por que. */
 let dreStatus = { at: null, ok: null, erro: null, unidades: [] };
 
+/* Contas a pagar (agente de quinta): a cada 30 min, das 6h às 20h de
+   Brasília, então a lista da quinta já está fresca às 7h. "Atualizar
+   agora" no painel grava /data/agentes/contas-agora e a rodada sai no
+   próximo ciclo, a qualquer hora. */
+const CONTAS_MS = Number(process.env.CONTAS_MS || 30 * 60 * 1000);
+const CONTAS_RETRY_MS = 10 * 60 * 1000;
+let proximoContas = 0;
+let contasStatus = { at: null, ok: null, erro: null, r: null };
+const arqContasAgora = () => join(DATA_DIR, "agentes", "contas-agora");
+function querContas() {
+  if (existsSync(arqContasAgora())) return true;
+  const hora = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "America/Sao_Paulo", hour: "2-digit", hour12: false }).format(new Date()));
+  return hora >= 6 && hora < 20 && Date.now() >= proximoContas;
+}
+
 /* "2026-09-01" -> {y,m,d}. Recusa o que nao for exatamente uma data. */
 function dataDaTela(txt) {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(txt || ""));
@@ -223,6 +239,8 @@ function tick() {
   if (pausado()) return;
   running = true;
   const querDre = Date.now() >= proximoDre;
+  const contas = querContas();
+  let respondeuContas = false;
   const inicio = Date.now();
   let respondeuScrape = false;
   let respondeuDre = false;
@@ -233,7 +251,7 @@ function tick() {
      padrao do Node. */
   const execArgv = process.env.ROBO_HEAP_MB ? [`--max-old-space-size=${process.env.ROBO_HEAP_MB}`] : [];
   const filho = fork(join(__dirname, "robo.js"), [], {
-    env: { ...process.env, ROBO_DRE: querDre ? "1" : "0" },
+    env: { ...process.env, ROBO_DRE: querDre ? "1" : "0", ROBO_CONTAS: contas ? "1" : "0" },
     execArgv,
     stdio: "inherit",
   });
@@ -279,6 +297,13 @@ function tick() {
       proximoDre = Date.now() + (m.ok ? DRE_MS : DRE_RETRY_MS);
       console[m.ok ? "log" : "error"]("dre", m.ok ? "ok" : "fail", m.ok ? m.r : m.erro);
     }
+    if (m?.tipo === "contas") {
+      respondeuContas = true;
+      contasStatus = { at: new Date().toISOString(), ok: m.ok, erro: m.erro || null, r: m.r || null };
+      proximoContas = Date.now() + (m.ok ? CONTAS_MS : CONTAS_RETRY_MS);
+      rmSync(arqContasAgora(), { force: true });
+      console[m.ok ? "log" : "error"]("contas", m.ok ? "ok" : "fail", JSON.stringify(m.r || m.erro));
+    }
   });
 
   filho.on("exit", (code, sinal) => {
@@ -292,6 +317,7 @@ function tick() {
     /* Pediu DRE e o processo morreu antes de responder: nao fica
        tentando a cada ciclo. */
     if (querDre && !respondeuDre) proximoDre = Date.now() + DRE_RETRY_MS;
+    if (contas && !respondeuContas) proximoContas = Date.now() + CONTAS_RETRY_MS;
     setTimeout(tick, deuCerto ? PAUSA_MS : INTERVAL_MS);
   });
 
@@ -351,6 +377,7 @@ app.get("/api/health", (_req, res) => {
     anos: estado.anos,
     filialOk: estado.filialOk,
     dre: dreStatus,
+    contas: contasStatus,
     historico: estado.historico,
     perfis: estado.perfis,
     receitasMeses: estado.receitasMeses || null,
@@ -701,6 +728,42 @@ app.get("/api/snapshot", exigeDiretoria(), async (req, res) => {
 /* A planilha para o contador. Ano inteiro, nao o mes da tela: quem fecha
    exercicio quer as doze colunas de uma vez. Exige a aba DRE — sem isso
    bastaria saber a URL para baixar o custo da clinica. */
+/* Lista da quinta para a aba Contas a pagar. Junta o que o robô leu do
+   SimplesVet e das caixas de e-mail; a conta é de contas-quinta.js. */
+async function lerAgente(nome) {
+  try {
+    return JSON.parse(await readFile(join(DATA_DIR, "agentes", nome), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+app.get("/api/contas", exigeDiretoria({ pagina: "contas" }), async (_req, res) => {
+  const sv = await lerAgente("pagar-sv.json");
+  const emails = await lerAgente("contas-email.json");
+  const semana = montarSemana({
+    sv: Object.values(sv?.unidades || {}).flat(),
+    emails: itensDasMensagens(emails?.mensagens),
+  });
+  res.json({
+    ok: true,
+    ...semana,
+    simplesVetLidoEm: sv?.lidoEm || null,
+    emailsLidoEm: emails?.lidoEm || null,
+    caixas: emails?.caixas || [],
+    errosEmail: emails?.erros || [],
+    atualizando: existsSync(arqContasAgora()),
+    rodada: contasStatus,
+  });
+});
+
+app.post("/api/contas/atualizar", exigeDiretoria({ pagina: "contas" }), async (req, res) => {
+  await mkdir(join(DATA_DIR, "agentes"), { recursive: true });
+  await writeFile(arqContasAgora(), new Date().toISOString());
+  console.log("contas: atualizar agora pedido por", req.perfil.email);
+  res.json({ ok: true });
+});
+
 app.get("/api/dre.xlsx", exigeDiretoria({ pagina: "dre" }), async (req, res) => {
   const unit = String(req.query.unit || "matriz");
   const year = Number(req.query.year) || new Date().getFullYear();

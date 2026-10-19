@@ -39,3 +39,23 @@ O documento de passagem de função traz a rotina (compra principal no dia 1 com
 ## Como saber que deu certo
 
 O Luís pede "prepara o pedido do mês" no WhatsApp e, em poucos minutos, recebe um pedido que ele consegue conferir, com quantidades justificadas, pendências claras e mensagens prontas para encaminhar; e cada atualização que ele manda aparece corretamente no pedido seguinte.
+
+---
+
+# Agente de Contas a Pagar (quinta-feira) — PRD
+
+## O que é
+
+Toda quinta-feira a clínica paga as contas que vencem daquele dia até a quinta seguinte. Este agente prepara essa lista para o Luís Eduardo: lê as cobranças que chegaram nas quatro caixas de e-mail da clínica, lê o Contas a pagar do SimplesVet das duas unidades e cruza os dois. O resultado aparece numa aba do painel, pronta na quinta às 7h, sem mensagem por fora.
+
+## O que a lista mostra
+
+Pagar nesta quinta: contas do SimplesVet não pagas que vencem até a quinta seguinte, com as atrasadas destacadas. Chegou e não está lançado: cobrança encontrada no e-mail (boleto ou nota fiscal) sem conta correspondente no SimplesVet, para lançar antes de pagar. Lançado sem cobrança no e-mail: só para conferência. Cada item diz de onde veio (caixa de e-mail e data, ou unidade do SimplesVet), o fornecedor, o valor e o vencimento.
+
+## Fontes
+
+Caixas: Financeiro, Centro, São Cristóvão e Centro Pet (os endereços ficam só no ambiente do servidor, `MAIL_1..4_EMAIL`), por senha de app do Gmail guardada só no servidor. SimplesVet: a API que a própria tela Contas a pagar usa (`api.simples.vet/app/v1/financeiro/lancamentos`, natureza D), com o mesmo login do robô, nas duas unidades.
+
+## Fora do escopo
+
+O agente não paga nada, não lança nada no SimplesVet e não manda mensagem. Compras são do Agente de Compras.

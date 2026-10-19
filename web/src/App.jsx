@@ -9,6 +9,7 @@ import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
 import { Table } from "@phosphor-icons/react/Table";
 import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
+import { Receipt } from "@phosphor-icons/react/Receipt";
 import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { CaretUp } from "@phosphor-icons/react/CaretUp";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
@@ -82,6 +83,7 @@ const NAV = [
   { id: "vacinas", label: "Vacinas", icon: Syringe },
   { id: "pesquisa", label: "Pesquisa", icon: ChatCircleDots },
   { id: "dre", label: "DRE", icon: Table },
+  { id: "contas", label: "Contas a pagar", icon: Receipt },
   { id: "tv", label: "Ranking", icon: MonitorPlay },
 ];
 
@@ -1516,6 +1518,198 @@ function DreAntiga({ u }) {
   );
 }
 
+/* ---------- Contas a pagar (agente de quinta) ----------
+   Na quinta paga-se o que vence até a quarta seguinte. O robô lê o Contas
+   a pagar do SimplesVet (as duas unidades) e as caixas de e-mail; esta aba
+   mostra o que pagar, o que está atrasado e o que chegou por e-mail sem
+   estar lançado. Não paga nem lança nada. */
+const diaMes = (iso) => (iso ? iso.split("-").reverse().slice(0, 2).join("/") : "—");
+const CASA_CONTAS = { matriz: "Animal Center", filial: "São Cristóvão" };
+
+function ContasPagar() {
+  const [d, setD] = useState(null);
+  const [erro, setErro] = useState("");
+  const [pedindo, setPedindo] = useState(false);
+  const carregar = () =>
+    apiFetch("/api/contas")
+      .then((r) => r.json())
+      .then((j) => {
+        if (!j.ok) throw new Error(j.error || "não deu");
+        setD(j);
+        setErro("");
+      })
+      .catch((e) => setErro(e.message));
+  useEffect(() => {
+    carregar();
+  }, []);
+  /* Atualização pedida: confere de 30 em 30 s até o robô terminar. */
+  useEffect(() => {
+    if (!d?.atualizando) return undefined;
+    const t = setInterval(carregar, 30000);
+    return () => clearInterval(t);
+  }, [d?.atualizando]);
+
+  async function atualizar() {
+    setPedindo(true);
+    try {
+      const r = await apiFetch("/api/contas/atualizar", { method: "POST" }).then((x) => x.json());
+      if (!r.ok) throw new Error(r.error || "não deu");
+      sileo.success({ title: "Atualização pedida", description: "O robô lê o SimplesVet e os e-mails no próximo ciclo; leva alguns minutos." });
+      await carregar();
+    } catch (e) {
+      sileo.error({ title: "Não pediu", description: e.message });
+    } finally {
+      setPedindo(false);
+    }
+  }
+
+  if (erro) {
+    return (
+      <div className="bento">
+        <section className="card span-12">
+          <p className="portao-erro">{erro}</p>
+        </section>
+      </div>
+    );
+  }
+  if (!d) {
+    return (
+      <div className="bento">
+        <section className="card span-12">
+          <p className="hint">Carregando as contas…</p>
+        </section>
+      </div>
+    );
+  }
+  const lido = (iso) =>
+    iso
+      ? new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })
+      : "ainda não";
+  return (
+    <div className="bento">
+      <section className="card span-12">
+        <header>
+          <h2>Quinta {diaMes(d.semana.quinta)}</h2>
+          <p>
+            Contas que vencem de {diaMes(d.semana.quinta)} a {diaMes(d.semana.ate)}, nas duas unidades. O agente não paga nem
+            lança nada: só mostra.
+          </p>
+        </header>
+        <div className="dre-resumo-numeros">
+          <div>
+            <small>Pagar nesta quinta</small>
+            <strong>{brlc(d.totalPagar)}</strong>
+            <span>{d.pagar.length} conta(s) no SimplesVet</span>
+          </div>
+          <div>
+            <small>Atrasadas</small>
+            <strong className={d.atrasadas.length ? "neg" : ""}>{brlc(d.totalAtrasadas)}</strong>
+            <span>{d.atrasadas.length} em aberto, vencidas antes da quinta</span>
+          </div>
+          <div>
+            <small>Chegou e não está lançado</small>
+            <strong className={d.naoLancadas.length ? "neg" : ""}>{brlc(d.totalNaoLancadas)}</strong>
+            <span>{d.naoLancadas.length} cobrança(s) do e-mail sem conta no SimplesVet</span>
+          </div>
+        </div>
+        <div className="contas-rodape">
+          <span>
+            SimplesVet lido {lido(d.simplesVetLidoEm)} · E-mails lidos {lido(d.emailsLidoEm)}
+            {d.caixas.length ? ` (${d.caixas.join(", ")})` : ""}
+          </span>
+          <button type="button" className="conta-sair" disabled={pedindo || d.atualizando} onClick={atualizar}>
+            {d.atualizando ? "Atualizando…" : "Atualizar agora"}
+          </button>
+        </div>
+        {d.errosEmail?.length ? <p className="portao-erro">{d.errosEmail.join(" · ")}</p> : null}
+        {!d.simplesVetLidoEm && !d.emailsLidoEm ? (
+          <p className="hint">O robô ainda não fez a primeira leitura. Ela sai entre 6h e 20h, de 30 em 30 minutos, ou em Atualizar agora.</p>
+        ) : null}
+      </section>
+      <TabelaContas
+        titulo="Chegou por e-mail e não está lançado"
+        texto="Lance no SimplesVet antes de pagar. Valor e vencimento vêm da nota (XML), do boleto ou do texto do e-mail."
+        linhas={d.naoLancadas}
+        tipo="email"
+      />
+      <TabelaContas titulo="Pagar nesta quinta" texto="Contas do SimplesVet em aberto que vencem até a quarta seguinte." linhas={d.pagar} tipo="sv" />
+      <TabelaContas titulo="Atrasadas" texto="Contas do SimplesVet em aberto que já venceram." linhas={d.atrasadas} tipo="sv" />
+      {d.conferir?.length ? (
+        <TabelaContas
+          titulo="Conferir"
+          texto="Nota sem parcela de pagamento (pode ser remessa ou consignação) e aviso com vencimento mas sem valor."
+          linhas={d.conferir}
+          tipo="email"
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function TabelaContas({ titulo, texto, linhas, tipo }) {
+  return (
+    <section className="card span-12">
+      <header>
+        <h2>{titulo}</h2>
+        <p>{texto}</p>
+      </header>
+      {linhas.length ? (
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Vence</th>
+                {tipo === "sv" ? (
+                  <>
+                    <th>Unidade</th>
+                    <th>Fornecedor</th>
+                    <th>Descrição</th>
+                  </>
+                ) : (
+                  <>
+                    <th>Fornecedor</th>
+                    <th>Origem</th>
+                  </>
+                )}
+                <th>Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {linhas.map((x) => (
+                <tr key={`${x.unidade || x.caixa}-${x.id}`}>
+                  <td>{diaMes(x.vencimento)}</td>
+                  {tipo === "sv" ? (
+                    <>
+                      <td>{CASA_CONTAS[x.unidade] || x.unidade}</td>
+                      <td>{x.fornecedor || "—"}</td>
+                      <td>
+                        {x.descricao}
+                        {x.parcela ? ` · parcela ${x.parcela}` : ""}
+                        {x.cobrancaRecebida ? " · cobrança recebida por e-mail" : ""}
+                      </td>
+                    </>
+                  ) : (
+                    <>
+                      <td>{x.fornecedor || x.de}</td>
+                      <td>
+                        {x.fonte === "nfe" ? `nota${x.numero ? " " + x.numero : ""}` : x.fonte} · {x.caixa}
+                        {x.vezes > 1 ? ` · ${x.vezes} e-mails` : ""}
+                      </td>
+                    </>
+                  )}
+                  <td>{x.valor == null ? "—" : brlc(x.valor)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p className="hint">Nada aqui.</p>
+      )}
+    </section>
+  );
+}
+
 function Drawer({ detail, onClose, onOpen }) {
   if (!detail) return null;
   const { type, payload: p } = detail;
@@ -2034,6 +2228,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
         {page === "pesquisa" && <Pesquisa u={u} />}
         {page === "dre" && <Dre u={u} year={year} />}
         {page === "tv" && <Tv u={u} label={labelComGrupo} fotos={live?.fotos} live={live} />}
+        {page === "contas" && <ContasPagar />}
         {page === "admin" ? (
           <Admin perfil={perfil} onSenhaTrocada={aoTrocarSenha} />
         ) : null}

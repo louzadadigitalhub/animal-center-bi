@@ -88,5 +88,21 @@ if (process.env.ROBO_DRE === "1") {
   }
 }
 
+/* Contas a pagar: o SimplesVet das duas unidades e as caixas de e-mail.
+   Uma parte que falha não derruba a outra; o servidor guarda o que veio. */
+if (process.env.ROBO_CONTAS === "1") {
+  if (erroScrape && LOGIN_MORTO.test(erroScrape)) {
+    avisar({ tipo: "contas", ok: false, pulado: true, erro: "login do SimplesVet falhou neste ciclo" });
+  } else {
+    const dir = process.env.DATA_DIR || join(dirname(fileURLToPath(import.meta.url)), "..", "data");
+    const falha = (err) => ({ erro: String(err?.message || err) });
+    const { collectContasPagar } = await import("./pagar-sv.js");
+    const { atualizarCobrancas } = await import("./emails-contas.js");
+    const sv = await collectContasPagar(dir).catch(falha);
+    const emails = await atualizarCobrancas(dir).catch(falha);
+    avisar({ tipo: "contas", ok: !sv.erro && !emails.erro, r: { sv, emails }, erro: sv.erro || emails.erro || null });
+  }
+}
+
 /* Da tempo para a ultima mensagem sair pelo canal antes de encerrar. */
 setTimeout(() => process.exit(0), 200);

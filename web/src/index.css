@@ -665,6 +665,18 @@ button.dre-no {
   margin-bottom: var(--s2);
 }
 
+/* Contas a pagar: quando foi lido e o botão de atualizar, na mesma linha. */
+.contas-rodape {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s3);
+  flex-wrap: wrap;
+  margin-top: var(--s3);
+  font-size: 12px;
+  color: var(--text-3);
+}
+
 .dre-resumo-numeros strong.neg {
   color: var(--neg);
 }
