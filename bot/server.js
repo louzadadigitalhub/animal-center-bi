@@ -1,5 +1,5 @@
 import express from "express";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { readFile, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -206,8 +206,21 @@ function dataDaTela(txt) {
 const ROBO_LIMITE_MS = Number(process.env.ROBO_LIMITE_MS || 60 * 60 * 1000);
 let ultimoCicloOk = null;
 
+/* Pausa de manutencao: com /data/robo-pausado de menos de 30 min, o robo
+   nao entra no SimplesVet. Serve para explorar o portal com o mesmo login
+   sem um derrubar o outro. Expira sozinha: ninguem precisa lembrar de tirar. */
+const PAUSA_VALE_MS = 30 * 60 * 1000;
+function pausado() {
+  try {
+    return Date.now() - statSync(join(DATA_DIR, "robo-pausado")).mtimeMs < PAUSA_VALE_MS;
+  } catch {
+    return false;
+  }
+}
+
 function tick() {
   if (running) return;
+  if (pausado()) return;
   running = true;
   const querDre = Date.now() >= proximoDre;
   const inicio = Date.now();
@@ -330,6 +343,7 @@ app.get("/api/health", (_req, res) => {
     ultimoCicloOk,
     semColetarMin,
     roboLimiteMin: Math.round(ROBO_LIMITE_MS / 60000),
+    pausado: pausado(),
     memoriaMb: { rss: Math.round(mem.rss / 1048576), heap: Math.round(mem.heapUsed / 1048576) },
     lastError,
     at: estado.at,
