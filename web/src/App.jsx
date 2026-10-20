@@ -1599,7 +1599,9 @@ function ContasPagar() {
           <div>
             <small>Pagar nesta quinta</small>
             <strong>{brlc(d.totalPagar)}</strong>
-            <span>{d.pagar.length} conta(s) no SimplesVet</span>
+            <span>
+              {d.pagar.length} conta(s) no SimplesVet · {d.pagar.filter((x) => x.boleto).length} com boleto pronto
+            </span>
           </div>
           <div>
             <small>Atrasadas</small>
@@ -1646,6 +1648,46 @@ function ContasPagar() {
   );
 }
 
+/* Boleto que veio no e-mail: a linha digitável para colar no app do
+   banco e o PDF. O PDF passa pela rota com login, então abre numa aba
+   aberta já no clique (o navegador bloqueia janela aberta depois). */
+function BoletoAcoes({ boleto }) {
+  const [copiou, setCopiou] = useState(false);
+  if (!boleto) return "—";
+  const codigo = String(boleto.linhaFormatada || boleto.linha || "").replace(/\D/g, "");
+  async function abrir() {
+    const janela = window.open("", "_blank");
+    const r = await apiFetch(`/api/contas/boleto/${boleto.pdf}`);
+    if (!r.ok) {
+      janela?.close();
+      sileo.error({ title: "Não abriu", description: "o PDF não está mais no servidor" });
+      return;
+    }
+    const url = URL.createObjectURL(await r.blob());
+    if (janela) janela.location = url;
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+  }
+  return (
+    <div className="boleto-acoes">
+      {codigo ? (
+        <button
+          type="button"
+          className="conta-sair"
+          title={boleto.linhaFormatada || codigo}
+          onClick={() => navigator.clipboard?.writeText(codigo).then(() => setCopiou(true))}
+        >
+          {copiou ? "Copiado" : "Copiar código"}
+        </button>
+      ) : null}
+      {boleto.pdf ? (
+        <button type="button" className="conta-sair" onClick={abrir}>
+          Ver boleto
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function TabelaContas({ titulo, texto, linhas, tipo }) {
   return (
     <section className="card span-12">
@@ -1672,6 +1714,7 @@ function TabelaContas({ titulo, texto, linhas, tipo }) {
                   </>
                 )}
                 <th>Valor</th>
+                <th>Boleto</th>
               </tr>
             </thead>
             <tbody>
@@ -1698,6 +1741,9 @@ function TabelaContas({ titulo, texto, linhas, tipo }) {
                     </>
                   )}
                   <td>{x.valor == null ? "—" : brlc(x.valor)}</td>
+                  <td>
+                    <BoletoAcoes boleto={x.boleto} />
+                  </td>
                 </tr>
               ))}
             </tbody>

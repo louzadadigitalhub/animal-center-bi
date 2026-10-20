@@ -110,7 +110,10 @@ function deArrecadacao(d) {
   return { tipo: "arrecadacao", valor, vencimento: null, linha: d };
 }
 
-export function lerBoleto(texto, referencia = new Date()) {
+/* Todos os boletos válidos de um texto (um PDF pode trazer uma parcela
+   por página), sem repetir. */
+export function lerBoletos(texto, referencia = new Date()) {
+  const achados = [];
   const candidatos = String(texto || "").match(/\d[\d.\s-]{38,70}\d/g) || [];
   for (const c of candidatos) {
     const d = c.replace(/\D/g, "");
@@ -118,9 +121,32 @@ export function lerBoleto(texto, referencia = new Date()) {
     if (d.length === 47) b = deLinhaBancaria(d, referencia);
     else if (d.length === 48 && d[0] === "8") b = deArrecadacao(d);
     else if (d.length === 44 && d[0] !== "8") b = deBarrasBancario(d, referencia);
-    if (b) return b;
+    if (b && !achados.some((x) => x.linha === b.linha)) achados.push(b);
   }
-  return null;
+  return achados;
+}
+
+export function lerBoleto(texto, referencia = new Date()) {
+  return lerBoletos(texto, referencia)[0] || null;
+}
+
+/* Linha digitável no formato que o banco mostra, pronta para copiar. O
+   código de barras de 44 dígitos vira linha digitável (com os dígitos de
+   cada campo); conta de consumo sai em quatro blocos. */
+export function linhaFormatada(digitos) {
+  let d = String(digitos || "").replace(/\D/g, "");
+  if (d.length === 44 && d[0] !== "8") {
+    const campo = (x) => x + mod10(x);
+    const c1 = campo(d.slice(0, 4) + d.slice(19, 24));
+    const c2 = campo(d.slice(24, 34));
+    const c3 = campo(d.slice(34, 44));
+    d = c1 + c2 + c3 + d[4] + d.slice(5, 19);
+  }
+  if (d.length === 47) {
+    return `${d.slice(0, 5)}.${d.slice(5, 10)} ${d.slice(10, 15)}.${d.slice(15, 21)} ${d.slice(21, 26)}.${d.slice(26, 32)} ${d[32]} ${d.slice(33)}`;
+  }
+  if (d.length === 48) return [0, 1, 2, 3].map((i) => `${d.slice(i * 12, i * 12 + 11)}-${d[i * 12 + 11]}`).join(" ");
+  return d;
 }
 
 /* ---------- NF-e ---------- */
@@ -185,6 +211,8 @@ function palavras(s) {
   );
 }
 
+const soDigitos = (x) => String(x || "").replace(/\D/g, "").replace(/^0+/, "");
+
 /* E-mail x SimplesVet: o valor tem de bater ao centavo, e além dele o
    vencimento (até 5 dias de diferença) ou o fornecedor. Cada conta do
    SimplesVet casa com um e-mail só. Devolve id do e-mail -> "unidade:id". */
@@ -203,6 +231,8 @@ export function cruzar(sv, emails) {
       if (e.vencimento && s.vencimento && Math.abs(data(e.vencimento) - data(s.vencimento)) <= 5 * DIA) n += 2;
       const ps = palavras(`${s.fornecedor || ""} ${s.descricao || ""}`);
       if ([...pe].some((p) => ps.has(p))) n += 1;
+      /* Conta importada do XML guarda o número da nota em "documento". */
+      if (e.numero && s.documento && soDigitos(e.numero) === soDigitos(s.documento)) n += 3;
       if (n > nota) {
         melhor = chave;
         nota = n;
@@ -234,7 +264,9 @@ export function unirDuplicadas(emails) {
     }
     g.ids.push(e.id);
     g.vezes += 1;
+    const boleto = { linha: g.linha || e.linha, pdf: g.pdf || e.pdf, numero: g.numero || e.numero };
     if ((CONFIANCA[e.fonte] || 0) > (CONFIANCA[g.fonte] || 0)) Object.assign(g, { ...e, id: g.id, ids: g.ids, vezes: g.vezes });
+    for (const [k, v] of Object.entries(boleto)) if (v) g[k] = v;
   }
   return grupos;
 }
@@ -245,9 +277,18 @@ export function montarSemana({ sv = [], emails = [], hoje = new Date() } = {}) {
   const semana = semanaDaQuinta(hoje);
   emails = unirDuplicadas(emails);
   const casou = cruzar(sv, emails);
-  const comEmail = new Set(casou.values());
+  const porId = new Map(emails.map((e) => [e.id, e]));
+  const emailDaConta = new Map([...casou].map(([emailId, conta]) => [conta, porId.get(emailId)]));
   const abertas = sv.filter((s) => !s.pago);
-  const marcar = (s) => ({ ...s, cobrancaRecebida: comEmail.has(`${s.unidade}:${s.id}`) });
+  /* Boleto pronto: a linha digitável e/ou o PDF que veio no e-mail. */
+  const boletoDe = (e) =>
+    e && (e.linha || e.pdf)
+      ? { linha: e.linha || null, linhaFormatada: e.linha ? linhaFormatada(e.linha) : null, pdf: e.pdf || null, valor: e.valor, vencimento: e.vencimento }
+      : null;
+  const marcar = (s) => {
+    const e = emailDaConta.get(`${s.unidade}:${s.id}`);
+    return { ...s, cobrancaRecebida: Boolean(e), boleto: boletoDe(e) };
+  };
   const pagar = abertas
     .filter((s) => s.vencimento >= semana.quinta && s.vencimento <= semana.ate)
     .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
@@ -264,7 +305,8 @@ export function montarSemana({ sv = [], emails = [], hoje = new Date() } = {}) {
   const soltas = emails.filter((e) => !casou.has(e.id));
   const naoLancadas = soltas
     .filter((e) => e.valor != null && e.vencimento && e.vencimento >= desde && e.vencimento <= semana.ate)
-    .sort((a, b) => a.vencimento.localeCompare(b.vencimento));
+    .sort((a, b) => a.vencimento.localeCompare(b.vencimento))
+    .map((e) => ({ ...e, boleto: boletoDe(e) }));
   const conferir = soltas
     .filter(
       (e) =>

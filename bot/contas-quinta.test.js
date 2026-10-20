@@ -81,7 +81,7 @@ test("lançamento do SimplesVet: só o que a lista usa, pago pelo campo foi_pago
     status: "N", status_formatado: "Não pago", parcela: "...", numero_parcela: "6", fornecedor: { id: "622093", nome: "TCR Comercio de Gas e Maquinas Ltda" },
     categorias: [{ id: "1", nome: "Material Aplicado Interno", principal: true, valor: "350.00" }] };
   assert.deepEqual(lancamento(x, "matriz"), { unidade: "matriz", id: "991", fornecedor: "TCR Comercio de Gas e Maquinas Ltda", descricao: "Oxigênio bloco",
-    valor: 350, vencimento: "2026-10-20", competencia: "2026-05-14", pago: false, status: "Não pago", parcela: "6", categoria: "Material Aplicado Interno" });
+    valor: 350, vencimento: "2026-10-20", competencia: "2026-05-14", pago: false, status: "Não pago", parcela: "6", categoria: "Material Aplicado Interno", documento: null });
   assert.equal(lancamento({ ...x, foi_pago: "Sim", status_formatado: "Pago" }, "matriz").pago, true);
 });
 
@@ -114,4 +114,27 @@ test("recibo sem vencimento fica fora; nota sem parcela e aviso sem valor vão p
   assert.deepEqual(s.naoLancadas.map((x) => x.id), ["g"]);
   assert.deepEqual(s.conferir.map((x) => x.id).sort(), ["k", "n"]);
   assert.equal(s.totalNaoLancadas, 9545.25);
+});
+
+test("boletos: vários no mesmo PDF, e a linha formatada para copiar no banco", async () => {
+  const { lerBoletos, linhaFormatada } = await import("./contas-quinta.js");
+  const l1 = linhaDe(barras(1605, 35000));
+  const l2 = linhaDe(barras(1636, 35000));
+  const bs = lerBoletos(`Parcela 1: ${l1}\nParcela 2: ${l2}`, new Date("2026-10-15"));
+  assert.deepEqual(bs.map((b) => b.vencimento), ["2026-10-20", "2026-11-20"]);
+  assert.equal(linhaFormatada(bs[0].linha), l1);
+});
+
+test("conta do SimplesVet ganha o boleto do e-mail: pela nota, mesmo com nota e boleto em e-mails separados", () => {
+  const sv = [{ unidade: "matriz", id: "7", fornecedor: "IMPORTADORA BAGE S.A.", documento: "000111648", descricao: "Compra", valor: 953.9, vencimento: "2026-10-26", pago: false }];
+  const emails = [
+    { id: "nf", caixa: "Financeiro", de: "nfe@bage.com.br", fornecedor: "IMPORTADORA BAGE S.A.", numero: "111648", valor: 953.9, vencimento: "2026-10-26", fonte: "nfe" },
+    { id: "bol", caixa: "Financeiro", de: "totvsibasa@ibasa.com.br", fornecedor: "totvsibasa@ibasa.com.br", valor: 953.9, vencimento: "2026-10-26", fonte: "boleto", linha: "0".repeat(47), pdf: "a".repeat(40) },
+  ];
+  const s = montarSemana({ sv, emails, hoje: new Date("2026-10-22T07:00:00-03:00") });
+  assert.equal(s.pagar.length, 1);
+  assert.equal(s.pagar[0].cobrancaRecebida, true);
+  assert.equal(s.pagar[0].boleto.pdf, "a".repeat(40));
+  assert.equal(s.pagar[0].boleto.linha, "0".repeat(47));
+  assert.equal(s.naoLancadas.length, 0);
 });

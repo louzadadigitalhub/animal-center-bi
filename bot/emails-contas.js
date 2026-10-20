@@ -11,13 +11,15 @@
 
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { lerBoleto, lerNfe, valorEVencimentoDoTexto } from "./contas-quinta.js";
+import { lerBoletos, lerNfe, valorEVencimentoDoTexto } from "./contas-quinta.js";
 
 const PARECE = /boleto|nota fiscal|\bnf-?e?\b|fatura|venc[ie]|cobran[cç]a|duplicata|pagamento|segunda via|2[ªa] via|\bxml\b/i;
 const ANEXO_COBRANCA = /boleto|fatura|nf|nota|danfe|cobran|duplicata|\.xml$/i;
 const DIA = 86400000;
+const VERSAO = 2;
 
 export function caixasDoAmbiente(env = process.env) {
   const lista = [];
@@ -64,43 +66,54 @@ function remetente(parsed) {
   return { nome: de.name || "", email: (de.address || "").toLowerCase() };
 }
 
-/* Uma mensagem pode trazer várias cobranças (NF-e com parcelas, dois
-   boletos). Cada uma vira um item com id próprio. */
-export async function cobrancasDaMensagem(parsed, chave, lerPdf = textoDoPdf) {
+/* Uma mensagem pode trazer várias cobranças (NF-e com parcelas, um PDF
+   com um boleto por parcela). Cada uma vira um item com id próprio. O
+   boleto de cada PDF fica pendurado na parcela da nota com o mesmo valor
+   e vencimento; o PDF é guardado para abrir na aba (guardarPdf). */
+export async function cobrancasDaMensagem(parsed, chave, lerPdf = textoDoPdf, guardarPdf = async () => null) {
   const data = parsed.date || new Date();
   const de = remetente(parsed);
   const itens = [];
   const add = (x) => itens.push({ id: `${chave}:${itens.length}`, fornecedor: de.nome || de.email, ...x });
+  const boletos = [];
+  for (const a of parsed.attachments || []) {
+    if (!/pdf/i.test(a.contentType) && !/\.pdf$/i.test(a.filename || "")) continue;
+    const achados = lerBoletos(await lerPdf(a.content).catch(() => ""), data);
+    if (!achados.length) continue;
+    const pdf = await guardarPdf(a.content);
+    for (const b of achados) boletos.push({ ...b, pdf });
+  }
+  if (!boletos.length) for (const b of lerBoletos(`${parsed.subject || ""}\n${parsed.text || ""}`, data)) boletos.push({ ...b, pdf: null });
+  const usados = new Set();
+  const boletoPara = (valor, vencimento) => {
+    const i = boletos.findIndex(
+      (b, k) => !usados.has(k) && b.valor != null && Math.round(b.valor * 100) === Math.round(Number(valor) * 100) &&
+        (!b.vencimento || !vencimento || Math.abs(new Date(b.vencimento) - new Date(vencimento)) <= 3 * 86400000)
+    );
+    if (i < 0) return {};
+    usados.add(i);
+    return { linha: boletos[i].linha, pdf: boletos[i].pdf };
+  };
   for (const a of parsed.attachments || []) {
     const nome = a.filename || "";
-    if (/xml/i.test(a.contentType) || /\.xml$/i.test(nome)) {
-      const n = lerNfe(a.content.toString("utf8"));
-      if (!n) continue;
-      if (n.parcelas.length) for (const p of n.parcelas) add({ fonte: "nfe", fornecedor: n.fornecedor, cnpj: n.cnpj, numero: n.numero, valor: p.valor, vencimento: p.vencimento });
-      else add({ fonte: "nfe", fornecedor: n.fornecedor, cnpj: n.cnpj, numero: n.numero, valor: n.valorTotal, vencimento: null });
-    }
+    if (!/xml/i.test(a.contentType) && !/\.xml$/i.test(nome)) continue;
+    const n = lerNfe(a.content.toString("utf8"));
+    if (!n) continue;
+    const base = { fonte: "nfe", fornecedor: n.fornecedor, cnpj: n.cnpj, numero: n.numero };
+    if (n.parcelas.length) for (const p of n.parcelas) add({ ...base, valor: p.valor, vencimento: p.vencimento, ...boletoPara(p.valor, p.vencimento) });
+    else add({ ...base, valor: n.valorTotal, vencimento: null, ...boletoPara(n.valorTotal, null) });
   }
+  boletos.forEach((b, k) => {
+    if (!usados.has(k)) add({ fonte: "boleto", valor: b.valor, vencimento: b.vencimento, tipoBoleto: b.tipo, linha: b.linha, pdf: b.pdf });
+  });
   if (!itens.length) {
-    for (const a of parsed.attachments || []) {
-      if (!/pdf/i.test(a.contentType) && !/\.pdf$/i.test(a.filename || "")) continue;
-      const texto = await lerPdf(a.content).catch(() => "");
-      const b = lerBoleto(texto, data);
-      if (b) add({ fonte: "boleto", valor: b.valor, vencimento: b.vencimento, tipoBoleto: b.tipo });
-    }
-  }
-  if (!itens.length) {
-    const texto = `${parsed.subject || ""}\n${parsed.text || ""}`;
-    const b = lerBoleto(texto, data);
-    if (b) add({ fonte: "boleto", valor: b.valor, vencimento: b.vencimento, tipoBoleto: b.tipo });
-    else {
-      const t = valorEVencimentoDoTexto(texto, data);
-      if (t.valor != null || t.vencimento) add({ fonte: "texto", ...t });
-    }
+    const t = valorEVencimentoDoTexto(`${parsed.subject || ""}\n${parsed.text || ""}`, data);
+    if (t.valor != null || t.vencimento) add({ fonte: "texto", ...t });
   }
   return itens;
 }
 
-async function lerCaixa(caixa, { desde, jaLidos, limite = 150 }) {
+async function lerCaixa(caixa, { desde, jaLidos, limite = 150, guardarPdf }) {
   const cliente = new ImapFlow({ host: caixa.host, port: 993, secure: true, auth: { user: caixa.email, pass: caixa.senha }, logger: false });
   const novas = {};
   await cliente.connect();
@@ -122,7 +135,7 @@ async function lerCaixa(caixa, { desde, jaLidos, limite = 150 }) {
         de: de.email,
         assunto: parsed.subject || "",
         data: (parsed.date || new Date()).toISOString().slice(0, 10),
-        itens: (await cobrancasDaMensagem(parsed, c.chave)).map((i) => ({ ...i, caixa: caixa.nome, de: de.email, assunto: parsed.subject || "" })),
+        itens: (await cobrancasDaMensagem(parsed, c.chave, undefined, guardarPdf)).map((i) => ({ ...i, caixa: caixa.nome, de: de.email, assunto: parsed.subject || "" })),
       };
     }
   } finally {
@@ -140,6 +153,16 @@ export async function atualizarCobrancas(dataDir, { env = process.env, agora = n
   } catch {
     /* primeira vez */
   }
+  /* Versão 2 guarda a linha digitável e o PDF do boleto: o que foi lido
+     antes disso é lido de novo uma vez. */
+  if ((guardado.versao || 1) < VERSAO) guardado = { mensagens: {} };
+  const pastaBoletos = join(dataDir, "agentes", "boletos");
+  await mkdir(pastaBoletos, { recursive: true });
+  const guardarPdf = async (conteudo) => {
+    const id = createHash("sha1").update(conteudo).digest("hex");
+    await writeFile(join(pastaBoletos, `${id}.pdf`), conteudo);
+    return id;
+  };
   const desde = new Date(agora.getTime() - dias * DIA);
   const corte = new Date(agora.getTime() - 90 * DIA).toISOString().slice(0, 10);
   const mensagens = Object.fromEntries(Object.entries(guardado.mensagens || {}).filter(([, m]) => m.data >= corte));
@@ -149,15 +172,19 @@ export async function atualizarCobrancas(dataDir, { env = process.env, agora = n
   let novas = 0;
   for (const c of caixas) {
     try {
-      const r = await lerCaixa(c, { desde, jaLidos });
+      const r = await lerCaixa(c, { desde, jaLidos, guardarPdf });
       novas += Object.keys(r).length;
       Object.assign(mensagens, r);
     } catch (e) {
       erros.push(`${c.nome}: ${e.responseText || e.message}`);
     }
   }
-  await mkdir(join(dataDir, "agentes"), { recursive: true });
-  await writeFile(arq, JSON.stringify({ lidoEm: new Date().toISOString(), caixas: caixas.map((c) => c.nome), erros, mensagens }));
+  /* PDF que nenhuma mensagem guardada usa mais (passou de 90 dias) sai. */
+  const emUso = new Set(Object.values(mensagens).flatMap((m) => (m.itens || []).map((i) => i.pdf).filter(Boolean)));
+  for (const f of await readdir(pastaBoletos).catch(() => [])) {
+    if (!emUso.has(f.replace(/\.pdf$/, ""))) await rm(join(pastaBoletos, f), { force: true });
+  }
+  await writeFile(arq, JSON.stringify({ versao: VERSAO, lidoEm: new Date().toISOString(), caixas: caixas.map((c) => c.nome), erros, mensagens }));
   return { caixas: caixas.length, novas, total: Object.keys(mensagens).length, erros };
 }
 

@@ -764,6 +764,18 @@ app.post("/api/contas/atualizar", exigeDiretoria({ pagina: "contas" }), async (r
   res.json({ ok: true });
 });
 
+/* PDF do boleto que veio no e-mail. O nome do arquivo é o hash do próprio
+   conteúdo: nenhum caminho vem de fora. */
+app.get("/api/contas/boleto/:id", exigeDiretoria({ pagina: "contas" }), (req, res) => {
+  const id = String(req.params.id || "");
+  if (!/^[a-f0-9]{40}$/.test(id)) return res.status(400).json({ ok: false, error: "boleto invalido" });
+  const arq = join(DATA_DIR, "agentes", "boletos", `${id}.pdf`);
+  if (!existsSync(arq)) return res.status(404).json({ ok: false, error: "boleto nao encontrado" });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Cache-Control", "private, no-store");
+  res.sendFile(arq);
+});
+
 app.get("/api/dre.xlsx", exigeDiretoria({ pagina: "dre" }), async (req, res) => {
   const unit = String(req.query.unit || "matriz");
   const year = Number(req.query.year) || new Date().getFullYear();

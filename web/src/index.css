@@ -665,6 +665,12 @@ button.dre-no {
   margin-bottom: var(--s2);
 }
 
+.boleto-acoes {
+  display: flex;
+  gap: var(--s1);
+  flex-wrap: wrap;
+}
+
 /* Contas a pagar: quando foi lido e o botão de atualizar, na mesma linha. */
 .contas-rodape {
   display: flex;

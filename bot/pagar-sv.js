@@ -35,6 +35,8 @@ export function lancamento(x, unidade) {
     status: x.status_formatado || x.status || null,
     parcela: x.parcela && x.parcela !== "..." ? x.parcela : x.numero_parcela || null,
     categoria: principal?.nome || null,
+    /* Número da nota quando a conta veio do XML: liga a conta ao e-mail. */
+    documento: x.documento ? String(x.documento) : null,
   };
 }
 
