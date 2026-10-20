@@ -82,6 +82,7 @@ export function TvVets() {
               return (
                 <section key={rk.id}>
                   <h2>{rk.nome}</h2>
+                  {!lista.length ? <p className="tv-sem">{rk.id === "nota" ? "Ainda sem avaliações suficientes." : "Sem dados no mês."}</p> : null}
                   <ol>
                     {lista.map((v) => (
                       <li key={v.nome}>

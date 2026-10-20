@@ -4133,18 +4133,20 @@ table.an-tabela tr.an-total td {
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 0.8vw;
+  gap: 0.5vw;
   align-content: start;
 }
 
+/* Uma linha por pessoa: com dez nomes a lista ainda cabe numa TV 16:9. */
 .tv-lista li {
   display: grid;
-  grid-template-columns: 4vw 1fr;
+  grid-template-columns: 3.4vw 1fr auto;
   align-items: baseline;
-  padding: 0.8vw 1vw;
+  gap: 0.8vw;
+  padding: 0.55vw 1vw;
   border-radius: 0.8vw;
   background: rgba(255, 255, 255, 0.05);
-  font-size: 1.9vw;
+  font-size: 1.55vw;
 }
 
 .tv-lista b {
@@ -4152,9 +4154,14 @@ table.an-tabela tr.an-total td {
 }
 
 .tv-lista small {
-  grid-column: 2;
-  font-size: 1.1vw;
+  font-size: 0.95vw;
   color: #9fb6d1;
+}
+
+.tv-sem {
+  margin: 0;
+  font-size: 1.1vw;
+  color: #6f86a3;
 }
 
 .tv-paineis {
@@ -4182,7 +4189,7 @@ table.an-tabela tr.an-total td {
   padding-left: 1.6vw;
   display: grid;
   gap: 0.3vw;
-  font-size: 1.4vw;
+  font-size: 1.25vw;
 }
 
 .tv-paineis li {
