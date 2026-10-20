@@ -10,6 +10,7 @@ import { Table } from "@phosphor-icons/react/Table";
 import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
 import { Receipt } from "@phosphor-icons/react/Receipt";
+import { SquaresFour } from "@phosphor-icons/react/SquaresFour";
 import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { CaretUp } from "@phosphor-icons/react/CaretUp";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
@@ -23,6 +24,7 @@ import { MONTHS, YEARS, brl, brlc, getView, hojeBR, num, periodLabel, sanitizeDa
 import { somarUnidades } from "./dre-soma.js";
 import { acharNo, arvoreDre, juntarNos, temValor } from "./dre-arvore.js";
 import MapPanel from "./MapPanel.jsx";
+import Dashboard from "./Dashboard.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
 import Podium, { Ambient } from "./Podium.jsx";
@@ -83,6 +85,7 @@ const NAV = [
   { id: "vacinas", label: "Vacinas", icon: Syringe },
   { id: "pesquisa", label: "Pesquisa", icon: ChatCircleDots },
   { id: "dre", label: "DRE", icon: Table },
+  { id: "dashboard", label: "Dashboard", icon: SquaresFour },
   { id: "contas", label: "Contas a pagar", icon: Receipt },
   { id: "tv", label: "Ranking", icon: MonitorPlay },
 ];
@@ -1912,6 +1915,9 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
     ...(perfil.admin ? [{ id: "admin", label: "Admin", icon: ShieldCheck }] : []),
   ];
   const [page, setPage] = useState(navVisivel[0]?.id || "vendas");
+  /* Admin e Dashboard nao usam unidade nem recorte: o Dashboard soma as
+     duas unidades e tem o proprio De/Ate. */
+  const semFiltros = page === "admin" || page === "dashboard";
   const [unit, setUnit] = useState("matriz");
   /* Abria sempre em Set/2026 porque ano e mês estavam escritos na mão.
      A tela de vendedor já derivava da data; o painel não. */
@@ -2086,7 +2092,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
 
       <div className="main" data-carregando={carregando ? "1" : undefined} aria-busy={carregando}>
         <header className="top">
-          <div className="units" hidden={page === "admin"}>
+          <div className="units" hidden={semFiltros}>
             {[
               ["matriz", "Matriz"],
               ["filial", "Filial 1"],
@@ -2097,7 +2103,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
               </button>
             ))}
           </div>
-          <div className="periodos" role="tablist" aria-label="Recorte" hidden={page === "admin"}>
+          <div className="periodos" role="tablist" aria-label="Recorte" hidden={semFiltros}>
             {[
               ["hoje", "Hoje"],
               ["semana", "Semana"],
@@ -2131,7 +2137,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
           {/* Data de um lado, conta do outro. Estavam no mesmo div e o
               hidden levava junto o Sair e o tema: quem clicava em "Hoje"
               ficava sem como sair. */}
-          <div className="intervalo" hidden={page === "admin" || !noIntervalo}>
+          <div className="intervalo" hidden={semFiltros || !noIntervalo}>
             <CalendarBlank size={16} />
             <input
               type="date"
@@ -2169,7 +2175,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
               ))}
             </div>
           </div>
-          <div className="period" hidden={page === "admin" || noIntervalo || periodo === "hoje" || periodo === "semana"}>
+          <div className="period" hidden={semFiltros || noIntervalo || periodo === "hoje" || periodo === "semana"}>
             <CalendarBlank size={16} />
             <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
               {yearsOn.map((y) => (
@@ -2216,7 +2222,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
           </div>
         </header>
 
-        <div className="grupos-filtro" role="tablist" aria-label="Grupo" hidden={page === "admin"}>
+        <div className="grupos-filtro" role="tablist" aria-label="Grupo" hidden={semFiltros}>
           {GRUPO_FILTROS.map(([id, rotulo]) => (
             <button
               key={id || "todos"}
@@ -2243,9 +2249,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
               </>
             ) : (
               <>
-                <span>
-                  {u.casa} · {labelComGrupo}
-                </span>
+                <span>{page === "dashboard" ? "As duas unidades · mês a mês" : `${u.casa} · ${labelComGrupo}`}</span>
                 <Badge variant={live?.ok ? "default" : "outline"} className={live?.ok ? "pill-live border-0" : "pill-wait"}>
                   {fonte}
                 </Badge>
@@ -2275,6 +2279,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
         {page === "dre" && <Dre u={u} year={year} />}
         {page === "tv" && <Tv u={u} label={labelComGrupo} fotos={live?.fotos} live={live} />}
         {page === "contas" && <ContasPagar />}
+        {page === "dashboard" && <Dashboard />}
         {page === "admin" ? (
           <Admin perfil={perfil} onSenhaTrocada={aoTrocarSenha} />
         ) : null}

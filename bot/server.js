@@ -32,6 +32,7 @@ import {
 } from "./acesso.js";
 import { criarConta, definirSenha, listarUsuarios } from "./contas.js";
 import { itensDasMensagens, montarSemana } from "./contas-quinta.js";
+import { gravarAjuste, lerAjustes, mesesEntre, montarDashboard } from "./dashboard.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
 process.on("uncaughtException", (err) => {
@@ -774,6 +775,44 @@ app.get("/api/contas/boleto/:id", exigeDiretoria({ pagina: "contas" }), (req, re
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader("Cache-Control", "private, no-store");
   res.sendFile(arq);
+});
+
+/* Aba Dashboard: a planilha de análise financeira, mês a mês, as duas
+   unidades juntas. Sem "de", começa onde a planilha começa (fev/2025). */
+app.get("/api/dashboard", exigeDiretoria({ pagina: "dashboard" }), async (req, res) => {
+  const agora = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+  const atual = `${agora.getFullYear()}-${String(agora.getMonth() + 1).padStart(2, "0")}`;
+  const mes = (s) => (/^\d{4}-(0[1-9]|1[0-2])$/.test(String(s || "")) ? String(s) : "");
+  let ate = mes(req.query.ate) || atual;
+  if (ate > atual) ate = atual;
+  let de = mes(req.query.de) || "2025-02";
+  if (de > ate) de = ate;
+  /* Seis anos no máximo: é o que a thread aceita de uma vez. */
+  const meses = mesesEntre(de, ate);
+  if (meses.length > 72) de = meses[meses.length - 72];
+  const anos = [...new Set(mesesEntre(de, ate).map((c) => Number(c.slice(0, 4))))];
+  let r;
+  try {
+    r = await consultar("receitas", { anos });
+  } catch (err) {
+    return res.status(503).json({ ok: false, error: "os numeros ainda estao sendo montados", detalhe: err.message });
+  }
+  if (r.semDados) return res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet" });
+  const ajustes = await lerAjustes(DATA_DIR);
+  const d = await montarDashboard(DATA_DIR, { de, ate, receitas: r.anos, ajustes, agora });
+  res.json({ ok: true, ...d, lidoEm: r.at, podeEditar: Boolean(req.perfil.admin) });
+});
+
+/* Pró-labore do mês, pró-labore "justo" e relatório do mês: só admin. */
+app.post("/api/dashboard/ajuste", exigeDiretoria({ admin: true }), async (req, res) => {
+  const { campo, chave, valor } = req.body || {};
+  try {
+    await gravarAjuste(DATA_DIR, { campo, chave, valor: valor ?? null });
+  } catch (err) {
+    return res.status(400).json({ ok: false, error: err.message });
+  }
+  console.log("dashboard: ajuste", campo, chave, "por", req.perfil.email);
+  res.json({ ok: true });
 });
 
 app.get("/api/dre.xlsx", exigeDiretoria({ pagina: "dre" }), async (req, res) => {

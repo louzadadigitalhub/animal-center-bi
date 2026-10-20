@@ -187,6 +187,34 @@ function comRecebimentoOficial(view, snap, unit, year, month, grupo) {
 
 /* O que o /api/snapshot precisa, menos o que depende de quem pediu
    (permissao, DRE, fotos) — isso o servidor acrescenta. */
+/* Receita de cada unidade, mês a mês. Com o card daquele mês (dia 1
+   ao último), vale o card. Sem ele, a soma das baixas — e oficial
+   fica false para a tela não chamar isso de Receita total. */
+function receitasDoAno(snap, agg, year) {
+  const out = {};
+  for (const u of ["matriz", "filial"]) {
+    out[u] = Array.from({ length: 12 }, (_, m) => {
+      const of = oficialDoMes(snap, u, year, m);
+      if (of) return { total: of.receitaTotalExata ?? of.receitaTotal, oficial: true };
+      const v = agg.views?.[u]?.[year]?.[m];
+      const daView = v?.caixa?.receitaTotal ?? v?.recebido;
+      const baixas = agg.baixasPorMes?.[u]?.[year]?.[m];
+      return { total: daView != null ? daView : (baixas ?? 0), oficial: false };
+    });
+  }
+  return out;
+}
+
+/* A aba Dashboard pede vários anos de uma vez. */
+async function receitas({ anos }) {
+  const snap = await snapshot();
+  const agg = await aggregado().catch(() => null);
+  if (!snap || !agg) return { semDados: true };
+  const out = {};
+  for (const ano of (anos || []).slice(0, 6)) out[ano] = receitasDoAno(snap, agg, Number(ano));
+  return { at: snap.at, anos: out };
+}
+
 async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
   const snap = await snapshot();
   const agg = await aggregado().catch(() => null);
@@ -225,20 +253,7 @@ async function painel({ unit, year, month, grupo, pediuIntervalo, de, ate }) {
     };
   }
 
-  /* Receita de cada unidade, mês a mês. Com o card daquele mês (dia 1
-     ao último), vale o card. Sem ele, a soma das baixas — e oficial
-     fica false para a tela não chamar isso de Receita total. */
-  const receitasPorUnidade = {};
-  for (const u of ["matriz", "filial"]) {
-    receitasPorUnidade[u] = Array.from({ length: 12 }, (_, m) => {
-      const of = oficialDoMes(snap, u, year, m);
-      if (of) return { total: of.receitaTotalExata ?? of.receitaTotal, oficial: true };
-      const v = agg.views?.[u]?.[year]?.[m];
-      const daView = v?.caixa?.receitaTotal ?? v?.recebido;
-      const baixas = agg.baixasPorMes?.[u]?.[year]?.[m];
-      return { total: daView != null ? daView : (baixas ?? 0), oficial: false };
-    });
-  }
+  const receitasPorUnidade = receitasDoAno(snap, agg, year);
 
   /* Receita oficial de cada unidade no mes pedido, para a aba DRE pôr ao
      lado das despesas de cada uma — no consolidado ela mostra as duas. */
@@ -292,6 +307,7 @@ const TAREFAS = {
   painel,
   ranking,
   caixa,
+  receitas,
   pessoa: ({ nome, year, month }) => personDashboard(nome, year, month),
   /* Chamado logo depois de cada coleta, para a primeira pessoa que abrir
      o painel nao ser quem paga o parse. */

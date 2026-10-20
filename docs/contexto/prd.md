@@ -59,3 +59,30 @@ Caixas: Financeiro, Centro, São Cristóvão e Centro Pet (os endereços ficam s
 ## Fora do escopo
 
 O agente não paga nada, não lança nada no SimplesVet e não manda mensagem. Compras são do Agente de Compras.
+
+---
+
+# Melhorias do BI (projeto de 20/10/2026) — PRD
+
+## O que é
+
+O documento "Projeto de melhorias e atualização do BI" da clínica, mais os vídeos do BI antigo (octaX, Power BI) e a planilha "Análise financeira ANIMAL CENTER". O pedido em destaque: a aba **Dashboard** do BI igual à "DASHBOARD ANÁLISE ESTRATÉGICA" da planilha, com os dados entrando sozinhos.
+
+## O que o projeto pede
+
+1. Dashboard igual ao Excel: meses em colunas, valor e % do faturamento, as mesmas linhas de resultado e as mesmas cores.
+2. Comparativo de faturamento mensal, anual e entre anos, em R$ e %, com gráfico de uma linha por ano (como o "Faturamento" do octaX).
+3. Filtro por dia de corte: comparar meses e anos só até o mesmo dia; em mês mais curto, vale o último dia que existe.
+4. DRE por categoria contra a média dos 12 meses anteriores, com diferença em R$ e % e sinal de acima ou abaixo.
+5. Seis rankings dos veterinários: ticket médio por cliente, consultas por cirurgia, exames por consulta, conversão de consulta em internação (pelo RG do paciente), atendimentos (consultas + idas de vacina, sem contar dose) e nota do tutor de 0 a 10 pelo WhatsApp, com mínimo de avaliações.
+6. Classificação geral "Coroa de Ouro": soma das posições, com pesos configuráveis.
+7. Página de TV com endereço próprio: só leitura, letra grande, atualiza sozinha, tela cheia, sem dado financeiro nem pessoal.
+8. Filtros comuns (ano, mês, dia de corte, período comparativo, profissional), sem duplicar venda, sem contar cancelada, e cada número rastreável.
+
+## Do BI antigo que ainda falta (vídeos de 20/10)
+
+Curva de fluxo de clientes por hora com uma linha por mês; recorrência com clientes, recorrentes e novos por mês; faturamento por funcionário, grupo e produto com % de variação; gráfico de conversão (consultas, cirurgias, exames e vacinas por mês); filtro de dia (1 a 31).
+
+## Como saber que deu certo
+
+A diretoria abre o Dashboard e vê os mesmos números da planilha nos meses fechados, sem digitar nada além do pró-labore e do relatório do mês.

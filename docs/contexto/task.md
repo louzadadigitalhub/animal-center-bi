@@ -25,3 +25,17 @@ Depois: aba Compras no painel para ver o caderno; ler a média de saídas do Sim
 6. ✅ (19/10) Agenda no robô (30 em 30 min, 6h–20h, e antes da quinta 7h) e rota `/api/contas`.
 7. ✅ (19/10) Aba "Contas a pagar" no painel e permissão `contas` para o Luís.
 8. Primeira quinta conferida com a clínica.
+
+---
+
+# Melhorias do BI (projeto de 20/10/2026) — tarefas
+
+1. ✅ (20/10) Aba Dashboard igual à planilha, conferida contra as 20 colunas de fev/2025 a set/2026.
+2. Comparativo de faturamento entre anos (gráfico de uma linha por ano, mensal e anual, R$ e %).
+3. Dia de corte nos indicadores e nos comparativos.
+4. DRE por categoria contra a média de 12 meses.
+5. Rankings dos veterinários: ticket médio por cliente primeiro, depois os outros cinco.
+6. Coroa de Ouro, com os pesos que a diretoria definir.
+7. Página de TV própria, sem dado financeiro.
+8. Nota do tutor pelo WhatsApp (precisa do número da clínica, o mesmo do Agente de Compras).
+9. O que falta do octaX: fluxo por hora por mês, recorrência mensal, faturamento por funcionário, grupo e produto, gráfico de conversão.

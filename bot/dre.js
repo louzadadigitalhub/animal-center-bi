@@ -82,6 +82,9 @@ async function ler(dataDir, year) {
   return null;
 }
 
+/* A aba Dashboard le varios anos de uma vez, com o mesmo cache. */
+export const lerDre = ler;
+
 /* O demonstrativo e olhado para frente: outubro, novembro e dezembro ja
    vinham preenchidos em setembro porque aluguel, salario e parcela a
    vencer ficam lancados na competencia futura. A receita desses meses,

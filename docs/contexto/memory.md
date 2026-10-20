@@ -30,3 +30,11 @@
 
 **2026-10-19 — Recibo não é conta.** Texto de e-mail sem vencimento (Canva, Mercado Livre) é recibo de compra já paga e fica fora. Nota sem parcela (uma da Zoetis de R$ 56 mil, possível remessa ou consignação) e aviso com vencimento mas sem valor vão para "conferir", sem entrar no total. No teste da semana de 22/10 a lista principal caiu de 17 para 5 cobranças.
 
+
+**2026-10-20 — Dashboard: pró-labore digitável.** O SimplesVet não tem conta de pró-labore: a retirada dos sócios cai em "Despesas administrativas" junto com gastos pequenos, e a planilha usa um número redondo, alguns mil abaixo da conta. O admin digita o pró-labore do mês; sem valor digitado, vale a conta. O resultado operacional não muda com isso, só a divisão entre despesa operacional e pró-labore.
+
+**2026-10-20 — Dashboard: empréstimos em linha própria.** A planilha separava "Pagamento de Empréstimos" até abr/2025 e depois somou em Investimentos, deixando a linha Empréstimos zerada. O BI separa sempre; o resultado líquido é o mesmo dos dois jeitos.
+
+**2026-10-20 — Dashboard: taxa de antecipação e devoluções fora.** Igual à planilha nos meses recentes (set/2026 bate no centavo). São valores pequenos perto da taxa de cartão; se a diretoria quiser, entram na linha de taxa de cartão.
+
+**2026-10-20 — O que a diretoria digita mora no volume.** `/data/dashboard-ajustes.json` (pró-labore, pró-labore "justo", relatório do mês). O repositório é público.

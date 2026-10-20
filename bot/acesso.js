@@ -25,6 +25,7 @@ export const PAGINAS = [
   { id: "vacinas", nome: "Vacinas" },
   { id: "pesquisa", nome: "Pesquisa" },
   { id: "dre", nome: "DRE", sensivel: true },
+  { id: "dashboard", nome: "Dashboard", sensivel: true },
   { id: "contas", nome: "Contas a pagar", sensivel: true },
   { id: "tv", nome: "Ranking" },
 ];
@@ -45,6 +46,8 @@ const CAMPOS = {
   tv: ["equipe"],
   /* A aba Contas a pagar lê /api/contas, não o snapshot. */
   contas: [],
+  /* A aba Dashboard lê /api/dashboard. */
+  dashboard: [],
 };
 
 /* Sempre presentes: sao o cabecalho da tela, nao dado de negocio. */
