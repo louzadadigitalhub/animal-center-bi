@@ -18,6 +18,7 @@ import { fileURLToPath } from "node:url";
 import { aggregate, GRUPOS } from "./aggregate.js";
 import { personDashboard } from "./people.js";
 import { oficialDoMes } from "./receita-mes.js";
+import { comparativo, conversaoMensal, faturamentoPor, fluxoHora, rankingVets, recorrenciaMensal } from "./analises.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || join(__dirname, "..", "data");
@@ -205,6 +206,70 @@ function receitasDoAno(snap, agg, year) {
   return out;
 }
 
+/* Análises do projeto de melhorias (analises.js). Guardadas até chegar
+   coleta nova, como os recortes. */
+const ANALISES = {
+  comparativo: (l, a) => comparativo(l, a),
+  fluxo: (l, a) => fluxoHora(l, a),
+  recorrencia: (l, a) => recorrenciaMensal(l, a),
+  por: (l, a) => faturamentoPor(l, a),
+  conversao: (l, a) => conversaoMensal(l, a),
+};
+
+/* Cache próprio: as análises são baratas (uma passada nas vendas) e não
+   podem empurrar para fora os recortes do painel, que custam segundos. */
+const cacheAnalises = new Map();
+function lembrarAnalise(agg, chave, fazer) {
+  const k = `${agg.__chave}|${chave}`;
+  if (cacheAnalises.has(k)) return cacheAnalises.get(k);
+  const v = fazer();
+  cacheAnalises.set(k, v);
+  if (cacheAnalises.size > 30) cacheAnalises.delete(cacheAnalises.keys().next().value);
+  return v;
+}
+
+async function analise({ tipo, ...args }) {
+  const agg = await aggregado().catch(() => null);
+  if (!agg?.linhas) return { semDados: true };
+  const f = ANALISES[tipo];
+  if (!f) throw new Error(`analise desconhecida: ${tipo}`);
+  return lembrarAnalise(agg, `an|${tipo}|${JSON.stringify(args)}`, () => f(agg.linhas, args));
+}
+
+async function vets(args) {
+  const agg = await aggregado().catch(() => null);
+  if (!agg?.linhas) return { semDados: true };
+  return lembrarAnalise(agg, `vets|${JSON.stringify(args)}`, () => rankingVets(agg.linhas, args));
+}
+
+/* Consultas de um dia, para a recepção pedir a avaliação do tutor. Uma
+   por veterinário + paciente. Leva nome e celular do tutor: a rota exige
+   a aba Veterinários. */
+async function consultasDoDia({ unit = "consolidado", dia }) {
+  const agg = await aggregado().catch(() => null);
+  if (!agg?.linhas) return { semDados: true };
+  const [y, m, d] = String(dia).split("-").map(Number);
+  const vistas = new Map();
+  for (const r of agg.linhas) {
+    if (r.dt.y !== y || r.dt.m !== m || r.dt.d !== d) continue;
+    if (unit !== "consolidado" && r.unit !== unit) continue;
+    if (String(r.grupoSV).toLowerCase() !== "consultas") continue;
+    const k = `${r.user}|${r.codigo || r.cliente}|${String(r.animal).toLowerCase()}`;
+    if (vistas.has(k)) continue;
+    vistas.set(k, {
+      funcionario: r.user || "Sem nome",
+      unit: r.unit,
+      dia,
+      hora: r.hora,
+      codigo: r.codigo,
+      cliente: r.cliente,
+      animal: r.animal,
+      celular: r.celular,
+    });
+  }
+  return { dia, consultas: [...vistas.values()].sort((a, b) => (a.hora ?? 99) - (b.hora ?? 99)) };
+}
+
 /* A aba Dashboard pede vários anos de uma vez. */
 async function receitas({ anos }) {
   const snap = await snapshot();
@@ -308,6 +373,9 @@ const TAREFAS = {
   ranking,
   caixa,
   receitas,
+  analise,
+  vets,
+  consultasDoDia,
   pessoa: ({ nome, year, month }) => personDashboard(nome, year, month),
   /* Chamado logo depois de cada coleta, para a primeira pessoa que abrir
      o painel nao ser quem paga o parse. */

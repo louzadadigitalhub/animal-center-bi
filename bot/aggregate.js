@@ -261,6 +261,10 @@ export function aggregate(rows, { soConsultas = false } = {}) {
         produto,
         unit: unitOf({ ...row, _sede: row._sede }),
         grupo: grupoOf(row),
+        /* O grupo como o SimplesVet chama ("Consultas", "Retorno",
+           "Cirurgias"...). grupo acima junta Retorno e Plantão de um jeito
+           que serve às abas; os rankings precisam do nome cru. */
+        grupoSV: pick(row, ["grupo"]),
         pago: norm(status),
         venda: pick(row, ["venda"]),
       };
@@ -878,6 +882,9 @@ export function aggregate(rows, { soConsultas = false } = {}) {
     years,
     views,
     baixasPorMes,
+    /* As vendas já lidas, para as análises de analises.js não lerem o
+       arquivo de novo. */
+    linhas: parsed,
     hoje,
     semana,
     clientesStatus,

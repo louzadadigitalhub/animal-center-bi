@@ -3712,6 +3712,590 @@ tr.click:hover td,
   }
 }
 
+/* Projeto de melhorias (20/10/2026): comparativo, análises nas abas,
+   veterinários, TV e avaliação do tutor. */
+.an-extra {
+  margin-top: var(--s4);
+}
+
+.an-filtro {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+}
+
+.an-campo {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.an-campo select,
+.an-campo input,
+.vet-config input {
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  padding: 6px 10px;
+  min-height: 36px;
+  font: inherit;
+}
+
+.an-abas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.an-abas button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.an-abas button.on {
+  background: var(--accent-wash);
+  border-color: var(--cyan);
+  color: var(--text);
+}
+
+.an-cor {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.an-grafico svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.an-legenda {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.an-legenda li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.an-legenda i {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+table.an-tabela td.num,
+table.an-tabela th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+table.an-tabela small {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+table.an-tabela tr.an-agora td {
+  background: var(--accent-wash);
+  color: var(--text);
+}
+
+table.an-tabela tr.an-total td {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.an-ruim {
+  color: var(--neg);
+}
+
+.an-bom {
+  color: var(--pos);
+}
+
+.an-sinal {
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.an-numeros {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s6);
+  margin-bottom: var(--s4);
+}
+
+.an-numeros small {
+  display: block;
+  font-size: 12px;
+  color: var(--text-3);
+}
+
+.an-numeros strong {
+  font-size: 30px;
+  color: var(--text);
+}
+
+.an-notas {
+  display: grid;
+  grid-template-columns: repeat(11, 1fr);
+  gap: 6px;
+  height: 140px;
+  align-items: end;
+  margin-bottom: var(--s4);
+}
+
+.an-notas div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  height: 100%;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text-2);
+}
+
+.an-notas span {
+  width: 100%;
+  border-radius: 4px 4px 0 0;
+  background: var(--text-3);
+}
+
+.an-notas span.pro {
+  background: var(--pos);
+}
+
+.an-notas span.det {
+  background: var(--neg);
+}
+
+.an-comentarios {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.an-comentarios li {
+  display: grid;
+  grid-template-columns: 32px 1fr;
+  gap: 2px var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  font-size: 13px;
+}
+
+.an-comentarios b {
+  grid-row: span 2;
+  font-size: 18px;
+  color: var(--text);
+}
+
+.an-comentarios small {
+  color: var(--text-3);
+}
+
+.vet-tv {
+  margin-left: auto;
+  font-size: 13px;
+  color: var(--cyan);
+}
+
+.vet-podio {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s3);
+  margin-bottom: var(--s4);
+}
+
+.vet-lugar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: var(--s4) var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-ctl);
+  background: var(--surface-2);
+  text-align: center;
+}
+
+.vet-lugar.l1 {
+  border-color: #e9b949;
+  box-shadow: inset 0 0 0 1px #e9b949;
+}
+
+.vet-lugar strong {
+  font-size: 17px;
+  color: var(--text);
+}
+
+.vet-lugar small {
+  color: var(--text-3);
+}
+
+.vet-coroa {
+  color: #e9b949;
+}
+
+.vet-pos {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-2);
+}
+
+.vet-casa,
+.vet-p {
+  color: var(--text-3);
+  font-size: 11px;
+}
+
+.vet-ranking ol {
+  margin: 0;
+  padding-left: 22px;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+}
+
+.vet-ranking li {
+  display: flex;
+  gap: var(--s2);
+  align-items: baseline;
+}
+
+.vet-ranking li span {
+  flex: 1;
+}
+
+.vet-ranking li small {
+  color: var(--text-3);
+}
+
+.vet-fora {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+
+.vet-acao button,
+.vet-salvar {
+  min-height: 32px;
+  padding: 4px 14px;
+  border-radius: var(--r-ctl);
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  color: var(--text);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.vet-ok {
+  color: var(--pos);
+  font-size: 13px;
+}
+
+.vet-config {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: var(--s3);
+  margin-bottom: var(--s3);
+}
+
+.vet-config label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.vet-excluir {
+  margin-bottom: var(--s3);
+  font-size: 13px;
+  color: var(--text-2);
+}
+
+.vet-excluir div {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 4px var(--s3);
+  margin-top: var(--s2);
+}
+
+/* Página da TV: letra grande, fundo escuro, sem rolagem. */
+.tv-vets {
+  min-height: 100dvh;
+  padding: 2.5vw 3vw;
+  background: #07121f;
+  color: #eaf4ff;
+  font-family: var(--font);
+  display: flex;
+  flex-direction: column;
+  gap: 2vw;
+}
+
+.tv-topo {
+  display: flex;
+  align-items: center;
+  gap: 2vw;
+}
+
+.tv-topo h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 3.2vw;
+}
+
+.tv-hora {
+  font-size: 2.6vw;
+  font-variant-numeric: tabular-nums;
+  color: #9fb6d1;
+}
+
+.tv-topo button {
+  background: none;
+  border: 0;
+  color: #9fb6d1;
+  cursor: pointer;
+}
+
+.tv-aviso {
+  font-size: 2vw;
+  color: #9fb6d1;
+}
+
+.tv-corpo {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr 1.6fr;
+  gap: 2.5vw;
+  flex: 1;
+}
+
+.tv-campeao {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1vw;
+  border-radius: 1.5vw;
+  background: linear-gradient(180deg, rgba(233, 185, 73, 0.18), rgba(233, 185, 73, 0.04));
+  border: 2px solid #e9b949;
+  text-align: center;
+  padding: 2vw;
+}
+
+.tv-coroa {
+  color: #e9b949;
+  width: 7vw;
+  height: 7vw;
+}
+
+.tv-campeao strong {
+  font-size: 3.4vw;
+  line-height: 1.1;
+}
+
+.tv-campeao span {
+  font-size: 1.6vw;
+  color: #9fb6d1;
+}
+
+.tv-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.8vw;
+  align-content: start;
+}
+
+.tv-lista li {
+  display: grid;
+  grid-template-columns: 4vw 1fr;
+  align-items: baseline;
+  padding: 0.8vw 1vw;
+  border-radius: 0.8vw;
+  background: rgba(255, 255, 255, 0.05);
+  font-size: 1.9vw;
+}
+
+.tv-lista b {
+  color: #e9b949;
+}
+
+.tv-lista small {
+  grid-column: 2;
+  font-size: 1.1vw;
+  color: #9fb6d1;
+}
+
+.tv-paineis {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.2vw;
+  align-content: start;
+}
+
+.tv-paineis section {
+  padding: 1vw 1.2vw;
+  border-radius: 0.8vw;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tv-paineis h2 {
+  margin: 0 0 0.6vw;
+  font-size: 1.3vw;
+  color: #9fb6d1;
+  font-weight: 600;
+}
+
+.tv-paineis ol {
+  margin: 0;
+  padding-left: 1.6vw;
+  display: grid;
+  gap: 0.3vw;
+  font-size: 1.4vw;
+}
+
+.tv-paineis li {
+  display: flex;
+  gap: 1vw;
+}
+
+.tv-paineis li span {
+  flex: 1;
+}
+
+.tv-rodape {
+  font-size: 1vw;
+  color: #6f86a3;
+}
+
+/* Avaliação do tutor: abre no celular, pelo link do WhatsApp. */
+.avaliar {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: #07121f;
+  color: #eaf4ff;
+  font-family: var(--font);
+}
+
+.avaliar-cartao {
+  width: min(440px, 100%);
+  display: grid;
+  gap: 16px;
+  justify-items: center;
+  text-align: center;
+  padding: 28px 20px;
+  border-radius: 16px;
+  background: #0e2136;
+  border: 1px solid rgba(125, 190, 255, 0.15);
+}
+
+.avaliar-cartao h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.avaliar-cartao p {
+  margin: 0;
+  color: #b8cbe2;
+  line-height: 1.5;
+}
+
+.avaliar-notas {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.avaliar-notas button {
+  min-height: 48px;
+  border-radius: 10px;
+  border: 1px solid rgba(125, 190, 255, 0.25);
+  background: transparent;
+  color: #eaf4ff;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avaliar-notas button.on {
+  background: #3ec8f0;
+  border-color: #3ec8f0;
+  color: #07121f;
+}
+
+.avaliar-cartao textarea {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(125, 190, 255, 0.25);
+  background: transparent;
+  color: #eaf4ff;
+  padding: 10px;
+  font: inherit;
+}
+
+.avaliar-enviar {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 10px;
+  border: 0;
+  background: #2ad4c8;
+  color: #07121f;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.avaliar-enviar:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+@media (max-width: 760px) {
+  .vet-podio {
+    grid-template-columns: 1fr;
+  }
+  .vet-ranking.span-4 {
+    grid-column: span 12;
+  }
+  .tv-corpo {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* Aba Dashboard: a planilha de análise financeira com a cara do Excel —
    fundo branco, grade fina, cabeçalho cinza e as faixas coloridas das
    linhas de resultado, nas cores da planilha original. */

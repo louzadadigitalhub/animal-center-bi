@@ -38,3 +38,15 @@
 **2026-10-20 — Dashboard: taxa de antecipação e devoluções fora.** Igual à planilha nos meses recentes (set/2026 bate no centavo). São valores pequenos perto da taxa de cartão; se a diretoria quiser, entram na linha de taxa de cartão.
 
 **2026-10-20 — O que a diretoria digita mora no volume.** `/data/dashboard-ajustes.json` (pró-labore, pró-labore "justo", relatório do mês). O repositório é público.
+
+**2026-10-20 — Faturamento do comparativo = o do octaX.** Soma do Líquido de todos os itens pela data da venda, as duas unidades. Set/2023 e set/2025 batem no centavo com o octaX. É diferente da Receita total (card de recebimentos) da DRE e do Dashboard, que conta o que entrou no caixa.
+
+**2026-10-20 — Cliente novo = primeira compra da vida no mês.** Set/2026: 447 recorrentes, igual ao octaX; 165 novos contra 168.
+
+**2026-10-20 — Atribuição dos rankings.** A exportação do SimplesVet só tem a coluna "Funcionário" e não tem RG do paciente. Profissional = Funcionário do item; paciente = código do cliente + nome do animal. Exame, cirurgia e internação vão para o veterinário da consulta mais recente do paciente, dentro de janelas de 2, 30 e 3 dias (editáveis). Entra no ranking quem tem 10 consultas ou mais no período; pesos começam todos em 1. Tudo editável pelo admin na aba Veterinários.
+
+**2026-10-20 — Nota do tutor sem o número da clínica.** Sem a Evolution própria, a recepção manda o link pelo WhatsApp do computador (wa.me, mensagem pronta). Cada consulta tem um link que vale uma resposta; fica guardado só o nome do veterinário, o dia e um hash do paciente. A nota entra no ranking a partir de 5 avaliações no período.
+
+**2026-10-20 — DRE contra a média sem dia de corte.** O Demonstrativo vem fechado por mês, sem o dia do lançamento. Para ter dia de corte seria preciso ler cada lançamento pago pela API de contas a pagar, 13 meses para trás.
+
+**2026-10-20 — TV pública sem dinheiro.** /tv mostra posição e indicadores de atendimento; o ticket médio (em reais) aparece só como posição.

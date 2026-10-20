@@ -31,11 +31,12 @@ Depois: aba Compras no painel para ver o caderno; ler a média de saídas do Sim
 # Melhorias do BI (projeto de 20/10/2026) — tarefas
 
 1. ✅ (20/10) Aba Dashboard igual à planilha, conferida contra as 20 colunas de fev/2025 a set/2026.
-2. Comparativo de faturamento entre anos (gráfico de uma linha por ano, mensal e anual, R$ e %).
-3. Dia de corte nos indicadores e nos comparativos.
-4. DRE por categoria contra a média de 12 meses.
-5. Rankings dos veterinários: ticket médio por cliente primeiro, depois os outros cinco.
-6. Coroa de Ouro, com os pesos que a diretoria definir.
-7. Página de TV própria, sem dado financeiro.
-8. Nota do tutor pelo WhatsApp (precisa do número da clínica, o mesmo do Agente de Compras).
-9. O que falta do octaX: fluxo por hora por mês, recorrência mensal, faturamento por funcionário, grupo e produto, gráfico de conversão.
+2. ✅ (20/10) Aba Comparativo: uma linha por ano, mês a mês e ano, em R$ e %, com faturamento, vendas, clientes e ticket.
+3. ✅ (20/10) Dia de corte no comparativo, no faturamento por funcionário/grupo/produto, no fluxo por hora e nos rankings. O DRE não tem (o demonstrativo vem fechado por mês).
+4. ✅ (20/10) DRE: cada conta contra a média dos 12 meses anteriores, com diferença em R$ e % e sinal de acima ou abaixo.
+5. ✅ (20/10) Aba Veterinários com os seis rankings.
+6. ✅ (20/10) Coroa de Ouro com pesos, mínimo de consultas, janelas e lista de quem fica fora, editáveis pelo admin.
+7. ✅ (20/10) Página /tv, pública, sem valor em reais, atualiza a cada 5 minutos, com botão de tela cheia.
+8. ✅ (20/10) Nota do tutor: link por consulta mandado pelo WhatsApp do computador da recepção (wa.me) e página pública /avaliar. Quando a clínica tiver o número próprio, o envio pode ficar automático.
+9. ✅ (20/10) Do octaX: fluxo por hora por mês (Ritmo), recorrência mensal (Recorrência), faturamento por funcionário, grupo e produto e gráfico de conversão (Vendas).
+10. A diretoria confere os pesos, o mínimo de consultas e quem fica fora do ranking.

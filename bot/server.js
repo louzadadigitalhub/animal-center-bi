@@ -33,6 +33,9 @@ import {
 import { criarConta, definirSenha, listarUsuarios } from "./contas.js";
 import { itensDasMensagens, montarSemana } from "./contas-quinta.js";
 import { gravarAjuste, lerAjustes, mesesEntre, montarDashboard } from "./dashboard.js";
+import { dreContraMedia } from "./dre-media.js";
+import { configCompleta, limparConfig } from "./analises.js";
+import { criarLink, hashPaciente, lerAvaliacoes, notasDoPeriodo, responder, resumoPesquisa, verLink } from "./avaliacoes.js";
 import { authConfigurada, exigeDiretoria, quemE } from "./auth-diretoria.js";
 
 process.on("uncaughtException", (err) => {
@@ -813,6 +816,193 @@ app.post("/api/dashboard/ajuste", exigeDiretoria({ admin: true }), async (req, r
   }
   console.log("dashboard: ajuste", campo, chave, "por", req.perfil.email);
   res.json({ ok: true });
+});
+
+/* ---------- Projeto de melhorias (20/10/2026) ---------- */
+function hojeBrasilia() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+}
+const unidadeDe = (u) => (["matriz", "filial", "consolidado"].includes(String(u)) ? String(u) : "consolidado");
+const anoDe = (a) => (Number(a) >= 2020 && Number(a) <= 2100 ? Number(a) : hojeBrasilia().getFullYear());
+const mesDe = (m) => (m === "all" ? "all" : /^(\d|1[01])$/.test(String(m)) ? Number(m) : hojeBrasilia().getMonth());
+const diaDe = (d) => (/^([1-9]|[12]\d|3[01])$/.test(String(d)) ? Number(d) : null);
+
+/* Cada análise exige a aba em que aparece. */
+const PAGINA_ANALISE = { comparativo: "comparativo", fluxo: "ritmo", recorrencia: "recorrencia", por: "vendas", conversao: "vendas" };
+app.get("/api/analise/:tipo", (req, res, next) => {
+  const pagina = PAGINA_ANALISE[req.params.tipo];
+  if (!pagina) return res.status(404).json({ ok: false, error: "analise desconhecida" });
+  return exigeDiretoria({ pagina })(req, res, next);
+}, async (req, res) => {
+  const tipo = req.params.tipo;
+  const q = req.query;
+  const args = { unit: unidadeDe(q.unit) };
+  if (tipo !== "comparativo") args.ano = anoDe(q.ano);
+  if (tipo === "comparativo" || tipo === "fluxo" || tipo === "por") args.dia = diaDe(q.dia);
+  if (tipo === "por") {
+    args.mes = mesDe(q.mes);
+    args.dim = ["funcionario", "grupo", "produto"].includes(String(q.dim)) ? String(q.dim) : "funcionario";
+  }
+  try {
+    const r = await consultar("analise", { tipo, ...args });
+    if (r.semDados) return res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet" });
+    res.json({ ok: true, ...r });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: "os numeros ainda estao sendo montados", detalhe: err.message });
+  }
+});
+
+/* DRE por categoria contra a média dos 12 meses anteriores. */
+app.get("/api/dre/media", exigeDiretoria({ pagina: "dre" }), async (req, res) => {
+  const mes = mesDe(req.query.mes);
+  const r = await dreContraMedia(DATA_DIR, {
+    unit: unidadeDe(req.query.unit),
+    ano: anoDe(req.query.ano),
+    mes: mes === "all" ? hojeBrasilia().getMonth() : mes,
+  }).catch(() => null);
+  if (!r) return res.status(404).json({ ok: false, error: "ainda sem demonstrativo" });
+  res.json({ ok: true, ...r });
+});
+
+/* Rankings dos veterinários e Coroa de Ouro. */
+const arqConfigVets = () => join(DATA_DIR, "veterinarios-config.json");
+async function configVets() {
+  try {
+    return configCompleta(JSON.parse(await readFile(arqConfigVets(), "utf8")));
+  } catch {
+    return configCompleta();
+  }
+}
+
+async function rankingDoPeriodo({ unit, ano, mes, dia }) {
+  const config = await configVets();
+  const notas = notasDoPeriodo(await lerAvaliacoes(DATA_DIR), { ano, mes, dia, unit });
+  return consultar("vets", { unit, ano, mes, dia, config, notas });
+}
+
+app.get("/api/veterinarios", exigeDiretoria({ pagina: "veterinarios" }), async (req, res) => {
+  const filtro = { unit: unidadeDe(req.query.unit), ano: anoDe(req.query.ano), mes: mesDe(req.query.mes), dia: diaDe(req.query.dia) };
+  try {
+    const r = await rankingDoPeriodo(filtro);
+    if (r.semDados) return res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet" });
+    res.json({ ok: true, ...r, podeEditar: Boolean(req.perfil.admin) });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: "os numeros ainda estao sendo montados", detalhe: err.message });
+  }
+});
+
+app.post("/api/veterinarios/config", exigeDiretoria({ admin: true }), async (req, res) => {
+  const cfg = limparConfig(req.body || {});
+  const tmp = `${arqConfigVets()}.tmp`;
+  await writeFile(tmp, JSON.stringify(cfg, null, 1));
+  const { rename } = await import("node:fs/promises");
+  await rename(tmp, arqConfigVets());
+  console.log("veterinarios: config salva por", req.perfil.email);
+  res.json({ ok: true, config: cfg });
+});
+
+/* Página de TV (/tv): pública, sem login, sem valor em reais e sem dado
+   de tutor — só a posição de cada veterinário no mês corrente. */
+let tvCache = { at: 0, dados: null };
+app.get("/api/tv", async (_req, res) => {
+  if (Date.now() - tvCache.at > 5 * 60 * 1000 || !tvCache.dados) {
+    const br = hojeBrasilia();
+    try {
+      const r = await rankingDoPeriodo({ unit: "consolidado", ano: br.getFullYear(), mes: br.getMonth(), dia: null });
+      if (r.semDados) return res.status(503).json({ ok: false, error: "ainda sem dados" });
+      tvCache = {
+        at: Date.now(),
+        dados: {
+          ano: r.ano,
+          mes: r.mes,
+          rankingsDef: r.rankingsDef,
+          vets: r.vets.map((v) => ({
+            nome: v.nome,
+            casa: v.casa,
+            coroa: v.coroa,
+            pontos: v.pontos,
+            posicoes: v.posicoes,
+            atendimentos: v.atendimentos,
+            consultasPorCirurgia: v.consultasPorCirurgia,
+            examesPorConsulta: v.examesPorConsulta,
+            internacao: v.internacao,
+            nota: v.nota,
+          })),
+        },
+      };
+    } catch {
+      return res.status(503).json({ ok: false, error: "ainda sem dados" });
+    }
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, atualizadoEm: new Date(tvCache.at).toISOString(), ...tvCache.dados });
+});
+
+/* Avaliação do tutor. A recepção vê as consultas do dia e gera o link;
+   isso leva nome e celular do tutor, então exige a aba Veterinários. */
+app.get("/api/avaliacoes/consultas", exigeDiretoria({ pagina: "veterinarios" }), async (req, res) => {
+  const br = hojeBrasilia();
+  const hoje = `${br.getFullYear()}-${String(br.getMonth() + 1).padStart(2, "0")}-${String(br.getDate()).padStart(2, "0")}`;
+  const dia = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.dia || "")) ? String(req.query.dia) : hoje;
+  try {
+    const r = await consultar("consultasDoDia", { unit: unidadeDe(req.query.unit), dia });
+    if (r.semDados) return res.status(503).json({ ok: false, error: "ainda sem dados do SimplesVet" });
+    const av = await lerAvaliacoes(DATA_DIR);
+    const porChave = new Map();
+    for (const [token, l] of Object.entries(av.links)) porChave.set(`${l.funcionario}|${l.dia}|${l.paciente}`, token);
+    const consultas = r.consultas.map((c) => {
+      const token = porChave.get(`${c.funcionario}|${c.dia}|${hashPaciente(c.codigo, c.animal)}`);
+      return { ...c, link: Boolean(token), respondida: Boolean(token && av.respostas[token]) };
+    });
+    res.json({ ok: true, dia, consultas });
+  } catch (err) {
+    res.status(503).json({ ok: false, error: "os numeros ainda estao sendo montados", detalhe: err.message });
+  }
+});
+
+app.post("/api/avaliacoes/link", exigeDiretoria({ pagina: "veterinarios" }), async (req, res) => {
+  const { funcionario, unit, dia, codigo, animal } = req.body || {};
+  try {
+    const { token, respondida } = await criarLink(DATA_DIR, { funcionario, unit, dia, codigo, animal });
+    res.json({ ok: true, url: `https://${req.get("host")}/avaliar/${token}`, respondida });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+/* Rotas públicas da avaliação. Limite simples por IP: quem não é tutor
+   não tem por que mandar dezenas de pedidos. */
+const tentativas = new Map();
+function limitePorIp(req, res, next) {
+  const agora = Date.now();
+  const ip = req.ip || "?";
+  const t = tentativas.get(ip);
+  if (!t || agora - t.desde > 10 * 60 * 1000) tentativas.set(ip, { desde: agora, n: 1 });
+  else if (++t.n > 40) return res.status(429).json({ ok: false, error: "muitas tentativas, tente mais tarde" });
+  if (tentativas.size > 5000) tentativas.clear();
+  next();
+}
+
+app.get("/api/avaliar/:token", limitePorIp, async (req, res) => {
+  const r = await verLink(DATA_DIR, req.params.token);
+  if (!r) return res.status(404).json({ ok: false, error: "link invalido" });
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, ...r });
+});
+
+app.post("/api/avaliar/:token", limitePorIp, async (req, res) => {
+  try {
+    await responder(DATA_DIR, req.params.token, { nota: req.body?.nota, comentario: req.body?.comentario });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+/* Aba Pesquisa: o resumo das notas dos tutores no período. */
+app.get("/api/pesquisa", exigeDiretoria({ pagina: "pesquisa" }), async (req, res) => {
+  const filtro = { unit: unidadeDe(req.query.unit), ano: anoDe(req.query.ano), mes: mesDe(req.query.mes), dia: diaDe(req.query.dia) };
+  res.json({ ok: true, ...filtro, ...resumoPesquisa(await lerAvaliacoes(DATA_DIR), filtro) });
 });
 
 app.get("/api/dre.xlsx", exigeDiretoria({ pagina: "dre" }), async (req, res) => {

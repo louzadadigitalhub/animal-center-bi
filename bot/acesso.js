@@ -26,6 +26,8 @@ export const PAGINAS = [
   { id: "pesquisa", nome: "Pesquisa" },
   { id: "dre", nome: "DRE", sensivel: true },
   { id: "dashboard", nome: "Dashboard", sensivel: true },
+  { id: "comparativo", nome: "Comparativo" },
+  { id: "veterinarios", nome: "Veterinários", sensivel: true },
   { id: "contas", nome: "Contas a pagar", sensivel: true },
   { id: "tv", nome: "Ranking" },
 ];
@@ -48,6 +50,9 @@ const CAMPOS = {
   contas: [],
   /* A aba Dashboard lê /api/dashboard. */
   dashboard: [],
+  /* Comparativo e Veterinários leem /api/analise e /api/veterinarios. */
+  comparativo: [],
+  veterinarios: [],
 };
 
 /* Sempre presentes: sao o cabecalho da tela, nao dado de negocio. */

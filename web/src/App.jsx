@@ -11,6 +11,8 @@ import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
 import { MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
 import { Receipt } from "@phosphor-icons/react/Receipt";
 import { SquaresFour } from "@phosphor-icons/react/SquaresFour";
+import { ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
+import { Crown } from "@phosphor-icons/react/Crown";
 import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { CaretUp } from "@phosphor-icons/react/CaretUp";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
@@ -25,6 +27,8 @@ import { somarUnidades } from "./dre-soma.js";
 import { acharNo, arvoreDre, juntarNos, temValor } from "./dre-arvore.js";
 import MapPanel from "./MapPanel.jsx";
 import Dashboard from "./Dashboard.jsx";
+import Veterinarios from "./Veterinarios.jsx";
+import { Comparativo, DreMedia, FaturamentoPor, FluxoMeses, GraficoConversao, PesquisaTutores, RecorrenciaMensal } from "./Analises.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
 import { Num } from "./anim.jsx";
 import Podium, { Ambient } from "./Podium.jsx";
@@ -78,6 +82,7 @@ function Delta({ vs, className = "" }) {
 
 const NAV = [
   { id: "vendas", label: "Vendas", icon: ChartBar },
+  { id: "comparativo", label: "Comparativo", icon: ChartLineUp },
   { id: "ritmo", label: "Ritmo do dia", icon: Stethoscope },
   { id: "equipe", label: "Equipe", icon: UsersThree },
   { id: "clientes", label: "Clientes", icon: PawPrint },
@@ -87,6 +92,7 @@ const NAV = [
   { id: "dre", label: "DRE", icon: Table },
   { id: "dashboard", label: "Dashboard", icon: SquaresFour },
   { id: "contas", label: "Contas a pagar", icon: Receipt },
+  { id: "veterinarios", label: "Veterinários", icon: Crown },
   { id: "tv", label: "Ranking", icon: MonitorPlay },
 ];
 
@@ -857,44 +863,6 @@ function Vacinas({ u, onOpen }) {
             </tbody>
           </table>
         </div>
-      </section>
-    </div>
-  );
-}
-
-function Pesquisa({ u }) {
-  const temDado = (u.nps?.respostas || 0) > 0;
-  return (
-    <div className="bento">
-      {temDado ? (
-        <>
-          <Kpi label="NPS" value={u.nps.nota} hint="0 a 10" />
-          <Kpi label="Respostas" value={num(u.nps.respostas)} />
-        </>
-      ) : null}
-      <section className="card span-12">
-        <header>
-          <h2>Pesquisa de satisfacao</h2>
-          <p>De onde viria a nota.</p>
-        </header>
-        {temDado ? (
-          <p className="body">
-            Comentarios individuais ficam so com a gestao. A TV e o time nao veem texto de tutor.
-          </p>
-        ) : (
-          <div className="tv-vazio">
-            <strong>Sem dado de pesquisa</strong>
-            <p>
-              A pesquisa de satisfacao da clinica roda no <b>Pangeia</b>, um sistema separado. Nosso
-              robo le o SimplesVet, e a nota nao passa por la — por isso chega zerada.
-            </p>
-            <p className="tv-vazio-dica">
-              O BI antigo tinha a mesma limitacao: a pagina de satisfacao dele mostrava
-              &ldquo;visual indisponivel&rdquo;. Para a nota aparecer aqui, alguem precisa ligar o Pangeia
-              (exportacao ou API) ao robo.
-            </p>
-          </div>
-        )}
       </section>
     </div>
   );
@@ -1916,8 +1884,10 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
   ];
   const [page, setPage] = useState(navVisivel[0]?.id || "vendas");
   /* Admin e Dashboard nao usam unidade nem recorte: o Dashboard soma as
-     duas unidades e tem o proprio De/Ate. */
-  const semFiltros = page === "admin" || page === "dashboard";
+     duas unidades e tem o proprio De/Ate. Comparativo e Veterinarios usam
+     a unidade, mas tem o proprio periodo e dia de corte. */
+  const semUnidade = page === "admin" || page === "dashboard";
+  const semFiltros = semUnidade || page === "comparativo" || page === "veterinarios";
   const [unit, setUnit] = useState("matriz");
   /* Abria sempre em Set/2026 porque ano e mês estavam escritos na mão.
      A tela de vendedor já derivava da data; o painel não. */
@@ -2092,7 +2062,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
 
       <div className="main" data-carregando={carregando ? "1" : undefined} aria-busy={carregando}>
         <header className="top">
-          <div className="units" hidden={semFiltros}>
+          <div className="units" hidden={semUnidade}>
             {[
               ["matriz", "Matriz"],
               ["filial", "Filial 1"],
@@ -2275,11 +2245,38 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
         {page === "clientes" && <Clientes u={u} onOpen={setDetail} />}
         {page === "recorrencia" && <Recorrencia u={u} status={live?.clientesStatus} onOpen={setDetail} />}
         {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
-        {page === "pesquisa" && <Pesquisa u={u} />}
+        {page === "pesquisa" && (
+          <div className="bento">
+            <PesquisaTutores unit={unit} year={year} month={month} />
+          </div>
+        )}
         {page === "dre" && <Dre u={u} year={year} />}
         {page === "tv" && <Tv u={u} label={labelComGrupo} fotos={live?.fotos} live={live} />}
         {page === "contas" && <ContasPagar />}
         {page === "dashboard" && <Dashboard />}
+        {page === "comparativo" && <Comparativo unit={unit} />}
+        {page === "veterinarios" && <Veterinarios unit={unit} />}
+        {page === "vendas" && (
+          <div className="bento an-extra">
+            <FaturamentoPor unit={unit} year={year} month={month} />
+            <GraficoConversao unit={unit} year={year} />
+          </div>
+        )}
+        {page === "ritmo" && (
+          <div className="bento an-extra">
+            <FluxoMeses unit={unit} year={year} />
+          </div>
+        )}
+        {page === "recorrencia" && (
+          <div className="bento an-extra">
+            <RecorrenciaMensal unit={unit} year={year} />
+          </div>
+        )}
+        {page === "dre" && !u.intervalo && (
+          <div className="bento an-extra">
+            <DreMedia unit={unit} year={year} month={month} />
+          </div>
+        )}
         {page === "admin" ? (
           <Admin perfil={perfil} onSenhaTrocada={aoTrocarSenha} />
         ) : null}
