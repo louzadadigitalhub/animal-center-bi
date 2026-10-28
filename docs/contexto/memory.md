@@ -50,3 +50,13 @@
 **2026-10-20 — DRE contra a média sem dia de corte.** O Demonstrativo vem fechado por mês, sem o dia do lançamento. Para ter dia de corte seria preciso ler cada lançamento pago pela API de contas a pagar, 13 meses para trás.
 
 **2026-10-20 — TV pública sem dinheiro.** /tv mostra posição e indicadores de atendimento; o ticket médio (em reais) aparece só como posição.
+
+**2026-10-28 — Primeira admin só por `ADMIN_EMAIL`.** Auditoria de segurança: o primeiro e-mail que entrasse virava admin com todas as abas, e qualquer erro ao ler `perfis.json` (JSON quebrado, disco) contava como "sem admins". Com cadastro aberto no Supabase, qualquer pessoa podia ser esse primeiro. Agora só o e-mail de `ADMIN_EMAIL` (EasyPanel) vira a primeira admin; erro de leitura que não seja "arquivo não existe" nega o acesso de todos, avisa no log e não grava por cima. `perfis.json` é gravado num arquivo ao lado e trocado por rename.
+
+**2026-10-28 — Identidade só pelo `email` do topo do token.** `user_metadata` a própria pessoa edita pelo navegador; quem pusesse ali o e-mail da diretoria entrava como ela. Conta anônima e e-mail marcado como não confirmado no token também ficam de fora.
+
+**2026-10-28 — PIN do /eu: limite por IP real, por pessoa e geral.** O IP vinha do primeiro item do `X-Forwarded-For`, que o cliente escreve: cada tentativa podia parecer de um IP novo. Agora é `req.ip` (trust proxy 1), mais 8 erros por pessoa e 50 no total a cada 15 minutos. O limite geral tranca o login de todos por até 15 minutos durante um ataque: preço aceito para não deixar adivinhar PIN de 6 dígitos. O scrypt da conferência virou assíncrono para uma rajada de tentativas não parar o servidor.
+
+**2026-10-28 — Chave de serviço presa ao painel.** Listar contas e trocar senha só para e-mails que estão no `perfis.json`: a chave alcança o projeto Supabase inteiro, não só a clínica.
+
+**2026-10-28 — /ranking sem dinheiro sem login.** O telão do corredor (/ranking, `/api/ranking`) ainda mostrava faturamento por pessoa e total em reais, contra a decisão de 20/10. Sem login sai nome, unidade e vendas, na mesma ordem; a diretoria logada com a aba Equipe ou Ranking vê os valores.
