@@ -1,13 +1,18 @@
 /* Telao do corredor: sem login, e por isso alimentado por /api/ranking, que
    nao carrega nada de tutor. Se ele usasse /api/snapshot, trancar o painel
-   nao adiantaria — a URL aberta entregaria telefone e endereco do mesmo jeito. */
+   nao adiantaria — a URL aberta entregaria telefone e endereco do mesmo jeito.
+   Sem login o servidor nao manda valor em reais (TV publica sem dinheiro):
+   o telao mostra vendas. apiFetch leva o token se quem abriu e da diretoria,
+   e ai o faturamento volta. */
 import { useEffect, useState } from "react";
 import Podium, { Ambient } from "./Podium.jsx";
 import { Num } from "./anim.jsx";
+import { apiFetch } from "./supa.js";
 import "./index.css";
 
 const brl = (n) =>
   (Number(n) || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+const inteiro = (n) => Math.round(Number(n) || 0).toLocaleString("pt-BR");
 
 export default function RankingPublico() {
   const p = new URLSearchParams(window.location.search);
@@ -18,7 +23,7 @@ export default function RankingPublico() {
   useEffect(() => {
     let vivo = true;
     const buscar = () =>
-      fetch(`/api/ranking?unit=${unit}&periodo=${periodo}`)
+      apiFetch(`/api/ranking?unit=${unit}&periodo=${periodo}`)
         .then((r) => r.json())
         .then((j) => vivo && setDados(j))
         .catch(() => vivo && setDados({ ok: false }));
@@ -31,7 +36,8 @@ export default function RankingPublico() {
   }, [unit, periodo]);
 
   const equipe = dados?.equipe || [];
-  const total = equipe.reduce((a, x) => a + (x.fat || 0), 0);
+  const comValores = equipe.some((x) => typeof x.fat === "number");
+  const total = equipe.reduce((a, x) => a + ((comValores ? x.fat : x.vendas) || 0), 0);
 
   return (
     <div className="app app-tv">
@@ -48,9 +54,9 @@ export default function RankingPublico() {
               </p>
             </div>
             <div className="tv-total">
-              <span>Total do time</span>
+              <span>{comValores ? "Total do time" : "Vendas do time"}</span>
               <strong>
-                <Num value={total} format={brl} ms={1600} />
+                <Num value={total} format={comValores ? brl : inteiro} ms={1600} />
               </strong>
             </div>
           </header>

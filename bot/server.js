@@ -492,7 +492,11 @@ app.get("/api/ranking", async (req, res) => {
   }));
   if (r.semDados) return res.status(503).json({ ok: false, error: "ainda sem dados" });
   const fotos = await photoMap().catch(() => ({}));
-  res.json({ ok: true, at: r.at, rows: r.rows, fotos, ...(viewPublicaRanking(r.view) || {}) });
+  /* Sem login (a TV do corredor) sai sem valor em reais. Diretoria logada
+     com a aba Equipe ou Ranking ve o faturamento de cada um. */
+  const perfil = authConfigurada() ? await quemE(req) : null;
+  if (perfil) res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, at: r.at, rows: r.rows, fotos, ...(viewPublicaRanking(r.view, perfil) || {}) });
 });
 
 /* Quem sou eu e o que posso ver. A tela usa para montar o menu; o servidor
@@ -523,8 +527,9 @@ app.post("/api/equipe/pin", exigeDiretoria({ admin: true }), async (req, res) =>
 });
 
 /* A lista da tela junta os perfis (quem ve o que) com as contas do
-   Supabase: mostra o ultimo acesso e quem tem conta mas ainda nao tem
-   perfil. Se o Supabase nao responder, a lista sai so com os perfis. */
+   Supabase: mostra o ultimo acesso de cada um. listarUsuarios so devolve
+   quem esta no perfis.json, entao conta de fora do painel nao aparece.
+   Se o Supabase nao responder, a lista sai so com os perfis. */
 async function perfisComContas() {
   const perfis = await listarPerfis();
   const contas = await listarUsuarios().catch(() => ({ ok: false }));

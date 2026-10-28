@@ -4,11 +4,15 @@ import {
   createHmac,
   randomBytes,
   randomInt,
+  scrypt,
   scryptSync,
   timingSafeEqual,
 } from "node:crypto";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
+
+const scryptAsync = promisify(scrypt);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const envPath = join(__dirname, "..", ".env");
@@ -276,10 +280,13 @@ function hashPin(pin) {
   return `${salt}:${hash}`;
 }
 
-function verifyPin(pin, stored) {
+/* Assincrono de proposito: o scrypt leva dezenas de ms e, sincrono, cada
+   tentativa de PIN parava o servidor inteiro (painel, TV, robo) nesse
+   tempo. Uma rajada de tentativas virava painel fora do ar. */
+export async function verifyPin(pin, stored) {
   if (!stored || !String(stored).includes(":")) return false;
   const [salt, hash] = String(stored).split(":");
-  const test = scryptSync(String(pin), salt, 32);
+  const test = await scryptAsync(String(pin), salt, 32);
   const a = Buffer.from(hash, "hex");
   if (a.length !== test.length) return false;
   return timingSafeEqual(a, test);
@@ -517,44 +524,84 @@ export async function photoMap() {
   return out;
 }
 
-function tooManyFails(ip) {
-  const row = loginFails.get(ip);
+/* Tres contadores de PIN errado, cada um numa janela de 15 minutos:
+   por IP, por pessoa e um geral. So o do IP nao bastava: trocando de IP
+   (ou, antes, mentindo no X-Forwarded-For) dava para tentar os 10^6 PINs de
+   uma pessoa sem parar. O da pessoa segura isso; o geral segura quem tenta
+   um pouco em cada pessoa. O geral tranca o login de todos por um tempo,
+   mas so conta PIN errado de pessoa que existe. */
+const JANELA_FALHAS_MS = 15 * 60 * 1000;
+const LIMITE_IP = 8;
+const LIMITE_PESSOA = 8;
+const LIMITE_GERAL = 50;
+const CHAVE_GERAL = "geral";
+
+function tooManyFails(chave, limite) {
+  const row = loginFails.get(chave);
   if (!row) return false;
-  if (Date.now() - row.t > 15 * 60 * 1000) {
-    loginFails.delete(ip);
+  if (Date.now() - row.t > JANELA_FALHAS_MS) {
+    loginFails.delete(chave);
     return false;
   }
-  return row.n >= 8;
+  return row.n >= limite;
 }
 
-function markFail(ip) {
-  const row = loginFails.get(ip) || { n: 0, t: Date.now() };
+function markFail(chave) {
+  /* Muitos IPs diferentes nao podem inchar o mapa para sempre. */
+  if (loginFails.size > 5000) {
+    for (const [k, row] of loginFails) if (Date.now() - row.t > JANELA_FALHAS_MS) loginFails.delete(k);
+  }
+  const row = loginFails.get(chave) || { n: 0, t: Date.now() };
   row.n += 1;
   row.t = Date.now();
-  loginFails.set(ip, row);
+  loginFails.set(chave, row);
 }
 
-function clearFail(ip) {
-  loginFails.delete(ip);
+function clearFail(chave) {
+  loginFails.delete(chave);
 }
+
+function devolverFalha(chave) {
+  const row = loginFails.get(chave);
+  if (row && row.n > 0) row.n -= 1;
+}
+
+const MUITAS_TENTATIVAS = { ok: false, status: 429, error: "muitas tentativas — espere 15 minutos" };
 
 export async function loginPerson(id, pin, ip) {
-  if (tooManyFails(ip)) {
-    return { ok: false, status: 429, error: "muitas tentativas — espere 15 minutos" };
-  }
+  const chaveIp = `ip:${ip || "local"}`;
   const cleanId = slug(id);
+  const chavePessoa = `pessoa:${cleanId}`;
+  const travado = () =>
+    tooManyFails(chaveIp, LIMITE_IP) ||
+    (cleanId && tooManyFails(chavePessoa, LIMITE_PESSOA)) ||
+    tooManyFails(CHAVE_GERAL, LIMITE_GERAL);
+  if (travado()) return MUITAS_TENTATIVAS;
   const cleanPin = String(pin || "").replace(/\D/g, "");
   if (!cleanId || cleanPin.length < 4 || cleanPin.length > 8) {
-    markFail(ip);
+    markFail(chaveIp);
     return { ok: false, status: 401, error: "nome ou PIN incorreto" };
   }
   const doc = await loadPeopleDoc();
   const person = doc.people.find((p) => p.id === cleanId);
-  if (!person || !verifyPin(cleanPin, person.pinHash)) {
-    markFail(ip);
+  if (!person) {
+    markFail(chaveIp);
     return { ok: false, status: 401, error: "nome ou PIN incorreto" };
   }
-  clearFail(ip);
+  /* A tentativa conta ANTES do scrypt, no mesmo passo da checagem (sem
+     await no meio). Contando so depois, mil pedidos disparados juntos
+     passariam todos pela checagem antes do primeiro erro ser contado.
+     PIN certo devolve a tentativa. */
+  if (travado()) return MUITAS_TENTATIVAS;
+  markFail(chaveIp);
+  markFail(chavePessoa);
+  markFail(CHAVE_GERAL);
+  if (!(await verifyPin(cleanPin, person.pinHash))) {
+    return { ok: false, status: 401, error: "nome ou PIN incorreto" };
+  }
+  clearFail(chaveIp);
+  clearFail(chavePessoa);
+  devolverFalha(CHAVE_GERAL);
   const token = await signSession(person);
   return {
     ok: true,
@@ -717,9 +764,10 @@ export async function personDashboard(nome, year, month) {
   };
 }
 
+/* req.ip, nunca o X-Forwarded-For cru: o primeiro item desse cabecalho
+   quem escreve e o cliente, e cada tentativa podia vir de um "IP" novo.
+   Com trust proxy 1 (server.js), o Express pega o endereco que o proxy do
+   EasyPanel acrescentou, que o cliente nao controla. */
 export function clientIp(req) {
-  const xf = String(req.headers["x-forwarded-for"] || "")
-    .split(",")[0]
-    .trim();
-  return xf || req.ip || "local";
+  return req.ip || req.socket?.remoteAddress || "local";
 }

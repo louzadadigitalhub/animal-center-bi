@@ -24,6 +24,15 @@ O Docker já junta o painel e o robô no mesmo serviço. Não precisa Vercel par
 | `PORT` | `8787` |
 | `DATA_DIR` | `/data` |
 | `SCRAPE_MS` | `120000` (puxa a cada 2 minutos) |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY` | projeto Supabase do login da diretoria |
+| `ADMIN_EMAIL` | e-mail da primeira conta admin do painel |
+
+`ADMIN_EMAIL` tem de estar definido **antes** do deploy num volume novo (ou
+com `perfis.json` sem admin): só esse e-mail vira admin, e o primeiro login
+não vira mais. Se `perfis.json` estiver ilegível, o painel nega o acesso de
+todos e avisa no log em vez de recomeçar do zero. No Supabase, deixe o
+cadastro público e o login anônimo desligados e a confirmação de e-mail
+ligada.
 
 6. Ligue auto-deploy no GitHub: cada `git push` na `main` reconstrói o app.
 7. Aponte um domínio no EasyPanel (ex.: `bi.seudominio.com.br`).

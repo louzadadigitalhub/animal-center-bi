@@ -3,7 +3,13 @@
    A chave de servico (SUPABASE_SECRET_KEY) cria conta e troca a senha de
    qualquer um, entao so existe aqui no servidor e nunca vai para o
    navegador. Quem pode chamar isto e decidido nas rotas, com
-   exigeDiretoria({ admin: true }). As permissoes continuam em acesso.js. */
+   exigeDiretoria({ admin: true }). As permissoes continuam em acesso.js.
+
+   A chave alcanca o projeto Supabase inteiro, nao so a clinica. Por isso
+   listar e trocar senha ficam presos aos e-mails do perfis.json: a admin
+   do painel nao ve nem mexe em conta que nao e do painel. */
+
+import { emailsDoPainel } from "./acesso.js";
 
 const MIN_SENHA = 8;
 
@@ -41,13 +47,16 @@ export function senhaFraca(senha) {
 }
 
 export async function listarUsuarios() {
+  const doPainel = await emailsDoPainel();
   const usuarios = [];
   for (let page = 1; page <= 20; page++) {
     const r = await admin(`users?page=${page}&per_page=200`);
     if (!r.ok) return r;
     const lote = r.dados.users || [];
     for (const u of lote) {
-      usuarios.push({ id: u.id, email: norm(u.email), ultimoAcesso: u.last_sign_in_at || null, criadoEm: u.created_at || null });
+      const email = norm(u.email);
+      if (!doPainel.has(email)) continue;
+      usuarios.push({ id: u.id, email, ultimoAcesso: u.last_sign_in_at || null, criadoEm: u.created_at || null });
     }
     if (lote.length < 200) break;
   }
@@ -69,6 +78,9 @@ export async function criarConta(email, senha) {
 export async function definirSenha(email, senha) {
   const fraca = senhaFraca(senha);
   if (fraca) return { ok: false, status: 400, error: fraca };
+  if (!(await emailsDoPainel()).has(norm(email))) {
+    return { ok: false, status: 403, error: "esse e-mail nao e do painel: libere uma aba antes" };
+  }
   const lista = await listarUsuarios();
   if (!lista.ok) return lista;
   const u = lista.usuarios.find((x) => x.email === norm(email));

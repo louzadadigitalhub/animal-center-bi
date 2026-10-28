@@ -26,6 +26,18 @@ function tokenDe(req) {
   return h.startsWith("Bearer ") ? h.slice(7).trim() : "";
 }
 
+/* O e-mail que vale e so o do topo do token, que o Supabase preenche com o
+   da conta. user_metadata a propria pessoa edita pelo navegador
+   (updateUser), entao quem pusesse ali o e-mail da diretoria entraria como
+   ela. Conta anonima nao tem dono e fica de fora; se o token disser que o
+   e-mail nao foi confirmado, tambem. */
+export function emailDoToken(payload) {
+  if (!payload || payload.is_anonymous === true) return "";
+  if ("email_confirmed_at" in payload && !payload.email_confirmed_at) return "";
+  if (payload.email_verified === false) return "";
+  return typeof payload.email === "string" ? payload.email.trim() : "";
+}
+
 export async function quemE(req) {
   const token = tokenDe(req);
   if (!token) return null;
@@ -33,7 +45,7 @@ export async function quemE(req) {
   if (!ks) return null;
   try {
     const { payload } = await jwtVerify(token, ks, { issuer: `${URL_SUPABASE}/auth/v1` });
-    const email = payload.email || payload.user_metadata?.email;
+    const email = emailDoToken(payload);
     if (!email) return null;
     return await perfilDe(email);
   } catch {

@@ -1,8 +1,24 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 process.env.SUPABASE_URL = "https://exemplo.supabase.co";
 process.env.SUPABASE_SECRET_KEY = "sb_secret_teste";
+process.env.DATA_DIR = await mkdtemp(join(tmpdir(), "contas-"));
+/* Quem e do painel: a admin e a Fulana. O resto do projeto Supabase nao. */
+await writeFile(
+  join(process.env.DATA_DIR, "perfis.json"),
+  JSON.stringify({
+    admins: ["dona@animalcenter.com"],
+    perfis: {
+      "dona@animalcenter.com": { paginas: "todas" },
+      "fulana@animalcenter.com": { paginas: ["vendas"] },
+      "semconta@animalcenter.com": { paginas: ["vendas"] },
+    },
+  })
+);
 const { criarConta, definirSenha, listarUsuarios } = await import("./contas.js");
 
 /* Supabase falso: guarda as chamadas e responde como a API de admin. */
@@ -50,13 +66,35 @@ test("trocar senha: acha a conta pelo e-mail e troca pelo id", async () => {
   const put = ch.find((c) => c.metodo === "PUT");
   assert.match(put.url, /\/auth\/v1\/admin\/users\/abc$/);
   assert.deepEqual(put.corpo, { password: "outrasenha9" });
-  const nao = await definirSenha("ninguem@x.com", "outrasenha9");
+  /* Do painel, mas sem conta no Supabase. */
+  const nao = await definirSenha("semconta@animalcenter.com", "outrasenha9");
   assert.equal(nao.ok, false);
   assert.equal(nao.status, 404);
+  /* Fora do painel: nem procura. */
+  assert.equal((await definirSenha("ninguem@x.com", "outrasenha9")).status, 403);
 });
 
 test("listar usuarios traz e-mail e ultimo acesso", async () => {
   falso([{ id: "abc", email: "Fulana@AnimalCenter.com", last_sign_in_at: "2026-10-07T10:00:00Z", created_at: "2026-09-01T00:00:00Z" }]);
   const r = await listarUsuarios();
   assert.deepEqual(r.usuarios, [{ id: "abc", email: "fulana@animalcenter.com", ultimoAcesso: "2026-10-07T10:00:00Z", criadoEm: "2026-09-01T00:00:00Z" }]);
+});
+
+test("listar usuarios: so quem esta no perfis.json, nunca o resto do projeto Supabase", async () => {
+  falso([
+    { id: "abc", email: "fulana@animalcenter.com" },
+    { id: "dona", email: "Dona@AnimalCenter.com" },
+    { id: "fora", email: "cliente@outro-sistema.com" },
+  ]);
+  const r = await listarUsuarios();
+  assert.deepEqual(r.usuarios.map((u) => u.email).sort(), ["dona@animalcenter.com", "fulana@animalcenter.com"]);
+});
+
+test("trocar senha de conta que nao e do painel: recusa antes de falar com o Supabase", async () => {
+  const ch = falso([{ id: "fora", email: "cliente@outro-sistema.com" }]);
+  const r = await definirSenha("cliente@outro-sistema.com", "outrasenha9");
+  assert.equal(r.ok, false);
+  assert.equal(r.status, 403);
+  assert.equal(ch.length, 0);
+  assert.equal(ch.some((c) => c.metodo === "PUT"), false);
 });

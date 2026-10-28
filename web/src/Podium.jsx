@@ -286,7 +286,9 @@ function Avatar({ p, rank, fotos }) {
   );
 }
 
-function Degrau({ p, rank, brl, maxFat, fotos }) {
+const vendasTxt = (n) => `${Math.round(Number(n) || 0).toLocaleString("pt-BR")} vendas`;
+
+function Degrau({ p, rank, brl, maxFat, fotos, comValores }) {
   const m = METAL[rank];
   const pct = Math.round((p.fat / (maxFat || 1)) * 100);
   return (
@@ -298,12 +300,20 @@ function Degrau({ p, rank, brl, maxFat, fotos }) {
         <Avatar p={p} rank={rank} fotos={fotos} />
         <strong className="pod-nome">{p.nome}</strong>
         {p.casa ? <small className="pod-casa">{p.casa}</small> : null}
-        <em className="pod-fat">
-          <Num value={p.fat} format={brl} ms={1400} />
-        </em>
-        <small className="pod-vendas">
-          {p.vendas} vendas · {pct}% do topo
-        </small>
+        {comValores ? (
+          <>
+            <em className="pod-fat">
+              <Num value={p.fat} format={brl} ms={1400} />
+            </em>
+            <small className="pod-vendas">
+              {p.vendas} vendas · {pct}% do topo
+            </small>
+          </>
+        ) : (
+          <em className="pod-fat">
+            <Num value={p.vendas || 0} format={vendasTxt} ms={1400} />
+          </em>
+        )}
       </div>
       <div className="pod-base">
         <span className="pod-rank">{rank}</span>
@@ -320,7 +330,11 @@ export default function Podium({ equipe = [], brl, fotos, diagnostico }) {
   const gente = equipe.filter((p) => !isSystemName(p.nome));
   const top = gente.slice(0, 3);
   const resto = gente.slice(3, 8);
-  const maxFat = Math.max(1, ...gente.map((p) => p.fat));
+  /* /ranking sem login nao recebe fat (TV publica sem dinheiro): a ordem
+     continua a do servidor, e o numero e a barra passam a ser vendas. */
+  const comValores = gente.some((p) => typeof p.fat === "number");
+  const medida = (p) => (comValores ? p.fat : p.vendas) || 0;
+  const maxFat = Math.max(1, ...gente.map(medida));
   const ordem = [top[1] && 2, top[0] && 1, top[2] && 3].filter(Boolean);
 
   /* Telao fica ligado o dia todo: o lider e comemorado de novo de tempos em tempos. */
@@ -360,6 +374,7 @@ export default function Podium({ equipe = [], brl, fotos, diagnostico }) {
             brl={brl}
             maxFat={maxFat}
             fotos={fotos}
+            comValores={comValores}
           />
         ))}
       </ol>
@@ -371,9 +386,9 @@ export default function Podium({ equipe = [], brl, fotos, diagnostico }) {
               <b>{i + 4}</b>
               <span>{p.nome}</span>
               <div className="track">
-                <i style={{ width: `${(p.fat / maxFat) * 100}%`, animationDelay: `${1000 + i * 110}ms` }} />
+                <i style={{ width: `${(medida(p) / maxFat) * 100}%`, animationDelay: `${1000 + i * 110}ms` }} />
               </div>
-              <em>{brl(p.fat)}</em>
+              <em>{comValores ? brl(p.fat) : vendasTxt(p.vendas)}</em>
             </li>
           ))}
         </ol>

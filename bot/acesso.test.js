@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 process.env.DATA_DIR = await mkdtemp(join(tmpdir(), "acesso-"));
-const { definirAdmin, listarPerfis, marcarSenhaProvisoria, perfilDe, salvarPerfil } = await import("./acesso.js");
+/* A primeira admin vem do ambiente, nao do primeiro login. */
+process.env.ADMIN_EMAIL = "dona@ac.com";
+const { definirAdmin, listarPerfis, marcarSenhaProvisoria, perfilDe, salvarPerfil, viewPublicaRanking } = await import(
+  "./acesso.js"
+);
 
 test("admin: dá para tornar e tirar, mas sempre fica uma", async () => {
   assert.equal((await perfilDe("dona@ac.com")).admin, true);
@@ -38,4 +42,37 @@ test("senha provisória: marca, aparece no perfil e na lista, e some quando a pe
   /* Tirar a marca de quem não tem perfil não cria perfil. */
   await marcarSenhaProvisoria("fantasma@ac.com", false);
   assert.equal((await listarPerfis()).some((p) => p.email === "fantasma@ac.com"), false);
+});
+
+test("ranking sem login: nome, unidade e vendas, nenhum valor em reais", () => {
+  const view = {
+    casa: "Animal Center",
+    diaLabel: "out/2026",
+    telefone: "51999999999",
+    equipe: [
+      { nome: "Ana", fat: 52300, vendas: 120, casa: "Animal Center", ticket: 435 },
+      { nome: "Bia", fat: 41000, vendas: 140, casa: "Animal Center", ticket: 292 },
+    ],
+  };
+  const publica = viewPublicaRanking(view);
+  assert.deepEqual(publica, {
+    casa: "Animal Center",
+    diaLabel: "out/2026",
+    equipe: [
+      { nome: "Ana", vendas: 120, casa: "Animal Center" },
+      { nome: "Bia", vendas: 140, casa: "Animal Center" },
+    ],
+  });
+  /* A ordem continua a do servidor. */
+  assert.deepEqual(publica.equipe.map((p) => p.nome), ["Ana", "Bia"]);
+  /* Conta logada sem aba de equipe tambem nao ve. */
+  assert.equal("fat" in viewPublicaRanking(view, { paginas: ["vendas", "dre"] }).equipe[0], false);
+  assert.equal("fat" in viewPublicaRanking(view, { paginas: [] }).equipe[0], false);
+});
+
+test("ranking com a diretoria logada (aba Equipe, Ranking ou todas): faturamento volta", () => {
+  const view = { casa: "Animal Center", equipe: [{ nome: "Ana", fat: 52300, vendas: 120, casa: "Animal Center" }] };
+  for (const paginas of ["todas", ["equipe"], ["tv"]]) {
+    assert.equal(viewPublicaRanking(view, { paginas }).equipe[0].fat, 52300, JSON.stringify(paginas));
+  }
 });
