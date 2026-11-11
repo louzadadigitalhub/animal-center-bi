@@ -13,7 +13,7 @@ RUN mkdir -p /root/.cache \
   && cd bot && npm ci --omit=dev \
   && npx playwright install chromium
 
-ENV BUILD_MARK=casca-painel-20261111a
+ENV BUILD_MARK=juliano-tv-20261112a
 COPY web/ web/
 RUN cd web && npm run build
 

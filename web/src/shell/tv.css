@@ -1,0 +1,530 @@
+/* ============================================================================
+   Telas do corredor (/ranking e /tv) na identidade do painel (11/11/2026).
+   Tudo sob .tvm. Tamanhos em vw/vh: a TV e lida de longe e a mesma tela tem
+   de servir de 1280 a 4K. O podio, as coroas, os metais e o confete
+   (Podium.jsx) continuam: aqui so muda o tom em volta deles.
+   ============================================================================ */
+.tvm {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  padding: clamp(18px, 2.2vw, 48px) clamp(22px, 2.8vw, 60px) clamp(64px, 9vh, 120px);
+  overflow: hidden;
+  color: #e9eff8;
+  background: #03070f;
+  font-family: var(--font);
+  --text: #e9eff8;
+  --text-2: #b3bfd2;
+  --text-3: #8592a8;
+  --line: rgba(148, 178, 214, 0.12);
+  --line-2: rgba(148, 178, 214, 0.2);
+  --surface-1: #0a1322;
+  --surface-2: #0f1a2c;
+  color-scheme: dark;
+}
+
+/* Grade que some para baixo, brilho verde e azul no alto, grao leve */
+.tvm-fundo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  pointer-events: none;
+  background:
+    radial-gradient(55% 60% at 80% -10%, rgba(20, 140, 190, 0.24), transparent 70%),
+    radial-gradient(40% 50% at 8% -10%, rgba(18, 200, 110, 0.12), transparent 70%),
+    radial-gradient(50% 40% at 50% 110%, rgba(20, 220, 200, 0.08), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.05'/%3E%3C/svg%3E");
+}
+
+.tvm-fundo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(rgba(148, 178, 214, 0.055) 1px, transparent 1px) 0 0 / 3.2vw 3.2vw,
+    linear-gradient(90deg, rgba(148, 178, 214, 0.055) 1px, transparent 1px) 0 0 / 3.2vw 3.2vw;
+  -webkit-mask-image: linear-gradient(180deg, #000 0%, transparent 85%);
+  mask-image: linear-gradient(180deg, #000 0%, transparent 85%);
+}
+
+/* A poeira do podio (canvas) fica atras de tudo, sobre o fundo */
+.tvm .tv-ambient {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+}
+
+/* ---------- Topo ---------- */
+.tvm-topo {
+  display: flex;
+  align-items: center;
+  gap: clamp(14px, 1.6vw, 36px);
+  padding-bottom: clamp(12px, 1.4vw, 28px);
+  border-bottom: 1px solid var(--line);
+  animation: rise 0.6s var(--m-curva) backwards;
+}
+
+.tvm-marca {
+  display: block;
+  height: clamp(46px, 5vw, 110px);
+  width: auto;
+  filter: drop-shadow(0 8px 24px rgba(18, 200, 110, 0.25));
+}
+
+.tvm-divisor {
+  align-self: stretch;
+  width: 1px;
+  background: var(--line-2);
+}
+
+.tvm-titulo {
+  flex: 1;
+  min-width: 0;
+}
+
+.tvm-rotulo {
+  margin: 0;
+  font-family: var(--mono-rotulo);
+  font-size: clamp(10px, 0.78vw, 17px);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #3ee39d;
+}
+
+.tvm-titulo h1 {
+  margin: 0.25vw 0 0;
+  font-size: clamp(24px, 2.6vw, 58px);
+  font-weight: 620;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  color: #f3f7fc;
+}
+
+.tvm-sub {
+  margin: 0.4vw 0 0;
+  font-size: clamp(12px, 0.95vw, 20px);
+  color: var(--text-3);
+}
+
+.tvm-relogio {
+  display: grid;
+  justify-items: end;
+  gap: 0.35vw;
+}
+
+.tvm-hora {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(22px, 2.3vw, 52px);
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: #e9eff8;
+}
+
+.tvm .sample {
+  font-size: clamp(9px, 0.68vw, 15px);
+}
+
+.tvm-cheia {
+  display: grid;
+  place-items: center;
+  width: clamp(38px, 2.6vw, 56px);
+  height: clamp(38px, 2.6vw, 56px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-3);
+  cursor: pointer;
+}
+
+.tvm-cheia:hover {
+  color: #fff;
+  border-color: var(--line-2);
+}
+
+/* Em tela cheia o botao some: na TV ele so atrapalha */
+:fullscreen .tvm-cheia {
+  display: none;
+}
+
+.tvm-corpo {
+  position: relative;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding-top: clamp(14px, 1.8vw, 40px);
+}
+
+/* ---------- Juliano em cena ----------
+   Respira e balanca de leve; no ranking, de tempos em tempos da um pulinho
+   com o trofeu. So transform: nada de reflow na TV. */
+.tvm-juliano {
+  position: absolute;
+  right: clamp(12px, 1.6vw, 40px);
+  bottom: clamp(26px, 4vh, 60px);
+  z-index: 2;
+  height: 34vh;
+  width: auto;
+  pointer-events: none;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.55)) drop-shadow(0 0 26px rgba(20, 220, 200, 0.18));
+  animation: juliano-respira 4.6s ease-in-out infinite, juliano-entra 0.9s var(--m-curva) backwards 0.4s;
+}
+
+@keyframes juliano-respira {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+  }
+  50% {
+    transform: translateY(-1.4%) rotate(-1.4deg) scale(1.012);
+  }
+}
+
+@keyframes juliano-entra {
+  from {
+    opacity: 0;
+    translate: 0 12%;
+  }
+}
+
+.tvm-ranking .tvm-juliano {
+  height: 30vh;
+  animation: juliano-comemora 7s ease-in-out infinite, juliano-entra 0.9s var(--m-curva) backwards 0.6s;
+}
+
+@keyframes juliano-comemora {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  30% {
+    transform: translateY(-1.2%) rotate(-1.2deg);
+  }
+  70% {
+    transform: translateY(-9%) rotate(3deg);
+  }
+  78% {
+    transform: translateY(0) rotate(-1deg);
+  }
+  84% {
+    transform: translateY(-3.5%) rotate(1.5deg);
+  }
+  90% {
+    transform: translateY(0) rotate(0deg);
+  }
+}
+
+/* ---------- Batimento no rodape: so corre com o robo vivo ---------- */
+.tvm-pulso {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: clamp(8px, 1.4vh, 22px);
+  width: 100%;
+  height: clamp(40px, 6vh, 90px);
+  z-index: 1;
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+.tvm-pulso .pulso-base {
+  stroke: rgba(148, 178, 214, 0.12);
+}
+
+.tvm-pulso .pulso-onda {
+  opacity: 0;
+  stroke-width: 2.4;
+  stroke-dasharray: 200 1000;
+  filter: drop-shadow(0 0 6px var(--marca-brilho));
+}
+
+.tvm-pulso.is-vivo .pulso-onda {
+  opacity: 1;
+  animation: tvm-batida 5.5s linear infinite;
+}
+
+@keyframes tvm-batida {
+  from {
+    stroke-dashoffset: 200;
+  }
+  to {
+    stroke-dashoffset: -1000;
+  }
+}
+
+/* ============================================================================
+   /ranking — podio do time
+   ============================================================================ */
+.tvm .tv-total {
+  text-align: right;
+  padding-right: clamp(10px, 1vw, 24px);
+  margin-right: clamp(4px, 0.4vw, 12px);
+  border-right: 1px solid var(--line);
+}
+
+.tvm .tv-total span {
+  display: block;
+  font-family: var(--mono-rotulo);
+  font-size: clamp(9px, 0.7vw, 15px);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+/* Numero heroi: o total do time, no verde da marca */
+.tvm .tv-total strong {
+  display: block;
+  margin-top: 0.3vw;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(24px, 2.6vw, 60px);
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1;
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: #3ee39d;
+  text-shadow: 0 0 30px rgba(30, 222, 150, 0.25);
+}
+
+.tvm .podium-wrap {
+  margin-top: clamp(26px, 4.5vh, 70px);
+}
+
+.tvm .pod-top {
+  border-color: var(--line);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--metal-b) 16%, transparent) 0%, transparent 62%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.005)),
+    #0c1627;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 30px 60px -36px rgba(0, 0, 0, 0.9);
+}
+
+.tvm .pod-nome {
+  color: #f3f7fc;
+}
+
+.tvm .pod-casa,
+.tvm .pod-vendas {
+  color: var(--text-3);
+}
+
+/* Do 4o em diante: abre espaco a direita para o Juliano */
+.tvm-ranking .tv-resto {
+  margin-right: 20vw;
+}
+
+.tvm .tv-resto li {
+  border-bottom-color: var(--line);
+}
+
+.tvm .tv-resto b {
+  font-family: var(--mono-rotulo);
+  color: #3ee39d;
+}
+
+.tvm .tv-resto .track {
+  background: rgba(148, 178, 214, 0.1);
+}
+
+/* ============================================================================
+   /tv — Coroa de Ouro dos veterinarios
+   O dourado aqui e o da coroa (o premio), como os metais do podio.
+   ============================================================================ */
+.tvm-vets .tv-corpo {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr 1.6fr;
+  gap: 2vw;
+  flex: 1;
+}
+
+.tvm-vets .tv-campeao {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1vw;
+  padding: 2vw;
+  text-align: center;
+  border-radius: 1.4vw;
+  border: 1px solid rgba(233, 185, 73, 0.55);
+  background:
+    radial-gradient(80% 60% at 50% 0%, rgba(233, 185, 73, 0.2), transparent 70%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.005)),
+    #0c1627;
+  box-shadow: 0 0 0 1px rgba(233, 185, 73, 0.12), 0 0 60px -10px rgba(233, 185, 73, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: rise 0.7s var(--m-curva) backwards 0.1s;
+}
+
+.tvm-vets .tv-coroa {
+  color: #f0c24f;
+  width: 7vw;
+  height: 7vw;
+  filter: drop-shadow(0 0 20px rgba(240, 194, 79, 0.55));
+  animation: coroa-flutua 3.8s ease-in-out infinite;
+}
+
+@keyframes coroa-flutua {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-6%) rotate(2deg);
+  }
+}
+
+.tvm-vets .tv-campeao strong {
+  font-size: 3.2vw;
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  color: #f3f7fc;
+}
+
+.tvm-vets .tv-campeao span {
+  font-family: var(--mono-rotulo);
+  font-size: 1vw;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #f0c24f;
+}
+
+.tvm-vets .tv-lista {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.55vw;
+  align-content: start;
+}
+
+.tvm-vets .tv-lista li {
+  display: grid;
+  grid-template-columns: 3.2vw 1fr auto;
+  align-items: baseline;
+  gap: 0.8vw;
+  padding: 0.7vw 1vw;
+  border: 1px solid var(--line);
+  border-radius: 0.8vw;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.005)), #0a1322;
+  font-size: 1.5vw;
+  color: #e9eff8;
+  animation: rise 0.55s var(--m-curva) backwards;
+}
+
+.tvm-vets .tv-lista li:nth-child(2) { animation-delay: 60ms; }
+.tvm-vets .tv-lista li:nth-child(3) { animation-delay: 120ms; }
+.tvm-vets .tv-lista li:nth-child(n + 4) { animation-delay: 180ms; }
+
+.tvm-vets .tv-lista b {
+  font-family: var(--mono);
+  color: #3ee39d;
+}
+
+.tvm-vets .tv-lista small {
+  font-family: var(--mono-rotulo);
+  font-size: 0.8vw;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.tvm-vets .tv-paineis {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.1vw;
+  align-content: start;
+  /* o Juliano fica no canto de baixo, a direita */
+  padding-bottom: 30vh;
+}
+
+.tvm-vets .tv-paineis section {
+  position: relative;
+  padding: 1vw 1.2vw;
+  border: 1px solid var(--line);
+  border-radius: 0.9vw;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.005)), #0a1322;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: rise 0.6s var(--m-curva) backwards 0.2s;
+}
+
+.tvm-vets .tv-paineis section::before {
+  content: "";
+  position: absolute;
+  left: 1.2vw;
+  top: -1px;
+  width: 2.4vw;
+  height: 2px;
+  background: linear-gradient(90deg, var(--cyan), rgba(62, 200, 240, 0));
+}
+
+.tvm-vets .tv-paineis h2 {
+  margin: 0 0 0.6vw;
+  font-family: var(--mono-rotulo);
+  font-size: 0.82vw;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-3);
+}
+
+.tvm-vets .tv-paineis ol {
+  margin: 0;
+  padding-left: 1.6vw;
+  display: grid;
+  gap: 0.3vw;
+  font-size: 1.2vw;
+}
+
+.tvm-vets .tv-paineis li {
+  display: flex;
+  gap: 1vw;
+}
+
+.tvm-vets .tv-paineis li span {
+  flex: 1;
+}
+
+.tvm-vets .tv-paineis li b {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tvm-vets .tv-sem,
+.tvm-vets .tv-aviso {
+  margin: 0;
+  color: var(--text-3);
+}
+
+.tvm-vets .tv-aviso {
+  font-size: 1.8vw;
+}
+
+/* Telas menores que uma TV (notebook abrindo o /ranking): o Juliano encolhe
+   e a lista volta a ocupar a largura. */
+@media (max-width: 900px) {
+  .tvm-juliano,
+  .tvm-ranking .tvm-juliano {
+    height: 22vh;
+    opacity: 0.9;
+  }
+  .tvm-ranking .tv-resto {
+    margin-right: 0;
+    padding-bottom: 20vh;
+  }
+  .tvm-divisor,
+  .tvm-sub {
+    display: none;
+  }
+  .tvm-topo {
+    flex-wrap: wrap;
+  }
+}

@@ -28,6 +28,16 @@ as telas de dado são as mesmas, só a casca e o tom em volta delas.
 - **Entrada** (`src/shell/Entrada.jsx`): cena de um lado, formulário do outro, como a do painel de referência. No lugar da foto do prédio, a
   cena é código: grade, logo aceso e a linha de batimento correndo. Sempre escura.
 - **Celular** (até 860 px): sem barra lateral; topo com o ícone, selo, unidade, tema e sair; dock de vidro com todas as áreas.
+- **Mascote Juliano** (12/11/2026): o cachorro da clínica, preto, orelhas enormes em pé, **três patas: em pé ele tem um
+  braço só, o esquerdo**. Arquivos em `public/mascote/`. Toda imagem nova dele tem de respeitar o braço único.
+- **Entrada com o Juliano:** a cena da recepção ocupa a tela, texto e formulário na metade escura da esquerda. No
+  computador entra por cima o vídeo `juliano-cena.mp4` (6 s, vaivém do trecho de 5 a 8 s do vídeo gerado: no começo do
+  vídeo bruto o modelo desenhou o braço que ele não tem). Começa e termina no quadro da foto, então não pula. Sem vídeo no
+  celular e com economia de dados.
+- **Telas do corredor** (`/ranking` e `/tv`) na mesma identidade, pela moldura `src/shell/TvMoldura.jsx` + `tv.css`:
+  fundo de sala de controle, marca, selo do robô, relógio, batimento no rodapé e o Juliano em cena (comemorando com
+  troféu no ranking, de plantão na Coroa de Ouro). O pódio, as coroas e o confete continuam. No `/tv` o selo é neutro
+  ("Lido às hh:mm"): a resposta não diz quando o robô coletou.
 
 ### Marca: um destaque só
 

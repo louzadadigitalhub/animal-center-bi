@@ -72,3 +72,9 @@
 **2026-11-11 — Selo do robô na barra lateral.** Verde com coleta há menos de 60 min (o limite do vigia), âmbar "Última coleta dd/mm hh:mm" depois disso, vermelho sem resposta do servidor. Motivo imediato: nesse dia o robô estava há 55 h sem coletar (login do SimplesVet falhando desde 09/11 09:25) e o painel antigo só dizia isso no rodapé do título.
 
 **2026-11-11 — Arte da entrada feita em código.** Os geradores de imagem estavam sem saldo (Higgsfield 0, KIE 1 crédito) e o ComfyUI não está instalado. A cena é a grade, o logo aceso e a linha de batimento, sem foto inventada da clínica.
+
+**2026-11-12 — Juliano é o mascote.** O cachorro de três patas que vive na clínica. Em pé, como mascote, tem um braço só, o esquerdo, sem prótese e sem esconder: é a história dele. Imagens geradas pelo OpenRouter (`openai/gpt-image-2.6-sunburst`, com a foto dele de referência) e o vídeo da entrada pelo `google/veo-3.1-lite` com a mesma imagem no primeiro e no último quadro.
+
+**2026-11-12 — Vídeo da entrada é só o trecho bom.** No vídeo gerado, entre 1 e 3 s, o modelo desenhou o braço direito que o Juliano não tem. Em vez de gerar de novo, usamos o trecho de 5 a 8 s (um braço só em todos os quadros) em vaivém: 6 s, 550 KB, começa e termina no quadro da foto.
+
+**2026-11-12 — TV do corredor na identidade do painel.** `/ranking` e `/tv` ganharam a mesma moldura (marca, selo, relógio, batimento, Juliano). Nenhum número mudou e a TV continua sem valor em reais para quem não está logado.

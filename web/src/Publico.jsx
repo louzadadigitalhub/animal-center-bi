@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Crown } from "@phosphor-icons/react/Crown";
-import { CornersOut } from "@phosphor-icons/react/CornersOut";
 import { MESES_LONGOS } from "./Analises.jsx";
 import { formatar } from "./Veterinarios.jsx";
+import TvMoldura from "./shell/TvMoldura.jsx";
 
 /* Páginas sem login. Nada de valor em reais nem dado de tutor: a TV mostra
    só posição e indicadores de atendimento; a avaliação, o primeiro nome
@@ -11,7 +11,6 @@ import { formatar } from "./Veterinarios.jsx";
 export function TvVets() {
   const [d, setD] = useState(null);
   const [erro, setErro] = useState("");
-  const [agora, setAgora] = useState(new Date());
   useEffect(() => {
     const carregar = () =>
       fetch("/api/tv")
@@ -24,83 +23,77 @@ export function TvVets() {
         .catch((e) => setErro(e.message));
     carregar();
     const t = setInterval(carregar, 5 * 60 * 1000);
-    const relogio = setInterval(() => setAgora(new Date()), 30 * 1000);
-    return () => {
-      clearInterval(t);
-      clearInterval(relogio);
-    };
+    return () => clearInterval(t);
   }, []);
-  const telaCheia = () => document.documentElement.requestFullscreen?.().catch(() => {});
-  const hora = agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+  /* Moldura do corredor (shell/TvMoldura.jsx), a mesma do /ranking. O selo
+     fica neutro: diz quando a tela leu, nao se o robo esta vivo. */
+  const lido = d?.atualizadoEm
+    ? new Date(d.atualizadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" })
+    : null;
+  const molde = (conteudo) => (
+    <TvMoldura
+      classe="tvm-vets"
+      rotulo="Coroa de Ouro · veterinários"
+      titulo={d ? `${MESES_LONGOS[d.mes]} de ${d.ano}` : "Coroa de Ouro"}
+      sub="Classificação geral pelos indicadores de atendimento · atualiza a cada 5 minutos"
+      estado={erro ? "erro" : "conectando"}
+      selo={erro ? "Sem dados agora" : lido ? `Lido às ${lido}` : "Carregando…"}
+      juliano="/mascote/juliano-plantao.webp"
+    >
+      {conteudo}
+    </TvMoldura>
+  );
 
   if (!d) {
-    return (
-      <main className="tv-vets">
-        <h1>Coroa de Ouro</h1>
-        <p className="tv-aviso">{erro ? `Sem dados agora (${erro}). Tenta de novo em 5 minutos.` : "Carregando…"}</p>
-      </main>
-    );
+    return molde(<p className="tv-aviso">{erro ? `Sem dados agora (${erro}). Tenta de novo em 5 minutos.` : "Carregando…"}</p>);
   }
   const [primeiro, ...resto] = d.vets;
   /* O ticket é em reais: na TV só aparece a posição. */
   const paineis = d.rankingsDef.filter((rk) => rk.id !== "ticket");
-  return (
-    <main className="tv-vets">
-      <header className="tv-topo">
-        <h1>
-          Coroa de Ouro · {MESES_LONGOS[d.mes]} de {d.ano}
-        </h1>
-        <span className="tv-hora">{hora}</span>
-        <button type="button" onClick={telaCheia} aria-label="Tela cheia">
-          <CornersOut size={28} />
-        </button>
-      </header>
-      {!primeiro ? (
-        <p className="tv-aviso">Ainda não há veterinário com consultas suficientes neste mês.</p>
-      ) : (
-        <div className="tv-corpo">
-          <section className="tv-campeao">
-            <Crown size={96} weight="fill" className="tv-coroa" />
-            <strong>{primeiro.nome}</strong>
-            <span>{primeiro.casa}</span>
-          </section>
-          <ol className="tv-lista" start={2}>
-            {resto.map((v) => (
-              <li key={v.nome}>
-                <b>{v.coroa}º</b>
-                <span>{v.nome}</span>
-                <small>{v.casa}</small>
-              </li>
-            ))}
-          </ol>
-          <div className="tv-paineis">
-            {paineis.map((rk) => {
-              const lista = [...d.vets]
-                .filter((v) => v[rk.id] != null)
-                .sort((a, b) => a.posicoes[rk.id] - b.posicoes[rk.id])
-                .slice(0, 3);
-              return (
-                <section key={rk.id}>
-                  <h2>{rk.nome}</h2>
-                  {!lista.length ? <p className="tv-sem">{rk.id === "nota" ? "Ainda sem avaliações suficientes." : "Sem dados no mês."}</p> : null}
-                  <ol>
-                    {lista.map((v) => (
-                      <li key={v.nome}>
-                        <span>{v.nome}</span>
-                        <b>{formatar(rk, v[rk.id])}</b>
-                      </li>
-                    ))}
-                  </ol>
-                </section>
-              );
-            })}
-          </div>
+  return molde(
+    !primeiro ? (
+      <p className="tv-aviso">Ainda não há veterinário com consultas suficientes neste mês.</p>
+    ) : (
+      <div className="tv-corpo">
+        <section className="tv-campeao">
+          <Crown size={96} weight="fill" className="tv-coroa" />
+          <strong>{primeiro.nome}</strong>
+          <span>{primeiro.casa}</span>
+        </section>
+        <ol className="tv-lista" start={2}>
+          {resto.map((v) => (
+            <li key={v.nome}>
+              <b>{v.coroa}º</b>
+              <span>{v.nome}</span>
+              <small>{v.casa}</small>
+            </li>
+          ))}
+        </ol>
+        <div className="tv-paineis">
+          {paineis.map((rk) => {
+            const lista = [...d.vets]
+              .filter((v) => v[rk.id] != null)
+              .sort((a, b) => a.posicoes[rk.id] - b.posicoes[rk.id])
+              .slice(0, 3);
+            return (
+              <section key={rk.id}>
+                <h2>{rk.nome}</h2>
+                {!lista.length ? <p className="tv-sem">{rk.id === "nota" ? "Ainda sem avaliações suficientes." : "Sem dados no mês."}</p> : null}
+                <ol>
+                  {lista.map((v) => (
+                    <li key={v.nome}>
+                      <span>{v.nome}</span>
+                      <b>{formatar(rk, v[rk.id])}</b>
+                    </li>
+                  ))}
+                </ol>
+              </section>
+            );
+          })}
         </div>
-      )}
-      <footer className="tv-rodape">
-        Atualiza sozinho a cada 5 minutos · {new Date(d.atualizadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-      </footer>
-    </main>
+      </div>
+    )
   );
 }
 

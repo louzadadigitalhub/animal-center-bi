@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import Podium, { Ambient } from "./Podium.jsx";
 import { Num } from "./anim.jsx";
 import { apiFetch } from "./supa.js";
+import TvMoldura from "./shell/TvMoldura.jsx";
 import "./index.css";
 
 const brl = (n) =>
@@ -39,35 +40,45 @@ export default function RankingPublico() {
   const comValores = equipe.some((x) => typeof x.fat === "number");
   const total = equipe.reduce((a, x) => a + ((comValores ? x.fat : x.vendas) || 0), 0);
 
+  /* Selo do robo, como na barra lateral do painel: verde com coleta ha
+     menos de 60 min, ambar com a hora da ultima coleta, vermelho sem resposta. */
+  const lidoEm = dados?.ok && dados.at ? new Date(dados.at) : null;
+  const estado = !dados ? "conectando" : !dados.ok ? "erro" : lidoEm && Date.now() - lidoEm.getTime() > 60 * 60000 ? "parado" : "vivo";
+  const fmt = (d, o) => d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", ...o }).replace(",", "");
+  const selo = {
+    conectando: "Conectando…",
+    erro: "Robô fora do ar",
+    parado: lidoEm ? `Última coleta ${fmt(lidoEm, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}` : "Sem coleta",
+    vivo: lidoEm ? `Ao vivo · ${fmt(lidoEm, { hour: "2-digit", minute: "2-digit" })}` : "Ao vivo",
+  }[estado];
+  const recorte = { mes: "Este mês", hoje: "Hoje", semana: "Esta semana" }[periodo] || periodo;
+  const sub = [recorte, dados?.diaLabel, dados?.ok ? `${inteiro(dados.rows)} vendas lidas` : "aguardando o robô"].filter(Boolean).join(" · ");
+
   return (
-    <div className="app app-tv">
-      <div className="main">
-        <div className="tv">
-          <Ambient />
-          <header className="tv-head">
-            <div>
-              <p className="tv-kicker">Ranking do time</p>
-              <h2 className="tv-title">{dados?.casa || "Animal Center"}</h2>
-              <p className="tv-sub">
-                {dados?.diaLabel ? `${dados.diaLabel} · ` : ""}
-                {dados?.ok ? `${dados.rows} vendas lidas` : "aguardando o robo"}
-              </p>
-            </div>
-            <div className="tv-total">
-              <span>{comValores ? "Total do time" : "Vendas do time"}</span>
-              <strong>
-                <Num value={total} format={comValores ? brl : inteiro} ms={1600} />
-              </strong>
-            </div>
-          </header>
-          <Podium
-            equipe={equipe}
-            brl={brl}
-            fotos={dados?.fotos}
-            diagnostico={`${dados?.casa || ""} · ${dados?.diaLabel || ""} · ${equipe.length} pessoa(s)`}
-          />
+    <TvMoldura
+      classe="tvm-ranking"
+      rotulo="Ranking do time"
+      titulo={dados?.casa || "Animal Center"}
+      sub={sub}
+      estado={estado}
+      selo={selo}
+      juliano="/mascote/juliano-comemorando.webp"
+      direita={
+        <div className="tv-total">
+          <span>{comValores ? "Total do time" : "Vendas do time"}</span>
+          <strong>
+            <Num value={total} format={comValores ? brl : inteiro} ms={1600} />
+          </strong>
         </div>
-      </div>
-    </div>
+      }
+    >
+      <Ambient />
+      <Podium
+        equipe={equipe}
+        brl={brl}
+        fotos={dados?.fotos}
+        diagnostico={`${dados?.casa || ""} · ${dados?.diaLabel || ""} · ${equipe.length} pessoa(s)`}
+      />
+    </TvMoldura>
   );
 }
