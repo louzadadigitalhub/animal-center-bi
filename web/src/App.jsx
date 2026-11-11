@@ -1,26 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ChartBar } from "@phosphor-icons/react/ChartBar";
-import { Stethoscope } from "@phosphor-icons/react/Stethoscope";
-import { UsersThree } from "@phosphor-icons/react/UsersThree";
-import { PawPrint } from "@phosphor-icons/react/PawPrint";
-import { ArrowsClockwise } from "@phosphor-icons/react/ArrowsClockwise";
-import { Syringe } from "@phosphor-icons/react/Syringe";
-import { ChatCircleDots } from "@phosphor-icons/react/ChatCircleDots";
-import { Table } from "@phosphor-icons/react/Table";
-import { ShieldCheck } from "@phosphor-icons/react/ShieldCheck";
-import { MonitorPlay } from "@phosphor-icons/react/MonitorPlay";
-import { Receipt } from "@phosphor-icons/react/Receipt";
-import { SquaresFour } from "@phosphor-icons/react/SquaresFour";
-import { ChartLineUp } from "@phosphor-icons/react/ChartLineUp";
-import { Crown } from "@phosphor-icons/react/Crown";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { CalendarBlank } from "@phosphor-icons/react/CalendarBlank";
 import { CaretUp } from "@phosphor-icons/react/CaretUp";
 import { CaretDown } from "@phosphor-icons/react/CaretDown";
 import { Minus } from "@phosphor-icons/react/Minus";
-import { List } from "@phosphor-icons/react/List";
-import { X } from "@phosphor-icons/react/X";
 import { Sun } from "@phosphor-icons/react/Sun";
 import { Moon } from "@phosphor-icons/react/Moon";
+import { Key } from "@phosphor-icons/react/Key";
+import { SignOut } from "@phosphor-icons/react/SignOut";
+import { MagnifyingGlass } from "@phosphor-icons/react/MagnifyingGlass";
 import { DailyBars, Donut, Hourly, LineChart, Radar, MultiLine, SparkBars, Treemap, VolumeTicket } from "./charts";
 import { MONTHS, YEARS, brl, brlc, getView, hojeBR, num, periodLabel, sanitizeDaily, isoBR, recuarMeses, recuarDias } from "./data";
 import { somarUnidades } from "./dre-soma.js";
@@ -30,13 +17,19 @@ import Dashboard from "./Dashboard.jsx";
 import Veterinarios from "./Veterinarios.jsx";
 import { Comparativo, DreMedia, FaturamentoPor, FluxoMeses, GraficoConversao, PesquisaTutores, RecorrenciaMensal } from "./Analises.jsx";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./components/ui/card.jsx";
-import { Num } from "./anim.jsx";
+import { Num, contarSempre } from "./anim.jsx";
 import Podium, { Ambient } from "./Podium.jsx";
+import Visao from "./Visao.jsx";
+import Comandos from "./shell/Comandos.jsx";
+import Pulso from "./shell/Pulso.jsx";
+import Entrada from "./shell/Entrada.jsx";
+import { useIndicador } from "./shell/indicador.js";
+import { AREA_ADMIN, areaDe, areasVisiveis } from "./shell/areas.js";
 import { Toaster, sileo } from "sileo";
 import * as Supa from "./supa.js";
 const { apiFetch, getSupa, iniciarSupa } = Supa;
 import "sileo/styles.css";
-import { Badge } from "./components/ui/badge.jsx";
+import "./shell/shell.css";
 
 const GRUPO_FILTROS = [
   ["", "Todos"],
@@ -80,21 +73,6 @@ function Delta({ vs, className = "" }) {
   );
 }
 
-const NAV = [
-  { id: "vendas", label: "Vendas", icon: ChartBar },
-  { id: "comparativo", label: "Comparativo", icon: ChartLineUp },
-  { id: "ritmo", label: "Ritmo do dia", icon: Stethoscope },
-  { id: "equipe", label: "Equipe", icon: UsersThree },
-  { id: "clientes", label: "Clientes", icon: PawPrint },
-  { id: "recorrencia", label: "Recorrencia", icon: ArrowsClockwise },
-  { id: "vacinas", label: "Vacinas", icon: Syringe },
-  { id: "pesquisa", label: "Pesquisa", icon: ChatCircleDots },
-  { id: "dre", label: "DRE", icon: Table },
-  { id: "dashboard", label: "Dashboard", icon: SquaresFour },
-  { id: "contas", label: "Contas a pagar", icon: Receipt },
-  { id: "veterinarios", label: "Veterinários", icon: Crown },
-  { id: "tv", label: "Ranking", icon: MonitorPlay },
-];
 
 /* So vira clicavel quando ha registro por tras. Card que abre gaveta vazia
    ensina a pessoa a nao clicar em card nenhum. */
@@ -1872,17 +1850,21 @@ function Tv({ u, label, fotos, live }) {
   );
 }
 
-function Painel({ perfil, aoSair, aoTrocarSenha }) {
+export function Painel({ perfil, aoSair, aoTrocarSenha }) {
   /* O menu so mostra o que a conta pode ver. Isto e conveniencia: o filtro
      que vale acontece no servidor, que poda o proprio snapshot. */
   const podeVer = (id) => perfil.paginas === "todas" || (perfil.paginas || []).includes(id);
-  /* Admin nao e uma aba de dado, e um lugar. Por isso fica fora do NAV e so
-     aparece para quem administra. */
-  const navVisivel = [
-    ...NAV.filter((n) => podeVer(n.id)),
-    ...(perfil.admin ? [{ id: "admin", label: "Admin", icon: ShieldCheck }] : []),
-  ];
-  const [page, setPage] = useState(navVisivel[0]?.id || "vendas");
+  /* Areas e abas como no painel de referencia (shell/areas.js). Admin nao e uma aba
+     de dado, e um lugar: so entra no menu de quem administra. */
+  const areas = areasVisiveis(podeVer, perfil.admin);
+  const [page, setPage] = useState(areas[0]?.abas[0]?.id || "admin");
+  /* "Minha conta" de quem nao e admin abre a pagina admin sem ela estar no
+     menu: a area dela e a de admin, com o nome trocado. */
+  const contaPropria = { ...AREA_ADMIN, label: perfil.admin ? "Admin" : "Minha conta" };
+  const area = page === "admin" || !areas.length ? contaPropria : areaDe(page, areas);
+  /* Cada area lembra a ultima aba aberta: voltar a Clientes cai em Vacinas
+     se foi la que a pessoa estava. */
+  const [ultimaAba, setUltimaAba] = useState({});
   /* Admin e Dashboard nao usam unidade nem recorte: o Dashboard soma as
      duas unidades e tem o proprio De/Ate. Comparativo e Veterinarios usam
      a unidade, mas tem o proprio periodo e dia de corte. */
@@ -1904,25 +1886,53 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
   const [grupo, setGrupo] = useState("");
   const [live, setLive] = useState(null);
   const [detail, setDetail] = useState(null);
-  const [menu, setMenu] = useState(false);
+  const [comandos, setComandos] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("ac-theme") || "dark");
+  const mainRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#e9eff8" : "#081527");
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "light" ? "#eef3f9" : "#03070f");
     localStorage.setItem("ac-theme", theme);
   }, [theme]);
 
+  /* Contagem dos numeros mesmo com "reduzir movimento", so dentro do painel
+     (telao e /eu seguem parados). Layout effect: roda antes dos useEffect
+     dos filhos, entao a primeira contagem ja ve a chave ligada. */
+  useLayoutEffect(() => {
+    contarSempre(true);
+    return () => contarSempre(false);
+  }, []);
+
+  /* Ctrl/⌘+K abre e fecha a paleta, de qualquer tela. */
+  useEffect(() => {
+    const atalho = (e) => {
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key?.toLowerCase() === "k") {
+        e.preventDefault();
+        setComandos((v) => !v);
+      }
+    };
+    window.addEventListener("keydown", atalho);
+    return () => window.removeEventListener("keydown", atalho);
+  }, []);
+
   const go = (id) => {
     setPage(id);
-    setMenu(false);
+    const dona = areaDe(id, areas);
+    if (dona && id !== "admin") setUltimaAba((x) => ({ ...x, [dona.id]: id }));
+    window.scrollTo({ top: 0 });
   };
-  const DOCK = [
-    { id: "vendas", label: "Vendas", icon: ChartBar },
-    { id: "clientes", label: "Clientes", icon: PawPrint },
-    { id: "equipe", label: "Equipe", icon: UsersThree },
-    { id: "vacinas", label: "Vacinas", icon: Syringe },
-  ];
+  const irArea = (a) => {
+    const lembrada = ultimaAba[a.id];
+    go(a.abas.some((b) => b.id === lembrada) ? lembrada : a.abas[0].id);
+  };
+  const destinos = areas.flatMap((a) => [
+    { chave: a.id, pagina: a.abas[0].id, area: a.label, rotulo: a.label, icon: a.icon },
+    ...(a.abas.length > 1 ? a.abas.map((b) => ({ chave: `${a.id}--${b.id}`, pagina: b.id, aba: true, area: a.label, rotulo: b.label, icon: a.icon })) : []),
+  ]);
+  const [navRef, navMarca] = useIndicador(area.id);
+  const [abasRef, abasMarca] = useIndicador(page);
+  const mac = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform);
   const demo = useMemo(() => getView(unit, year, month), [unit, year, month]);
   const recorte =
     periodo === "hoje" ? live?.hoje : periodo === "semana" ? live?.semana : live?.view;
@@ -2026,54 +2036,147 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
     };
   }, [api, unit, year, month, tentativa, noIntervalo, de, ate, grupo]);
 
+  /* Selo do robo na barra lateral, como o selo "ao vivo" do painel de referencia: verde e
+     pulsando com coleta recente; ambar quando a ultima coleta passou do
+     limite do vigia (60 min); vermelho quando o servidor nem respondeu. */
+  const lidoEm = live?.ok && live.at ? new Date(live.at) : null;
+  const minutosSemColeta = lidoEm ? (Date.now() - lidoEm.getTime()) / 60000 : null;
+  const estado = !live ? "conectando" : !live.ok ? "erro" : minutosSemColeta > 60 ? "parado" : "vivo";
+  const quando = (d) =>
+    d.toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }).replace(",", "");
+  const hora = (d) => d.toLocaleTimeString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+  const selo = {
+    conectando: "Conectando…",
+    erro: "Robô fora do ar",
+    parado: lidoEm ? `Última coleta ${quando(lidoEm)}` : "Sem coleta",
+    vivo: lidoEm ? `SimplesVet · ${hora(lidoEm)}` : "SimplesVet ao vivo",
+  }[estado];
+  const seloDica = live?.ok ? `${fonte}. O robô relê o SimplesVet a cada 2 minutos.` : "Os números na tela são a última leitura guardada.";
+  const nota = page === "admin" ? perfil.email : page === "dashboard" ? "As duas unidades · mês a mês" : `${u.casa} · ${labelComGrupo}`;
+  const iniciais = (perfil.email || "?").split("@")[0].split(/[._-]+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("") || "?";
+
   return (
-    <div className={`app ${menu ? "menu-open" : ""}`}>
-      <header className="mob-top">
-        <button className="burger" aria-label="Abrir menu" onClick={() => setMenu((v) => !v)}>
-          {menu ? <X size={22} /> : <List size={22} />}
-        </button>
-        <strong>
-          <img src={theme === "light" ? "/logo-light.png" : "/logo-dark.png"} alt="" width="22" height="22" />
-          Animal Center
-        </strong>
-        <span />
-      </header>
-      {menu ? <div className="scrim" onClick={() => setMenu(false)} /> : null}
-      <aside>
-        <div className="logo">
-          <img src={theme === "light" ? "/logo-light.png" : "/logo-dark.png"} alt="" width="38" height="38" />
-          <div>
-            <strong>Animal Center</strong>
-            <small>Gestao</small>
-          </div>
+    <div className="shell">
+      <aside className="sidebar">
+        <div className="brand">
+          <img className="brand-logo" src="/marca-animal-center.webp" alt="Animal Center, centro veterinário 24h" width="543" height="200" />
+          <span className="brand-name">Painel de gestão</span>
+          <Pulso className="brand-pulso" batidas={3} />
+          <span className={`sample is-${estado}`} title={seloDica}>
+            {selo}
+          </span>
         </div>
-        <nav>
-          {navVisivel.map((item) => {
-            const Icon = item.icon;
+        <p className="nav-label">Áreas</p>
+        <nav className="nav" aria-label="Áreas do painel" ref={navRef}>
+          <span className="nav-marca" style={navMarca} aria-hidden />
+          {areas.map((a) => {
+            const Icon = a.icon;
+            const on = area.id === a.id;
             return (
-              <button key={item.id} className={page === item.id ? "on" : ""} onClick={() => go(item.id)}>
-                <Icon size={18} weight={page === item.id ? "fill" : "regular"} />
-                {item.label}
+              <button key={a.id} type="button" className={`nav-btn${on ? " is-on" : ""}`} onClick={() => irArea(a)} aria-current={on ? "page" : undefined}>
+                <span className="nav-ico">
+                  <Icon size={18} weight={on ? "fill" : "regular"} />
+                </span>
+                {a.label}
+                {a.abas.length > 1 ? <span className="nav-qtd">{a.abas.length}</span> : null}
               </button>
             );
           })}
         </nav>
+        <div className="user">
+          <div className="avatar" aria-hidden>
+            {iniciais}
+          </div>
+          <div className="user-quem" title={perfil.email}>
+            {perfil.email}
+            <small>{perfil.admin ? "Administração" : "Diretoria"}</small>
+          </div>
+          <div className="user-acoes">
+            <button
+              type="button"
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              aria-label={theme === "dark" ? "Usar o tema claro" : "Usar o tema escuro"}
+              title={theme === "dark" ? "Tema claro" : "Tema escuro"}
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            {perfil.admin ? null : (
+              <button type="button" onClick={() => go("admin")} aria-label="Minha conta" title="Minha conta e senha">
+                <Key size={16} />
+              </button>
+            )}
+            <button type="button" onClick={aoSair} aria-label="Sair" title={`Sair (${perfil.email})`}>
+              <SignOut size={16} />
+            </button>
+          </div>
+        </div>
       </aside>
 
-      <div className="main" data-carregando={carregando ? "1" : undefined} aria-busy={carregando}>
-        <header className="top">
-          <div className="units" hidden={semUnidade}>
-            {[
-              ["matriz", "Matriz"],
-              ["filial", "Filial 1"],
-              ["consolidado", "As duas"],
-            ].map(([id, lb]) => (
-              <button key={id} className={unit === id ? "on" : ""} onClick={() => setUnit(id)}>
-                {lb}
+      <main className="main" ref={mainRef} data-carregando={carregando ? "1" : undefined} aria-busy={carregando}>
+        <header className="topbar">
+          <div className="topbar-titulo">
+            <span className="topbar-marca" aria-hidden>
+              <img src="/logo-dark.png" alt="" width="26" height="26" />
+            </span>
+            <div>
+              <h1>{area.label}</h1>
+              <p className="period-note">
+                <span>{nota}</span>
+                <span className={`sample sample-topo is-${estado}`} title={seloDica}>
+                  {selo}
+                </span>
+              </p>
+            </div>
+          </div>
+          <div className="topbar-acoes" role="group" aria-label="Filtros">
+            <button type="button" className="cmd-abre" onClick={() => setComandos(true)} title={`Ir para uma área ou aba (${mac ? "⌘K" : "Ctrl+K"})`} aria-label="Ir para uma área ou aba" aria-keyshortcuts="Control+K Meta+K">
+              <MagnifyingGlass size={15} aria-hidden />
+              <span className="cmd-abre-texto">Ir para</span>
+              <kbd aria-hidden>{mac ? "⌘K" : "Ctrl K"}</kbd>
+            </button>
+            <div className="units" hidden={semUnidade}>
+              {[
+                ["matriz", "Matriz"],
+                ["filial", "Filial 1"],
+                ["consolidado", "As duas"],
+              ].map(([id, lb]) => (
+                <button key={id} type="button" className={unit === id ? "on" : ""} aria-pressed={unit === id} onClick={() => setUnit(id)}>
+                  {lb}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="topo-icone topo-celular"
+              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+              aria-label={theme === "dark" ? "Usar o tema claro" : "Usar o tema escuro"}
+            >
+              {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+            </button>
+            {perfil.admin ? null : (
+              <button type="button" className="topo-icone topo-celular" onClick={() => go("admin")} aria-label="Minha conta e senha">
+                <Key size={16} />
+              </button>
+            )}
+            <button type="button" className="topo-icone topo-celular" onClick={aoSair} aria-label="Sair">
+              <SignOut size={16} />
+            </button>
+          </div>
+        </header>
+
+        {area.abas.length > 1 ? (
+          <nav className="abas" aria-label={`Páginas de ${area.label}`} ref={abasRef}>
+            <span className="abas-marca" style={abasMarca} aria-hidden />
+            {area.abas.map((b) => (
+              <button key={b.id} type="button" className={page === b.id ? "is-on" : ""} aria-current={page === b.id ? "page" : undefined} onClick={() => go(b.id)}>
+                {b.label}
               </button>
             ))}
-          </div>
-          <div className="periodos" role="tablist" aria-label="Recorte" hidden={semFiltros}>
+          </nav>
+        ) : null}
+
+        <div className="filtros" hidden={semFiltros}>
+          <div className="periodos" role="tablist" aria-label="Recorte">
             {[
               ["hoje", "Hoje"],
               ["semana", "Semana"],
@@ -2084,6 +2187,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
             ].map(([id, rotulo]) => (
               <button
                 key={id}
+                type="button"
                 role="tab"
                 aria-selected={periodo === id}
                 className={periodo === id ? "on" : ""}
@@ -2104,10 +2208,9 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
               </button>
             ))}
           </div>
-          {/* Data de um lado, conta do outro. Estavam no mesmo div e o
-              hidden levava junto o Sair e o tema: quem clicava em "Hoje"
-              ficava sem como sair. */}
-          <div className="intervalo" hidden={semFiltros || !noIntervalo}>
+          {/* Data de um lado, conta do outro: o hidden do intervalo nao leva
+              junto o Sair e o tema, que moram na barra lateral. */}
+          <div className="intervalo" hidden={!noIntervalo}>
             <CalendarBlank size={16} />
             <input
               type="date"
@@ -2145,7 +2248,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
               ))}
             </div>
           </div>
-          <div className="period" hidden={semFiltros || noIntervalo || periodo === "hoje" || periodo === "semana"}>
+          <div className="period" hidden={noIntervalo || periodo === "hoje" || periodo === "semana"}>
             <CalendarBlank size={16} />
             <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Ano">
               {yearsOn.map((y) => (
@@ -2171,26 +2274,7 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
               ))}
             </select>
           </div>
-          <div className="acoes">
-            {perfil.admin || page === "admin" ? null : (
-              <button type="button" className="conta-sair" onClick={() => setPage("admin")}>
-                Minha conta
-              </button>
-            )}
-            <button type="button" className="conta-sair" onClick={aoSair} title={perfil.email}>
-              Sair
-            </button>
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-              aria-label={theme === "dark" ? "Mudar para tema claro" : "Mudar para tema escuro"}
-              title={theme === "dark" ? "Tema claro" : "Tema escuro"}
-            >
-              {theme === "dark" ? <Sun size={18} weight="fill" /> : <Moon size={18} weight="fill" />}
-            </button>
-          </div>
-        </header>
+        </div>
 
         <div className="grupos-filtro" role="tablist" aria-label="Grupo" hidden={semFiltros}>
           {GRUPO_FILTROS.map(([id, rotulo]) => (
@@ -2207,94 +2291,84 @@ function Painel({ perfil, aoSair, aoTrocarSenha }) {
           ))}
         </div>
 
-        <div className="crumb">
-          <h1>{page === "admin" ? (perfil.admin ? "Admin" : "Minha conta") : NAV.find((n) => n.id === page)?.label}</h1>
-          <div className="crumb-meta">
-            {page === "admin" ? (
-              <>
-                <span>{perfil.email}</span>
-                <Badge variant={perfil.admin ? "default" : "outline"} className={perfil.admin ? "pill-live border-0" : "pill-wait"}>
-                  {perfil.admin ? "administradora" : "acesso limitado"}
-                </Badge>
-              </>
-            ) : (
-              <>
-                <span>{page === "dashboard" ? "As duas unidades · mês a mês" : `${u.casa} · ${labelComGrupo}`}</span>
-                <Badge variant={live?.ok ? "default" : "outline"} className={live?.ok ? "pill-live border-0" : "pill-wait"}>
-                  {fonte}
-                </Badge>
-              </>
-            )}
-          </div>
-        </div>
-
         {perfil.senhaProvisoria ? (
           <div className="aviso-senha" role="status">
             <span>Sua senha foi definida pela administração. Troque por uma só sua.</span>
             {page === "admin" ? null : (
-              <button type="button" className="conta-sair" onClick={() => setPage("admin")}>
+              <button type="button" className="conta-sair" onClick={() => go("admin")}>
                 Trocar agora
               </button>
             )}
           </div>
         ) : null}
 
-        {page === "vendas" && <Vendas u={u} year={year} porMes={periodo === "ano" || month === "all"} />}
-        {page === "ritmo" && <Ritmo u={u} hoje={live?.hoje} onOpen={setDetail} />}
-        {page === "equipe" && <Equipe u={u} onOpen={setDetail} />}
-        {page === "clientes" && <Clientes u={u} onOpen={setDetail} />}
-        {page === "recorrencia" && <Recorrencia u={u} status={live?.clientesStatus} onOpen={setDetail} />}
-        {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
-        {page === "pesquisa" && (
-          <div className="bento">
-            <PesquisaTutores unit={unit} year={year} month={month} />
-          </div>
-        )}
-        {page === "dre" && <Dre u={u} year={year} />}
-        {page === "tv" && <Tv u={u} label={labelComGrupo} fotos={live?.fotos} live={live} />}
-        {page === "contas" && <ContasPagar />}
-        {page === "dashboard" && <Dashboard />}
-        {page === "comparativo" && <Comparativo unit={unit} />}
-        {page === "veterinarios" && <Veterinarios unit={unit} />}
-        {page === "vendas" && (
-          <div className="bento an-extra">
-            <FaturamentoPor unit={unit} year={year} month={month} />
-            <GraficoConversao unit={unit} year={year} />
-          </div>
-        )}
-        {page === "ritmo" && (
-          <div className="bento an-extra">
-            <FluxoMeses unit={unit} year={year} />
-          </div>
-        )}
-        {page === "recorrencia" && (
-          <div className="bento an-extra">
-            <RecorrenciaMensal unit={unit} year={year} />
-          </div>
-        )}
-        {page === "dre" && !u.intervalo && (
-          <div className="bento an-extra">
-            <DreMedia unit={unit} year={year} month={month} />
-          </div>
-        )}
-        {page === "admin" ? (
-          <Admin perfil={perfil} onSenhaTrocada={aoTrocarSenha} />
-        ) : null}
-      </div>
-      <nav className="dock" aria-label="Atalhos">
-        {DOCK.map((item) => {
-          const Icon = item.icon;
+        <div className="tela" key={page}>
+          {page === "painel" && <Visao u={u} podeVer={podeVer} onIr={go} rotulo={`${u.casa} · ${labelComGrupo}`} />}
+          {page === "vendas" && <Vendas u={u} year={year} porMes={periodo === "ano" || month === "all"} />}
+          {page === "ritmo" && <Ritmo u={u} hoje={live?.hoje} onOpen={setDetail} />}
+          {page === "equipe" && <Equipe u={u} onOpen={setDetail} />}
+          {page === "clientes" && <Clientes u={u} onOpen={setDetail} />}
+          {page === "recorrencia" && <Recorrencia u={u} status={live?.clientesStatus} onOpen={setDetail} />}
+          {page === "vacinas" && <Vacinas u={u} onOpen={setDetail} />}
+          {page === "pesquisa" && (
+            <div className="bento">
+              <PesquisaTutores unit={unit} year={year} month={month} />
+            </div>
+          )}
+          {page === "dre" && <Dre u={u} year={year} />}
+          {page === "tv" && <Tv u={u} label={labelComGrupo} fotos={live?.fotos} live={live} />}
+          {page === "contas" && <ContasPagar />}
+          {page === "dashboard" && <Dashboard />}
+          {page === "comparativo" && <Comparativo unit={unit} />}
+          {page === "veterinarios" && <Veterinarios unit={unit} />}
+          {page === "vendas" && (
+            <div className="bento an-extra">
+              <FaturamentoPor unit={unit} year={year} month={month} />
+              <GraficoConversao unit={unit} year={year} />
+            </div>
+          )}
+          {page === "ritmo" && (
+            <div className="bento an-extra">
+              <FluxoMeses unit={unit} year={year} />
+            </div>
+          )}
+          {page === "recorrencia" && (
+            <div className="bento an-extra">
+              <RecorrenciaMensal unit={unit} year={year} />
+            </div>
+          )}
+          {page === "dre" && !u.intervalo && (
+            <div className="bento an-extra">
+              <DreMedia unit={unit} year={year} month={month} />
+            </div>
+          )}
+          {page === "admin" ? <Admin perfil={perfil} onSenhaTrocada={aoTrocarSenha} /> : null}
+        </div>
+      </main>
+
+      {comandos ? (
+        <Comandos
+          destinos={destinos}
+          aoFechar={() => setComandos(false)}
+          aoIr={(d) => {
+            const a = !d.aba && areas.find((x) => x.id === d.chave);
+            if (a) irArea(a);
+            else go(d.pagina);
+          }}
+        />
+      ) : null}
+
+      <nav className="dock" aria-label="Menu do celular">
+        {areas.map((a) => {
+          const Icon = a.icon;
+          const on = area.id === a.id;
           return (
-            <button key={item.id} className={page === item.id ? "on" : ""} onClick={() => go(item.id)}>
-              <Icon size={20} weight={page === item.id ? "fill" : "regular"} />
-              {item.label}
+            <button key={a.id} type="button" className={on ? "is-on" : ""} onClick={() => irArea(a)} aria-current={on ? "page" : undefined}>
+              <Icon size={20} weight={on ? "fill" : "regular"} />
+              {a.label}
             </button>
           );
         })}
-        <button className={menu ? "on" : ""} onClick={() => setMenu((v) => !v)}>
-          <List size={20} />
-          Menu
-        </button>
       </nav>
       <Drawer detail={detail} onClose={() => setDetail(null)} onOpen={setDetail} />
       <Toaster position="bottom-right" theme={theme} offset={{ bottom: 20, right: 20 }} />
@@ -2931,41 +3005,15 @@ export default function App() {
 
   if (!sessao) {
     return (
-      <div className="portao">
-        <form className="portao-caixa" onSubmit={entrar}>
-          <img src="/logo-dark.png" alt="" />
-          <h1>Painel da diretoria</h1>
-          <p>Acesso restrito da diretoria.</p>
-          {erro ? <p className="portao-erro">{erro}</p> : null}
-          <label>
-            E-mail
-            <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="username" />
-          </label>
-          <label>
-            Senha
-            <input type="password" required value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="current-password" />
-          </label>
-          <button type="submit" disabled={ocupado || !email || !senha}>
-            {ocupado ? "Entrando…" : "Entrar"}
-          </button>
-          {/* Quem cai aqui sem ser da diretoria costuma ser a vendedora
-              procurando o painel dela, ou alguem ligando a TV do corredor.
-              Os dois caminhos ficam a um clique em vez de exigir decorar URL. */}
-          <div className="portao-saidas">
-            <span>Não é você?</span>
-            <a href="/ranking" className="portao-saida">
-              <MonitorPlay size={16} weight="fill" />
-              Ranking do corredor
-              <small>sem senha</small>
-            </a>
-            <a href="/eu" className="portao-saida">
-              <UsersThree size={16} weight="fill" />
-              Acesso das vendedoras
-              <small>entra com PIN</small>
-            </a>
-          </div>
-        </form>
-      </div>
+      <Entrada
+        email={email}
+        senha={senha}
+        erro={erro}
+        ocupado={ocupado}
+        aoEmail={setEmail}
+        aoSenha={setSenha}
+        aoEntrar={entrar}
+      />
     );
   }
 

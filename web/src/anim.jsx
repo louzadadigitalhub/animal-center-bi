@@ -38,12 +38,21 @@ export function useRaf(cb, on = true) {
   }, [on]);
 }
 
+/* Dentro do painel a contagem roda mesmo com "reduzir movimento", como no
+   painel de referencia: e curta, nao desloca nada, e o dono le numero parado como
+   tela travada (web/DESIGN.md). O Painel liga ao montar; telao, /eu e
+   /avaliar nao montam o Painel e seguem a preferencia do sistema. */
+let sempreConta = false;
+export function contarSempre(v) {
+  sempreConta = v;
+}
+
 /* Conta ate o valor na entrada. */
 export function useCountUp(target, ms = 900) {
   const [n, setN] = useState(target);
   useEffect(() => {
     const end = Number(target) || 0;
-    if (prefersReduced() || !end) {
+    if ((prefersReduced() && !sempreConta) || !end) {
       setN(end);
       return undefined;
     }

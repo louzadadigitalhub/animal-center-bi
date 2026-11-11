@@ -60,3 +60,15 @@
 **2026-10-28 — Chave de serviço presa ao painel.** Listar contas e trocar senha só para e-mails que estão no `perfis.json`: a chave alcança o projeto Supabase inteiro, não só a clínica.
 
 **2026-10-28 — /ranking sem dinheiro sem login.** O telão do corredor (/ranking, `/api/ranking`) ainda mostrava faturamento por pessoa e total em reais, contra a decisão de 20/10. Sem login sai nome, unidade e vendas, na mesma ordem; a diretoria logada com a aba Equipe ou Ranking vê os valores.
+
+**2026-11-11 — Painel na mesma estrutura do painel de referência.** Pedido do dono: "deixar na mesma estrutura do nosso outro painel, mantendo os dados". Copiamos a casca, não os dados: barra lateral com marca, selo do robô e áreas; topo de vidro com "Ir para" (Ctrl/⌘+K); abas dentro de cada área; tema "sala de controle"; tela de entrada com cena. As 13 páginas de antes viraram abas de 5 áreas (Painel, Vendas, Equipe, Clientes, Financeiro) mais Admin. Os ids de página não mudaram, então as permissões do `perfis.json` e o servidor ficaram intactos.
+
+**2026-11-11 — Painel (primeira tela) sem número novo.** Cada indicador é o mesmo campo do snapshot que a aba de origem mostra e leva para ela. Pede a permissão de Vendas porque lê o mesmo snapshot; a lista da equipe só aparece para quem também tem Equipe.
+
+**2026-11-11 — Verde da marca só em três lugares.** Item ativo do menu, botão principal e número herói, como o destaque único do painel de referência. Gráfico continua ciano/teal: se o verde entrasse em dado, deixaria de marcar "aqui é você/aqui é o principal".
+
+**2026-11-11 — Movimento fora de "reduzir movimento" dentro do painel.** Mesma decisão do painel de referência: o dono usa o Mac com a opção ligada e lê tela parada como defeito. Ficam a cascata de entrada, o número contando e o marcador deslizando (curtos, nada grande se desloca). Enfeite em laço para. Telão, /eu e /avaliar seguem a regra antiga, tudo parado.
+
+**2026-11-11 — Selo do robô na barra lateral.** Verde com coleta há menos de 60 min (o limite do vigia), âmbar "Última coleta dd/mm hh:mm" depois disso, vermelho sem resposta do servidor. Motivo imediato: nesse dia o robô estava há 55 h sem coletar (login do SimplesVet falhando desde 09/11 09:25) e o painel antigo só dizia isso no rodapé do título.
+
+**2026-11-11 — Arte da entrada feita em código.** Os geradores de imagem estavam sem saldo (Higgsfield 0, KIE 1 crédito) e o ComfyUI não está instalado. A cena é a grade, o logo aceso e a linha de batimento, sem foto inventada da clínica.

@@ -5,6 +5,54 @@
 **Temas:** escuro (padrão) e claro, com toggle. Preferência em `localStorage` sob a chave `ac-theme`.
 **Referência:** dashboard "Personal Finance" (Collect UI) — navy + ciano, cards arredondados, radar de estrutura, donuts com anel grosso, toggle de tema no topo.
 
+## Casca no molde do painel de referência (11/11/2026)
+
+Pedido do dono: "deixar na mesma estrutura do nosso outro painel, mantendo os dados que já temos aqui, com animação".
+Referência: outro painel da consultoria (o caminho fica nas notas locais, fora deste repositório público). Nenhum número mudou:
+as telas de dado são as mesmas, só a casca e o tom em volta delas.
+
+- **Áreas e abas** (`src/shell/areas.js`): Painel · Vendas (Visão geral, Comparativo, Ritmo do dia) · Equipe (Desempenho,
+  Veterinários, Ranking) · Clientes (Perfil, Recorrência, Vacinas, Pesquisa) · Financeiro (DRE, Dashboard, Contas a pagar)
+  · Admin. O id de cada aba é o id de página de sempre, então as permissões do `perfis.json` não mudaram. Cada área lembra
+  a última aba aberta.
+- **Painel** (`src/Visao.jsx`): a primeira tela, como a do painel de referência. Oito indicadores e quatro cartões, todos com o mesmo campo do
+  snapshot que a aba de origem mostra; cada cartão leva para ela. Pede a permissão de Vendas.
+- **Barra lateral** escura nos dois temas (como a do painel de referência): marca oficial (`public/marca-animal-center.webp`), "Painel de
+  gestão", linha de batimento, selo do robô, "Áreas", e a conta embaixo (tema, minha conta, sair).
+- **Selo do robô** (`.sample`): verde pulsando com coleta há menos de 60 min (o limite do vigia); âmbar "Última coleta
+  dd/mm hh:mm" depois disso; vermelho "Robô fora do ar" quando o servidor não respondeu. É o selo "ao vivo" do painel de referencia.
+- **Topo** de vidro, preso no alto a partir de 1101 px: título da área, unidade e recorte embaixo, "Ir para ⌘K" e o seletor
+  de unidade. Filtros de recorte e de grupo numa fileira abaixo das abas.
+- **Paleta de comandos** (`src/shell/Comandos.jsx`): Ctrl/⌘+K ou o botão "Ir para". Lista as áreas e abas liberadas, sem
+  acento na busca. Só navega.
+- **Entrada** (`src/shell/Entrada.jsx`): cena de um lado, formulário do outro, como a do painel de referência. No lugar da foto do prédio, a
+  cena é código: grade, logo aceso e a linha de batimento correndo. Sempre escura.
+- **Celular** (até 860 px): sem barra lateral; topo com o ícone, selo, unidade, tema e sair; dock de vidro com todas as áreas.
+
+### Marca: um destaque só
+
+O verde da cruz do logo (`--marca-a #12c86e` → `--marca-b #14dcc8`, `--marca` para texto) é o destaque único da casca, **só
+em três lugares**: item ativo do menu (barra de 3 px com brilho e ícone), botão principal (Entrar) e número herói (Receita
+total no Painel e em Vendas). **Nunca em dado de gráfico**: dado continua ciano/teal/azul. Seleção de botão (unidade,
+período, aba, item da paleta) é `--sel` marinho com borda ciano e texto branco, como a seleção do painel de referência.
+
+### Movimento da casca
+
+| Efeito | Onde | Tempo |
+|--------|------|-------|
+| Cascata | Blocos de `.tela` ao abrir área ou aba (a `.tela` tem `key` da página) e indicadores do Painel | 380 ms, 45–70 ms entre eles |
+| Número contando | `useCountUp` em todo `Num` | 900 ms |
+| Marcador que desliza | Área ativa na barra lateral e aba ativa (`src/shell/indicador.js`) | 420 ms |
+| Batimento | Linha na barra lateral, uma passada a cada 6 s, **só com o robô vivo** | 6 s |
+| Ponto ao vivo | Selo do robô verde | 2,4 s |
+| Paleta | Entra descendo 8 px | 260 ms |
+| Entrada | Batimento correndo, logo respirando, fundo andando com o mouse | 3,4 s / 4 s |
+
+**Reduzir movimento:** a regra geral continua parando tudo. Como no painel de referência, só voltam, dentro do painel e da entrada,
+a cascata curta dos blocos, o número contando (`contarSempre`, ligado pelo Painel), o marcador que desliza, a paleta e o
+ponto do selo do robô. O dono usa o Mac com a opção ligada e lê tela parada como defeito. Gráfico desenhando, batimento,
+pódio, halo do logo e o fundo seguindo o mouse ficam parados. Telão, `/eu` e `/avaliar` não montam o Painel: lá tudo para.
+
 ## Princípio
 
 Estrutura calma, detalhe vivo. O layout não chama atenção; o **dado** é que se move ao entrar — barra cresce, linha se desenha, número conta. Depois disso, tudo fica parado.
@@ -31,21 +79,21 @@ O acento é constante nos dois temas. Só as superfícies e o texto trocam.
 
 | Token | Escuro | Claro | Papel |
 |-------|--------|-------|-------|
-| `--bg` | `#081527` | `#e9eff8` | Canvas |
-| `--surface-1` | `#0f2039` | `#ffffff` | Card |
-| `--surface-2` | `#16304f` | `#f4f8fd` | Elevado, card de destaque |
-| `--surface-3` | `#1d3b61` | `#e6eff9` | Pressionado |
-| `--line` | `rgba(125,190,255,.10)` | `rgba(15,45,85,.09)` | Borda |
-| `--line-2` | `rgba(125,190,255,.20)` | `rgba(15,45,85,.16)` | Borda em hover/destaque |
+| `--bg` | `#03070f` | `#eef3f9` | Canvas (escuro de "sala de controle" desde 11/11/2026) |
+| `--surface-1` | `#0a1322` | `#ffffff` | Card |
+| `--surface-2` | `#0f1a2c` | `#f4f8fd` | Elevado, card de destaque |
+| `--surface-3` | `#16243a` | `#e6eff9` | Pressionado |
+| `--line` | `rgba(148,178,214,.12)` | `rgba(15,45,85,.09)` | Borda |
+| `--line-2` | `rgba(148,178,214,.20)` | `rgba(15,45,85,.16)` | Borda em hover/destaque |
 | `--edge` | `rgba(255,255,255,.06)` | `rgba(255,255,255,.9)` | Fio de luz no topo do card |
 
 ### Texto
 
 | Token | Escuro | Claro | Papel |
 |-------|--------|-------|-------|
-| `--text` | `#e9f2fe` | `#0f2340` | Títulos, valores |
-| `--text-2` | `#9fb6d6` | `#4c6488` | Corpo, células |
-| `--text-3` | `#6c86a9` | `#7a91b0` | Rótulos, eixos, legendas |
+| `--text` | `#e9eff8` | `#0f2340` | Títulos, valores |
+| `--text-2` | `#b3bfd2` | `#4c6488` | Corpo, células |
+| `--text-3` | `#7d8aa1` | `#7a91b0` | Rótulos, eixos, legendas (5,2:1 no card escuro) |
 | `--accent-text` | `#5fd4f5` | `#0c93bd` | Texto sobre o acento — mais fundo no claro para manter contraste |
 
 ### Sistema
@@ -209,7 +257,7 @@ Refluxo depende da largura do **card**, não da janela — o mesmo componente vi
 | `@container (max-width: 400px)` | `.row` vira duas linhas: nome + valor em cima, barra + % embaixo |
 | `@container (max-width: 460px)` | `.donut-wrap` empilha donut sobre legenda |
 
-Breakpoints de janela cuidam do shell: 1240px encolhe a sidebar, 1100px desempilha as grades, 800px troca sidebar por gaveta + dock, 640px enxuga colunas de tabela.
+Breakpoints de janela cuidam da casca: 1100px encolhe a barra lateral e desempilha as grades, 860px tira a barra lateral e liga o dock com todas as áreas, 640px enxuga colunas de tabela.
 
 ---
 
@@ -225,7 +273,7 @@ Breakpoints de janela cuidam do shell: 1240px encolhe a sidebar, 1100px desempil
 
 - **Sem segundo acento.** Ciano e teal são um gradiente, não duas cores.
 - **Sem `backdrop-filter` em card.** Só em barra fixa de mobile e no scrim.
-- **Sem animação em loop**, exceto o ponto do selo "ao vivo".
+- **Sem animação em loop**, exceto o selo do robô e o batimento da barra lateral (os dois só com o robô vivo) e a cena da entrada.
 - **Sem hex solto em componente.** Token novo entra no `:root` do `index.css`.
 - **Sem depender só de cor** para positivo, negativo, alerta ou ativo.
 - **Sem alpha do acento para elemento que precisa ser lido no tema claro.** Use `--bar-off-*`.
@@ -236,7 +284,7 @@ Breakpoints de janela cuidam do shell: 1240px encolhe a sidebar, 1100px desempil
 
 - `:focus-visible` é contorno de 2px em `--cyan` com 2px de deslocamento
 - Alvo de toque mínimo de 44px no mobile
-- `prefers-reduced-motion` zera animação e transição
+- `prefers-reduced-motion` zera animação e transição fora do painel; dentro dele ver "Movimento da casca"
 - `color-scheme` por tema, para select e scrollbar nativos acompanharem
 - `--accent-text` é mais escuro no tema claro justamente para manter contraste sobre branco
 
@@ -251,4 +299,6 @@ Breakpoints de janela cuidam do shell: 1240px encolhe a sidebar, 1100px desempil
 | `src/charts.jsx` | SVG lendo `var(--token)` em `fill`/`stroke`, com gradientes e animação de entrada |
 | `src/main.jsx` | Aplica `data-theme` do `localStorage` **antes** de renderizar — vale para o dashboard e para `/eu` |
 | `src/anim.jsx` | Ticker rAF compartilhado, `useCountUp`, `Num`, `useCanvasSize` |
+| `src/shell/` | Casca no molde do painel de referência: `areas.js`, `Comandos.jsx`, `Entrada.jsx`, `Pulso.jsx`, `indicador.js`, `shell.css` |
+| `src/Visao.jsx` | Painel (primeira tela) |
 | `src/Podium.jsx` | Pódio da TV: coroa, faíscas, confete, degraus |

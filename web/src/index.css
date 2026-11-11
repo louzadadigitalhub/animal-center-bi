@@ -40,6 +40,29 @@
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
   --fast: 0.18s;
   --slow: 0.5s;
+  /* Movimento da casca, como no painel de referencia: tempos e curva num lugar so */
+  --m-curva: cubic-bezier(0.22, 1, 0.36, 1);
+  --m-entrada: 380ms;
+  --m-passo: 45ms;
+  --m-desliza: 420ms;
+
+  /* Marca: o verde da cruz do logo. E o unico destaque da casca (item
+     ativo do menu, botao principal, numero heroi), como o destaque unico
+     do painel de referencia. Nunca em dado de grafico: dado continua ciano/teal. */
+  --marca-a: #12c86e;
+  --marca-b: #14dcc8;
+  --marca-grad: linear-gradient(135deg, var(--marca-a) 0%, var(--marca-b) 100%);
+  --marca-tinta: #021a10;
+  --marca-brilho: rgba(30, 222, 150, 0.55);
+
+  /* Barra lateral: escura nos dois temas, como a do painel de referencia */
+  --lado-fundo: #040b16;
+  --lado-texto: #a9b4c6;
+  --lado-forte: #f1f5fb;
+  --lado-mudo: #6f7a91;
+  --lado-linha: rgba(148, 178, 214, 0.12);
+
+  --mono-rotulo: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* ---- Tema escuro (padrao) ---- */
@@ -47,39 +70,50 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --bg: #081527;
-  --glow-1: rgba(62, 200, 240, 0.1);
-  --glow-2: rgba(42, 212, 200, 0.08);
+  /* "Sala de controle" (11/11/2026): o fundo quase preto puxado para o
+     marinho do logo, como o tema escuro do painel de referencia. */
+  --bg: #03070f;
+  --glow-1: rgba(19, 220, 200, 0.07);
+  --glow-2: rgba(62, 200, 240, 0.06);
 
-  --surface-1: #0f2039;
-  --surface-2: #16304f;
-  --surface-3: #1d3b61;
+  --surface-1: #0a1322;
+  --surface-2: #0f1a2c;
+  --surface-3: #16243a;
 
-  --line: rgba(125, 190, 255, 0.1);
-  --line-2: rgba(125, 190, 255, 0.2);
+  --line: rgba(148, 178, 214, 0.12);
+  --line-2: rgba(148, 178, 214, 0.2);
   --edge: rgba(255, 255, 255, 0.06);
 
-  --text: #e9f2fe;
-  --text-2: #9fb6d6;
-  --text-3: #6c86a9;
+  --text: #e9eff8;
+  --text-2: #b3bfd2;
+  --text-3: #7d8aa1;
 
   --accent-text: #5fd4f5;
   --accent-wash: rgba(62, 200, 240, 0.12);
-  --track: rgba(125, 190, 255, 0.12);
+  --track: rgba(148, 178, 214, 0.12);
 
   --bar-off-a: #1c5563;
   --bar-off-b: #21597a;
 
-  --shadow: 0 2px 8px rgba(0, 0, 0, 0.3), 0 18px 40px -24px rgba(0, 0, 0, 0.75);
-  --shadow-lift: 0 4px 14px rgba(0, 0, 0, 0.35), 0 26px 56px -28px rgba(0, 0, 0, 0.8);
+  --shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045), 0 1px 2px rgba(0, 0, 0, 0.45), 0 24px 48px -32px rgba(0, 0, 0, 0.9);
+  --shadow-lift: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 2px 6px rgba(0, 0, 0, 0.5), 0 30px 60px -30px rgba(0, 0, 0, 0.95);
   --glow: 0 0 0 1px rgba(62, 200, 240, 0.3), 0 10px 30px -10px rgba(62, 200, 240, 0.35);
+
+  /* Escolhido num grupo de botoes (unidade, periodo, aba): marinho com
+     borda ciano e texto branco, nunca a cor da marca */
+  --sel: #0f2a3f;
+  --sel-borda: rgba(62, 200, 240, 0.5);
+  --sel-texto: #ffffff;
+  --marca: #3ee39d;
+  --campo: #0b1526;
+  --topo-vidro: rgba(3, 7, 15, 0.72);
 }
 
 /* ---- Tema claro ---- */
 [data-theme="light"] {
   color-scheme: light;
 
-  --bg: #e9eff8;
+  --bg: #eef3f9;
   --glow-1: rgba(62, 200, 240, 0.16);
   --glow-2: rgba(79, 143, 247, 0.1);
 
@@ -105,6 +139,14 @@
   --shadow: 0 2px 8px rgba(16, 42, 80, 0.06), 0 18px 40px -24px rgba(16, 42, 80, 0.25);
   --shadow-lift: 0 4px 14px rgba(16, 42, 80, 0.1), 0 26px 56px -28px rgba(16, 42, 80, 0.3);
   --glow: 0 0 0 1px rgba(62, 200, 240, 0.45), 0 10px 30px -10px rgba(62, 200, 240, 0.4);
+
+  --sel: #dff1fa;
+  --sel-borda: rgba(12, 147, 189, 0.45);
+  --sel-texto: #08334a;
+  /* verde escuro o bastante para numero grande no branco (4,4:1) */
+  --marca: #0a8a4f;
+  --campo: #ffffff;
+  --topo-vidro: rgba(238, 243, 249, 0.78);
 }
 
 /* ================= BASE ================= */
@@ -1234,7 +1276,7 @@ table.dre td.down::before {
   font-size: 13px;
 }
 
-aside {
+:where(aside.drawer) {
   display: flex;
   flex-direction: column;
   gap: var(--s6);
@@ -1277,58 +1319,6 @@ aside {
   text-transform: uppercase;
 }
 
-aside nav {
-  display: grid;
-  gap: var(--s1);
-}
-
-aside nav button {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-  width: 100%;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-2);
-  text-align: left;
-  font-size: 14px;
-  padding: 10px var(--s3);
-  border-radius: var(--r-ctl);
-  cursor: pointer;
-  transition: background var(--fast) var(--ease), color var(--fast) var(--ease),
-    border-color var(--fast) var(--ease), transform var(--fast) var(--ease);
-}
-
-aside nav button:hover {
-  background: var(--surface-2);
-  color: var(--text);
-}
-
-aside nav button:active {
-  transform: scale(0.985);
-}
-
-/* Ativo: lavagem + borda + barrinha em gradiente */
-aside nav button.on {
-  background: var(--accent-wash);
-  border-color: var(--line-2);
-  color: var(--accent-text);
-  font-weight: 600;
-}
-
-aside nav button.on::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 50%;
-  width: 3px;
-  height: 20px;
-  border-radius: var(--r-pill);
-  background: var(--grad-v);
-  transform: translateY(-50%);
-  animation: fade var(--fast) var(--ease) both;
-}
 
 .main {
   min-width: 0;
@@ -3580,7 +3570,7 @@ tr.click:hover td,
     cursor: pointer;
   }
 
-  aside {
+  :where(aside.drawer) {
     position: fixed;
     inset: 0 auto 0 0;
     width: min(278px, 86vw);
@@ -3590,9 +3580,6 @@ tr.click:hover td,
     transition: transform 0.26s var(--ease);
     overflow: auto;
     box-shadow: var(--shadow-lift);
-  }
-  .app.menu-open aside {
-    transform: translateX(0);
   }
   .scrim {
     display: block;
@@ -4579,6 +4566,11 @@ table.planilha {
   justify-self: start;
 }
 
+/* Reduzir movimento. Fora do painel (telao, /eu, /avaliar) tudo para, como
+   sempre. No painel e na entrada o movimento curto de entrada (cascata,
+   numero contando, marcador deslizando) continua de proposito, como no
+   painel de referencia: o dono usa o Mac com a opcao ligada e le tela parada como
+   defeito. O que e enfeite em laco para (web/DESIGN.md, "Movimento"). */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -4586,5 +4578,26 @@ table.planilha {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+  /* Excecoes, so dentro do painel, como no painel de referencia: a cascata curta
+     de entrada dos blocos, o marcador que desliza, a paleta e o ponto do
+     selo do robo. Grafico, batimento, podio e enfeite seguem parados. */
+  .shell .tela > *,
+  .shell .card,
+  .shell .tile,
+  .shell .kpi,
+  .shell .vg-kpi,
+  .shell .cmd,
+  .entrada .en-hero,
+  .entrada .en-form {
+    animation-duration: var(--m-entrada) !important;
+  }
+  .shell .nav-marca,
+  .shell .abas-marca {
+    transition-duration: var(--m-desliza) !important;
+  }
+  .shell .sample.is-vivo::before {
+    animation-duration: 2.4s !important;
+    animation-iteration-count: infinite !important;
   }
 }

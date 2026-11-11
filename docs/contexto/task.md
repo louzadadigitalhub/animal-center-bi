@@ -40,3 +40,14 @@ Depois: aba Compras no painel para ver o caderno; ler a média de saídas do Sim
 8. ✅ (20/10) Nota do tutor: link por consulta mandado pelo WhatsApp do computador da recepção (wa.me) e página pública /avaliar. Quando a clínica tiver o número próprio, o envio pode ficar automático.
 9. ✅ (20/10) Do octaX: fluxo por hora por mês (Ritmo), recorrência mensal (Recorrência), faturamento por funcionário, grupo e produto e gráfico de conversão (Vendas).
 10. A diretoria confere os pesos, o mínimo de consultas e quem fica fora do ranking.
+
+---
+
+# Casca no molde do painel de referência (11/11/2026) — tarefas
+
+1. ✅ (11/11) Áreas e abas, barra lateral com marca e selo do robô, topo de vidro, paleta Ctrl/⌘+K, dock no celular.
+2. ✅ (11/11) Tema "sala de controle" nos tokens, verde da marca só nos três lugares, rótulos em mono.
+3. ✅ (11/11) Painel (primeira tela) com os campos do snapshot.
+4. ✅ (11/11) Tela de entrada com cena em código.
+5. Revisão por outro modelo (Codex) e o dono aprovar as capturas antes de publicar.
+6. Publicar (push na main = deploy no EasyPanel) só com o ok do dono.
